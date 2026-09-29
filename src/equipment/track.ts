@@ -60,6 +60,8 @@ function rulerTexture(): THREE.CanvasTexture {
 export class Rail extends Item {
   readonly sim = new TrackSim();
   readonly track: Socket;
+  /** 양 끝 센서 받침 [왼쪽, 오른쪽] */
+  readonly mounts: Socket[];
   onOpenPanel: (r: Rail) => void = () => {};
   /** 재생 속도 (패널에서: 1, ½, ¼, 0 = 멈춤) */
   speed = 1;
@@ -92,6 +94,16 @@ export class Rail extends Item {
     this.track = new Socket(this, '역학 레일', ['railMount'], v(HALF, RAIL_TOP, 0), {
       slide: { min: 0.1, max: RAIL_LENGTH - 0.1, axis: 'x' }, multi: true, hitRadius: 0.04,
     }, body);
+    // 양 끝 센서 받침: 멈추개 바깥, 센서 앞면 중심이 수레 몸체 높이(레일 윗면 + 3.2 cm)에 오게.
+    // 오른쪽 받침은 180° 돌려서 두 받침 모두 +x 쪽(받침 좌표)이 레일 가운데를 향한다
+    this.mounts = [0, RAIL_LENGTH].map((x, i) => {
+      const end = new THREE.Group();
+      end.position.x = x;
+      end.rotation.y = i ? Math.PI : 0;
+      body.add(end);
+      end.add(mesh(new THREE.BoxGeometry(0.06, 0.004, 0.08), DARK, -0.03, 0.022, 0)); // 받침판
+      return new Socket(this, `레일 ${i ? '오른쪽' : '왼쪽'} 끝 센서 받침`, ['sensorMount'], v(-0.055, RAIL_TOP + 0.032, 0), { hitRadius: 0.035 }, end);
+    });
   }
 
   get carts(): Cart[] {

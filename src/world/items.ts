@@ -20,7 +20,8 @@ export type PlugType =
   | 'hook' // 실 끝 고리에 걸 수 있는 고리
   | 'accessory' // 클램프에 붙이는 부속 (각도기)
   | 'railMount' // 역학 레일에 올리는 수레 바퀴
-  | 'cartMass'; // 수레 위에 얹는 질량 막대
+  | 'cartMass' // 수레 위에 얹는 질량 막대
+  | 'sensorMount'; // 레일 끝 센서 받침에 끼우는 센서 뒷면
 
 export interface Plug {
   type: PlugType;

@@ -12,6 +12,7 @@
  *   칸 6, 7 아래 선반 (불투명 문 안) : 직류 전원 장치, 마이크로전류계, 광전관 2개 (Cs · Na 음극)
  *
  * 뒤쪽 벽 수납장(높이 0.9 m) 위: 역학 레일 1.2 m, 수레 2대, 질량 막대 250 g × 4 (길어서 보관장에 안 들어감)
+ * 칠판 앞 교탁 위: 노트북 2대 (측정 프로그램), 운동 센서 2개
  */
 import type { StorageCabinet } from '../world/cabinet';
 import { at, type Item } from '../world/items';
@@ -21,6 +22,7 @@ import { Spring } from './spring';
 import { Laser, OpticScreen, SlitPlate } from './optics';
 import { DCPowerSupply, Microammeter, Phototube } from './electrical';
 import { Cart, Rail, massBar } from './track';
+import { Laptop, MotionSensor } from './sensors';
 import * as THREE from 'three';
 
 export interface Stock {
@@ -33,6 +35,8 @@ export interface Stock {
   tubes: Phototube[];
   rails: Rail[];
   carts: Cart[];
+  laptops: Laptop[];
+  motionSensors: MotionSensor[];
 }
 
 export function stockEquipment(cab: StorageCabinet): Stock {
@@ -50,7 +54,20 @@ export function stockEquipment(cab: StorageCabinet): Stock {
   const rails = [new Rail()];
   const carts = [new Cart('수레 A', 0x2f6fb0), new Cart('수레 B', 0xd07a2a)];
   const top = (x: number, z: number) => new THREE.Vector3(x, 0.9, z);
+  // 교탁(높이 0.76 m): 화면이 실험실 쪽(+x)을 보게 90° 돌려 놓는다
+  const laptops = [new Laptop('노트북 1'), new Laptop('노트북 2')];
+  const motionSensors = [new MotionSensor('운동 센서 1'), new MotionSensor('운동 센서 2')];
+  const desk = (it: Item, x: number, z: number, yaw: number) => {
+    at(it, new THREE.Vector3(x, 0.76, z));
+    it.object.rotation.y = yaw;
+    it.yaw = yaw;
+    return it;
+  };
   const items: Item[] = [
+    desk(laptops[0], 2.3, 2.1, Math.PI / 2),
+    desk(laptops[1], 2.3, 3.4, Math.PI / 2),
+    desk(motionSensors[0], 2.35, 2.65, Math.PI / 2),
+    desk(motionSensors[1], 2.35, 2.85, Math.PI / 2),
     at(rails[0], top(7.6, 7.3)),
     at(carts[0], top(6.45, 7.3)),
     at(carts[1], top(6.75, 7.3)),
@@ -90,5 +107,5 @@ export function stockEquipment(cab: StorageCabinet): Stock {
     at(tubes[0], cab.slot(7, 1, 0.55)),
     at(tubes[1], cab.slot(7, 1, 0.85)),
   ];
-  return { items, strings, springs, lasers, supplies, ammeters, tubes, rails, carts };
+  return { items, strings, springs, lasers, supplies, ammeters, tubes, rails, carts, laptops, motionSensors };
 }

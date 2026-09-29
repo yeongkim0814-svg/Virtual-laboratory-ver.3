@@ -348,6 +348,52 @@
         <p class="legend">속도·가속도·충돌 측정은 센서(추후 추가)로 한다. "처음 자리로" = 마지막으로 밀기 직전의 위치.</p>
       </section>
 
+      <!-- 노트북 측정 프로그램 -->
+      <section id="log-panel" class="exp-panel" hidden>
+        <header>
+          <h2 id="lg-title">측정 프로그램</h2>
+          <button id="lg-close">닫기</button>
+        </header>
+        <p id="lg-status" class="status"></p>
+        <div id="lg-sensors" class="segmented"></div>
+        <div class="buttons">
+          <button id="lg-rec" class="primary"></button>
+          <button id="lg-csv">CSV</button>
+        </div>
+        <div class="field">표본 속도
+          <div id="lg-rate" class="segmented">
+            <button data-v="10">10 Hz</button><button data-v="20">20 Hz</button><button data-v="30">30 Hz</button>
+          </div>
+        </div>
+        <div class="field">기록 시간
+          <div id="lg-dur" class="segmented">
+            <button data-v="5">5 s</button><button data-v="10">10 s</button><button data-v="20">20 s</button><button data-v="0">계속</button>
+          </div>
+        </div>
+        <div class="field">매끄럽게 (속도·가속도 계산 창)
+          <div id="lg-win" class="segmented">
+            <button data-v="3">3점</button><button data-v="5">5점</button><button data-v="7">7점</button><button data-v="11">11점</button>
+          </div>
+        </div>
+        <label class="row"><input id="lg-flip" type="checkbox" /> 방향 반대 (센서 쪽으로 오는 것을 +)</label>
+        <dl class="readout">
+          <dt>지금 거리</dt><dd id="lg-now"></dd>
+        </dl>
+        <canvas id="lg-x" class="plot"></canvas>
+        <p class="legend" id="lg-x-leg"></p>
+        <canvas id="lg-v" class="plot"></canvas>
+        <p class="legend" id="lg-v-leg"></p>
+        <canvas id="lg-a" class="plot"></canvas>
+        <p class="legend" id="lg-a-leg"></p>
+        <label>커서 A <span id="lg-ta-val"></span>
+          <input id="lg-ta" type="range" min="0" max="1000" step="1" value="200" />
+        </label>
+        <label>커서 B <span id="lg-tb-val"></span>
+          <input id="lg-tb" type="range" min="0" max="1000" step="1" value="800" />
+        </label>
+        <dl class="readout" id="lg-stats"></dl>
+      </section>
+
       <!-- 조작 방법 도움말 (? 버튼) -->
       <div id="help" class="panel help" hidden>
         <header class="help-head">
@@ -377,10 +423,16 @@
           <li>이을 기구를 한 번 탭 → 단자 고르기 (노란 선이 조준점까지 따라옴)</li>
           <li>빈 곳을 탭하면 취소. 빼기는 기구 두 번 탭 → <b>도선 빼기</b></li>
         </ol>
+        <h3>센서 · 노트북</h3>
+        <ul>
+          <li>센서를 두 번 탭 → <b>노트북에 연결</b> (USB 2 m, 노트북 한 대에 센서 2개까지)</li>
+          <li>운동 센서를 들고 레일 끝을 두 번 탭 → <b>센서 받침</b>에 끼워져 레일 방향을 바라봄 (측정 범위 0.15 ~ 3 m)</li>
+          <li>노트북을 두 번 탭 → <b>측정 프로그램</b>: 기록 시작·멈춤, x·v·a 그래프, 커서 A·B 구간 분석, CSV</li>
+        </ul>
         <h3>전원</h3>
         <p>전원이 필요한 기기(레이저, 직류 전원 장치)는 실험 테이블 짧은 옆면의 콘센트에 꽂아야 작동한다. 전원선은 2 m, 도선은 1.5 m — 더 멀어지면 빠진다.</p>
         <h3>기구 위치</h3>
-        <p>주 실험실 오른쪽 벽 보관장: 스탠드·클램프·실·용수철·추·레이저·슬릿·스크린, 아래 칸(불투명 문)에 전원 장치·전류계·광전관. 레일과 수레는 뒤쪽 벽 수납장 위.</p>
+        <p>주 실험실 오른쪽 벽 보관장: 스탠드·클램프·실·용수철·추·레이저·슬릿·스크린, 아래 칸(불투명 문)에 전원 장치·전류계·광전관. 레일과 수레는 뒤쪽 벽 수납장 위. 노트북 2대와 운동 센서 2개는 칠판 앞 교탁 위.</p>
         <h3>실험 패널</h3>
         <p>기구가 실험할 수 있게 조립되면 화면 왼쪽 위에 <b>▸ 실험 이름</b> 버튼이 뜬다. 패널은 한 번에 하나, 화면 오른쪽에 열린다.</p>
       </div>

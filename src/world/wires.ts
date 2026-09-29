@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { HITBOX_MAT, type Item } from './items';
 import type { Action } from './interactable';
-import { Cable, cablePath, settle, surfaceBelow } from './cable';
+import { Cable, endToEndPath, settle } from './cable';
 
 const WIRE_MAX = 1.5; // m
 const KNOB_RED = new THREE.MeshLambertMaterial({ color: 0xc0302a });
@@ -79,15 +79,7 @@ export class Wire {
    */
   redraw(): void {
     const CLR = 0.006;
-    const p = this.a.worldPosition();
-    const q = this.b.worldPosition();
-    const ps = p.clone().addScaledVector(this.a.worldFacing(), 0.03);
-    const qs = q.clone().addScaledVector(this.b.worldFacing(), 0.03);
-    const sp = surfaceBelow(ps.x, ps.z, ps.y + 0.02);
-    const sq = surfaceBelow(qs.x, qs.z, qs.y + 0.02);
-    const A = new THREE.Vector3(ps.x, Math.min(ps.y, sp + CLR), ps.z);
-    const B = new THREE.Vector3(qs.x, Math.min(qs.y, sq + CLR), qs.z);
-    const path = [p, ps, ...cablePath(A, sp, B, sq, CLR), qs, q];
+    const path = endToEndPath(this.a.worldPosition(), this.a.worldFacing(), this.b.worldPosition(), this.b.worldFacing(), CLR);
     settle(path, this.pts, CLR);
     this.cable.setPoints(this.pts);
   }

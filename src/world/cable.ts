@@ -185,6 +185,20 @@ export function cablePath(A: THREE.Vector3, sA: number, B: THREE.Vector3, sB: nu
   return flip ? out.reverse() : out;
 }
 
+/**
+ * 두 끝점(단자·포트)을 잇는 선: 각 끝에서 바깥 방향(facing)으로 3 cm 뻗은 뒤 놓인 면으로 내려가,
+ * 면 위의 장비를 옆으로 돌아서(길찾기) 다른 끝으로 간다. 면 높이가 다르면 가장자리를 넘어 늘어진다.
+ */
+export function endToEndPath(p: THREE.Vector3, fp: THREE.Vector3, q: THREE.Vector3, fq: THREE.Vector3, clr: number): THREE.Vector3[] {
+  const ps = p.clone().addScaledVector(fp, 0.03);
+  const qs = q.clone().addScaledVector(fq, 0.03);
+  const sp = surfaceBelow(ps.x, ps.z, ps.y + 0.02);
+  const sq = surfaceBelow(qs.x, qs.z, qs.y + 0.02);
+  const A = new THREE.Vector3(ps.x, Math.min(ps.y, sp + clr), ps.z);
+  const B = new THREE.Vector3(qs.x, Math.min(qs.y, sq + clr), qs.z);
+  return [p, ps, ...cablePath(A, sp, B, sq, clr), qs, q];
+}
+
 function p2(v: THREE.Vector3): P2 {
   return { x: v.x, z: v.z };
 }

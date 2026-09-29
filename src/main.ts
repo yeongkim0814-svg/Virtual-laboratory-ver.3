@@ -27,6 +27,9 @@ import { PendulumPanel } from './ui/pendulumPanel';
 import { SpringPanel } from './ui/springPanel';
 import { SupplyPanel } from './ui/supplyPanel';
 import { TrackPanel } from './ui/trackPanel';
+import { LoggerPanel } from './ui/loggerPanel';
+import { SensorNetwork } from './equipment/sensors';
+import { Rail } from './equipment/track';
 import { SlitPanel } from './ui/slitPanel';
 import { stockEquipment } from './equipment/stock';
 import { BeamSystem } from './equipment/beams';
@@ -118,7 +121,15 @@ let circuits: PhotoCircuitState[] = [];
 const photoPanel = new PhotoPanel((open) => panelToggled(photoPanel, open), (s) => circuits.find((c) => c.supply === s) ?? null);
 const supplyPanel = new SupplyPanel((open) => panelToggled(supplyPanel, open));
 const trackPanel = new TrackPanel((open) => panelToggled(trackPanel, open));
-const panels = [pendulumPanel, springPanel, slitPanel, photoPanel, supplyPanel, trackPanel];
+const loggerPanel = new LoggerPanel((open) => panelToggled(loggerPanel, open));
+const panels = [pendulumPanel, springPanel, slitPanel, photoPanel, supplyPanel, trackPanel, loggerPanel];
+// 센서 ↔ 노트북 (USB)
+const sensorNet = new SensorNetwork(scene, stock.laptops, stock.motionSensors);
+for (const l of stock.laptops) l.onOpenPanel = (lap) => loggerPanel.open(lap);
+for (const s of stock.motionSensors) {
+  // 레일 끝에 끼워져 있으면 레일의 재생 속도(느리게 보기)만큼 시간도 느리게 흐른다 → 측정값은 실제 물리량
+  s.timeScale = () => (s.attachedTo?.owner instanceof Rail ? s.attachedTo.owner.speed : 1);
+}
 for (const r of stock.rails) r.onOpenPanel = (rail) => trackPanel.open(rail);
 for (const s of stock.strings) s.onOpenPanel = (str) => pendulumPanel.open(str);
 for (const s of stock.springs) s.onOpenPanel = (sp) => springPanel.open(sp);
@@ -474,6 +485,8 @@ renderer.setAnimationLoop(() => {
   }
   for (const s of stock.springs) s.update(dt, springPanel.speed, springPanel.target === s);
   for (const r of stock.rails) r.update(dt);
+  sensorNet.update();
+  for (const l of stock.laptops) l.update(dt, scene);
   updateLights(now / 1000);
   camera.updateMatrixWorld();
   collectEquipmentBoxes();
@@ -524,6 +537,7 @@ renderer.setAnimationLoop(() => {
   photoPanel.update();
   supplyPanel.update();
   trackPanel.update();
+  loggerPanel.update();
   updateDock();
   roomLabel.textContent = roomNameAt(player.pos.x, player.pos.z);
 
