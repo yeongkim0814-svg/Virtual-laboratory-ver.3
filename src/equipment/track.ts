@@ -271,7 +271,7 @@ export class Rail extends Item {
     if (!L || L.cartId !== tied.id || L.dir !== pu.dir) {
       L = {
         cartId: tied.id, dir: pu.dir, m: hanger.mass, inertia: Pulley.INERTIA, fp: Pulley.FRICTION,
-        drop: Math.min(0.12, maxDrop), minDrop: 0.03, maxDrop, taut: true, sRest: tied.s,
+        drop: Math.min(Pulley.REST_DROP, maxDrop), minDrop: 0.03, maxDrop, taut: true, sRest: tied.s,
       } satisfies HangingLoad;
       this.sim.load = L;
       tied.locked = true; // 추를 걸자마자 끌려가지 않게 손으로 잡고 있음
@@ -302,11 +302,11 @@ export class Rail extends Item {
     c.object.updateWorldMatrix(true, false);
     const tie = c.object.localToWorld(new THREE.Vector3(L!.dir * 0.095, 0.045, 0)); // 수레 도르래 쪽 범퍼
     const p = pu!.p;
-    const top = p.object.localToWorld(new THREE.Vector3(0, 0, -0.03));
+    const top = p.object.localToWorld(new THREE.Vector3(0, Pulley.TOP, Pulley.CZ));
     const pts: THREE.Vector3[] = [tie, top];
     // 바퀴를 따라 90° 감기는 부분 (바퀴 중심 기준)
-    const ctr = p.object.localToWorld(new THREE.Vector3(0, -Pulley.R, -0.03));
-    const outward = p.object.localToWorld(new THREE.Vector3(0, -Pulley.R, -0.03 - Pulley.R)).sub(ctr);
+    const ctr = p.object.localToWorld(new THREE.Vector3(0, Pulley.TOP - Pulley.R, Pulley.CZ));
+    const outward = p.object.localToWorld(new THREE.Vector3(0, Pulley.TOP - Pulley.R, Pulley.CZ - Pulley.R)).sub(ctr);
     const up = top.clone().sub(ctr);
     for (let k = 1; k <= 8; k++) {
       const a = (k / 8) * (Math.PI / 2);
@@ -405,33 +405,89 @@ export class Cart extends Item {
  *   바퀴 중심 (0, −R, −0.03), 축은 x 방향. 실은 바퀴 위(0, 0, −0.03)를 지나 바깥쪽(z = −0.03 − R)으로 내려간다.
  */
 export class Pulley extends Item {
-  static readonly R = 0.022;
+  /** 바퀴 반지름 (실이 감기는 홈 기준) */
+  static readonly R = 0.04;
+  /** 바퀴 중심의 앞뒤 위치 (물체 좌표 z): 레일 쪽 가장자리는 받침 바로 앞 */
+  static readonly CZ = -0.05;
   /** 바퀴 관성 I/r² = m_p/2 (얇은 원판, 바퀴 20 g) */
   static readonly INERTIA = 0.01;
   /** 축 마찰력 (N) */
   static readonly FRICTION = 0.003;
+  /** 추를 처음 걸었을 때·도르래를 떼었을 때 실 길이 (도르래 아래로 늘어진 길이) */
+  static readonly REST_DROP = 0.12;
+  /** 실이 지나는 바퀴 꼭대기의 높이 (물체 좌표 y): 물체 원점은 받침 바닥 → 책상에 놓으면 바퀴가 상판 위에 선다 */
+  static readonly TOP = 2 * Pulley.R + 0.008;
   readonly hook: Socket;
 
   constructor() {
     const g = new THREE.Group();
     const R = Pulley.R;
-    const wheel = mesh(new THREE.CylinderGeometry(R, R, 0.008, 14).rotateZ(Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x3a3d40 }), 0, -R, -0.03);
-    const hub = mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.02, 8).rotateZ(Math.PI / 2), ALU, 0, -R, -0.03);
-    const arm = mesh(new THREE.BoxGeometry(0.004, 0.03, 0.05), ALU, 0.008, -R, -0.01);
-    const arm2 = mesh(new THREE.BoxGeometry(0.004, 0.03, 0.05), ALU, -0.008, -R, -0.01);
-    const clamp = mesh(new THREE.BoxGeometry(0.03, 0.02, 0.02), DARK, 0, -R - 0.005, 0.02);
-    g.add(wheel, hub, arm, arm2, clamp);
-    super(g, { name: '도르래', radius: 0.04, mass: 0.06, plugs: [{ type: 'railEnd', point: v(0, 0, 0), rotY: Math.PI / 2 }] });
-    this.hook = new Socket(this, '도르래 실 끝 고리', ['hook'], this.hookLocal(0.12), { hitRadius: 0.03 });
+    const z = Pulley.CZ;
+    // 모양은 바퀴 꼭대기 기준으로 만들고 통째로 TOP만큼 올린다
+    const body = new THREE.Group();
+    body.position.y = Pulley.TOP;
+    g.add(body);
+    const wheelMat = new THREE.MeshLambertMaterial({ color: 0x2f6fb0 });
+    // 홈이 파인 바퀴: 가운데 원판 + 양쪽 테두리 (조금 더 큼)
+    const wheel = mesh(new THREE.CylinderGeometry(R, R, 0.01, 18).rotateZ(Math.PI / 2), wheelMat, 0, -R, z);
+    const rimA = mesh(new THREE.CylinderGeometry(R + 0.004, R + 0.004, 0.003, 18).rotateZ(Math.PI / 2), wheelMat, 0.0065, -R, z);
+    const rimB = mesh(new THREE.CylinderGeometry(R + 0.004, R + 0.004, 0.003, 18).rotateZ(Math.PI / 2), wheelMat, -0.0065, -R, z);
+    // 바퀴살 느낌이 나게 밝은 원판 (돌 때 보이도록 흰 표시 하나)
+    const mark = mesh(new THREE.BoxGeometry(0.0125, 0.006, R * 0.8), ALU, 0, -R, z - R * 0.4);
+    const hub = mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.03, 10).rotateZ(Math.PI / 2), ALU, 0, -R, z);
+    // 축을 잡는 팔 두 개: 바퀴 중심 → 받침 집게
+    const armLen = -z + 0.02;
+    const arm = mesh(new THREE.BoxGeometry(0.004, 0.02, armLen), ALU, 0.0135, -R, z / 2 + 0.01);
+    const arm2 = mesh(new THREE.BoxGeometry(0.004, 0.02, armLen), ALU, -0.0135, -R, z / 2 + 0.01);
+    const clamp = mesh(new THREE.BoxGeometry(0.034, 0.03, 0.024), DARK, 0, -R, 0.02);
+    const post = mesh(new THREE.BoxGeometry(0.02, R, 0.012), DARK, 0, -R / 2, 0.02);
+    body.add(wheel, rimA, rimB, mark, hub, arm, arm2, clamp, post);
+    super(g, { name: '도르래', radius: 0.06, mass: 0.08, plugs: [{ type: 'railEnd', point: v(0, Pulley.TOP, 0), rotY: Math.PI / 2 }] });
+    this.wheel = [wheel, mark];
+    this.hook = new Socket(this, '도르래 실 끝 고리', ['hook'], this.hookLocal(Pulley.REST_DROP), { hitRadius: 0.035 });
   }
 
-  /** 추가 drop만큼 내려갔을 때 실 끝 고리 (물체 좌표) */
+  private wheel: THREE.Mesh[];
+  private lastDrop = Pulley.REST_DROP;
+
+  /** 추가 drop만큼 내려갔을 때 실 끝 고리 (물체 좌표): 바퀴 바깥쪽 가장자리에서 수직으로 내려감 */
   hookLocal(drop: number): THREE.Vector3 {
-    return v(0, -Pulley.R - drop, -0.03 - Pulley.R);
+    return v(0, Pulley.TOP - Pulley.R - drop, Pulley.CZ - Pulley.R);
   }
 
+  /** 실 길이 반영 + 실이 풀린 만큼 바퀴를 돌린다 (미끄러짐 없음: Δθ = Δs / R) */
   setDrop(drop: number): void {
     this.hook.anchor.position.copy(this.hookLocal(drop));
+    const dth = (drop - this.lastDrop) / Pulley.R;
+    this.lastDrop = drop;
+    for (const w of this.wheel) {
+      // 바퀴 중심을 축으로 회전 (축은 물체 x축)
+      const c = new THREE.Vector3(0, -Pulley.R, Pulley.CZ);
+      w.position.sub(c).applyAxisAngle(new THREE.Vector3(1, 0, 0), dth).add(c);
+      w.rotateX(dth);
+    }
+  }
+
+  /**
+   * 레일에 끼우지 않은 도르래: 실을 감아 추가 받침 바닥 높이에 닿게 둔다
+   * (손에 들면 도르래 바로 옆에 매달려 보이고, 책상에 놓으면 추가 도르래 옆 상판에 얹힌다)
+   */
+  private rest(): void {
+    const w = this.hook.children[0];
+    if (!w) return this.setDrop(0);
+    const hang = w.plugs[0]?.point.y ?? w.height; // 추 바닥 → 고리
+    this.setDrop(Math.max(-Pulley.R, Pulley.TOP - Pulley.R - hang));
+  }
+
+  /** 레일에서 떼면 (추가 1 m 가까이 아래에 매달린 채 사라지지 않게) 실을 감아 둔다 */
+  onDetached(s: Socket): void {
+    super.onDetached(s);
+    this.rest();
+  }
+
+  onChildAttached(child: Item, s: Socket): void {
+    super.onChildAttached(child, s);
+    if (!this.attachedTo) this.rest();
   }
 
   /** 받침에 끼워져 있으면 돌리지 않는다 */
