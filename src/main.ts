@@ -13,7 +13,8 @@ import './style.css';
 import { buildLab } from './world/buildLab';
 import { buildFurniture } from './world/buildFurniture';
 import { Door } from './world/door';
-import { createBenchItems, Item, type Plug, type Socket } from './world/items';
+import { createBenchItems, HITBOX_MAT, Item, type Plug, type Socket } from './world/items';
+import { equipmentBoxes } from './world/cable';
 import { SPAWN, roomNameAt } from './world/layout';
 import { INTERACT_RANGE, type Action, type Interactable } from './world/interactable';
 import { Player } from './player/player';
@@ -321,6 +322,36 @@ let fpsFrames = 0;
 let fpsTime = 0;
 let fps = 0;
 
+/**
+ * 전선이 타고 넘어갈 장비 상자: 장면에 놓인 기구의 보이는 부품마다 월드 상자 하나.
+ * (손에 든 기구, 투명 판정용 원기둥, 단자 꼭지, 가늘고 긴 막대는 뺀다)
+ */
+const tmpBox = new THREE.Box3();
+function collectEquipmentBoxes(): void {
+  equipmentBoxes.length = 0;
+  if (!wires.wires.length && !power.hasCords()) return;
+  for (const it of items) {
+    const root = it.root();
+    if (root.object.parent !== scene) continue;
+    const visit = (o: THREE.Object3D): void => {
+      if (!o.visible || (o !== it.object && o.userData.item) || o.userData.noPick || o.userData.cableIgnore) return;
+      const m = o as THREE.Mesh;
+      if (m.isMesh && m.material !== HITBOX_MAT) {
+        const g = m.geometry;
+        if (!g.boundingBox) g.computeBoundingBox();
+        tmpBox.copy(g.boundingBox!).applyMatrix4(m.matrixWorld);
+        const h = tmpBox.max.y - tmpBox.min.y;
+        const wMin = Math.min(tmpBox.max.x - tmpBox.min.x, tmpBox.max.z - tmpBox.min.z);
+        if (!(h > 0.3 && wMin < 0.06)) {
+          equipmentBoxes.push({ x1: tmpBox.min.x, z1: tmpBox.min.z, x2: tmpBox.max.x, z2: tmpBox.max.z, top: tmpBox.max.y, owner: root.object });
+        }
+      }
+      for (const c of o.children) visit(c);
+    };
+    visit(it.object);
+  }
+}
+
 // 테스트용: 주소 끝이 #debug일 때만 내부 객체를 노출 (자동 테스트가 조립을 빠르게 재현하는 데 씀)
 if (location.hash === '#debug') {
   (window as unknown as Record<string, unknown>).lab = { THREE, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors };
@@ -343,6 +374,7 @@ renderer.setAnimationLoop(() => {
   for (const s of stock.springs) s.update(dt, springPanel.speed, springPanel.target === s);
   updateLights(now / 1000);
   camera.updateMatrixWorld();
+  collectEquipmentBoxes();
   power.update();
   wires.update();
   circuits = solveCircuits(wires, stock.supplies, stock.ammeters, stock.tubes);

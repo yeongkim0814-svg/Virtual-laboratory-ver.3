@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import type { Action, Interactable } from './interactable';
 import { FURNITURE } from './layout';
-import { Cable, liftAboveFurniture } from './cable';
+import { Cable, drape } from './cable';
 
 export interface Powered {
   readonly name: string;
@@ -69,7 +69,7 @@ export class Outlet implements Interactable {
   }
 }
 
-const CORD_PTS = 24;
+const CORD_PTS = 110; // 점 간격이 3 cm보다 촘촘하도록 (전원선 2 m + 경로)
 
 /**
  * 전원선 한 가닥. 실제 선처럼 놓이도록:
@@ -77,6 +77,7 @@ const CORD_PTS = 24;
  *   → 가장자리에서 콘센트까지 아래로 처지며 늘어짐 (바닥 아래로는 내려가지 않음)
  */
 class Cord {
+  private out = Array.from({ length: CORD_PTS }, () => new THREE.Vector3());
   private cable = new Cable(CORD_PTS, 0.0045, 0xc8cac2);
   readonly line = this.cable.mesh;
 
@@ -84,8 +85,26 @@ class Cord {
     scene.add(this.line);
   }
 
-  set(a: THREE.Vector3, b: THREE.Vector3, restY: number): void {
+  /**
+   * @param restY 기기(조립체)가 놓인 면의 높이 — null이면 손에 들고 있는 중
+   * @param own 기기 조립체 (선이 자기 기기 위로 타고 넘지 않게 장애물에서 뺀다)
+   */
+  set(a: THREE.Vector3, b: THREE.Vector3, restY: number | null, own: THREE.Object3D): void {
     const path: THREE.Vector3[] = [a.clone()];
+    if (restY === null) {
+      // 들고 있을 때: 손에서 콘센트까지 그냥 늘어진다
+      const sag = 0.35 * a.distanceTo(b);
+      for (let i = 1; i <= 20; i++) {
+        const t = i / 20;
+        const p = a.clone().lerp(b, t);
+        p.y -= sag * 4 * t * (1 - t);
+        path.push(p);
+      }
+      drape(path, this.out, 0.005);
+      this.cable.setPoints(this.out);
+      this.line.visible = true;
+      return;
+    }
     const onTop = new THREE.Vector3(a.x, restY + 0.006, a.z);
     path.push(onTop);
     // 기기가 가구 윗면 위에 있으면: 콘센트 방향으로 그 면의 가장자리까지 면을 따라 간다
@@ -102,21 +121,18 @@ class Cord {
       // 가장자리 위의 점: 모서리에 걸쳐 넘어가도록 가장자리보다 1 cm 바깥
       const len = Math.hypot(dx, dz) || 1;
       hangFrom = new THREE.Vector3(a.x + dx * t + (dx / len) * 0.01, restY + 0.006, a.z + dz * t + (dz / len) * 0.01);
-      // 윗면을 따라가는 동안 점을 몇 개 더 찍어 둔다 (관 모양이 곧게 눕도록)
-      for (const s of [0.33, 0.66]) path.push(onTop.clone().lerp(hangFrom, s));
       path.push(hangFrom);
     }
     // 가장자리 → 콘센트: 처지는 곡선
-    const n = CORD_PTS - path.length;
     const sag = 0.3 * hangFrom.distanceTo(b);
-    for (let i = 1; i <= n; i++) {
-      const t = i / n;
+    for (let i = 1; i <= 20; i++) {
+      const t = i / 20;
       const p = hangFrom.clone().lerp(b, t);
       p.y -= sag * 4 * t * (1 - t);
       path.push(p);
     }
-    liftAboveFurniture(path, 0.005);
-    this.cable.setPoints(path);
+    drape(path, this.out, 0.005, own);
+    this.cable.setPoints(this.out);
     this.line.visible = true;
   }
 
@@ -134,6 +150,11 @@ export class PowerSystem {
       o.getActions = (outlet) => this.outletActions(outlet);
       scene.add(o.object);
     }
+  }
+
+  /** 꽂혀 있는 전원선이 하나라도 있는가 */
+  hasCords(): boolean {
+    return [...this.cords.values()].some((c) => c.line.visible);
   }
 
   /** 기기의 전원선 출구 (월드) */
@@ -210,9 +231,14 @@ export class PowerSystem {
       }
       if (!cord) this.cords.set(d, (cord = new Cord(this.scene)));
       // 선이 놓일 면의 높이: 조립체 맨 아래(예: 클램프에 물렸으면 스탠드 밑판)가 놓인 곳
+      // (손에 들고 있으면 카메라에 붙어 있으므로 장면까지 올라가다 카메라를 만나면 "들고 있음")
       let root: THREE.Object3D = d.object;
-      while (root.parent && root.parent.type !== 'Scene') root = root.parent;
-      cord.set(a, b, root.getWorldPosition(new THREE.Vector3()).y);
+      let held = false;
+      while (root.parent && root.parent.type !== 'Scene') {
+        root = root.parent;
+        if ((root as THREE.Camera).isCamera) held = true;
+      }
+      cord.set(a, b, held ? null : root.getWorldPosition(new THREE.Vector3()).y, root);
     }
   }
 }

@@ -11,7 +11,7 @@ import { E_CHARGE, H, frequency, linearFit, photonEnergyEV } from '../sim/photoe
 import { wavelengthToRGB } from '../sim/optics';
 
 const LOG_KEY = 'vlab-photo-log-v1';
-const V_MIN = -1.5;
+const V_MIN = -1.5; // 가로축 왼쪽 끝 기본값 (역전압을 더 걸면 그만큼 넓힌다)
 const V_MAX = 5;
 
 interface Row {
@@ -193,7 +193,13 @@ export class PhotoPanel {
     const { g, w, h } = prep(byId<HTMLCanvasElement>('pe-iv'));
     let maxI = 0.1e-6;
     for (const s of this.series.values()) for (const i of s.pts.values()) maxI = Math.max(maxI, i);
-    const X = (v: number) => ((v - V_MIN) / (V_MAX - V_MIN)) * (w - 1);
+    // 가로축: 기록된 가장 큰 역전압(또는 지금 전압)까지 0.5 V 단위로 넓힌다 → 역전압 쪽 점이 그래프 밖으로 나가지 않음
+    let lo = Math.min(V_MIN, this.state?.vAK ?? 0);
+    for (const s of this.series.values()) for (const v of s.pts.keys()) lo = Math.min(lo, v);
+    const vMin = Math.floor(lo * 2) / 2;
+    const X = (v: number) => ((v - vMin) / (V_MAX - vMin)) * (w - 1);
+    g.fillStyle = 'rgba(255,154,46,0.18)';
+    for (let v = Math.ceil(vMin); v <= V_MAX; v++) if (v !== 0) g.fillRect(Math.round(X(v)), 0, 1, h);
     const Y = (i: number) => h - 2 - (i / (maxI * 1.1)) * (h - 4);
     axes(g, w, h, X(0), h - 2);
     for (const s of this.series.values()) {
@@ -214,7 +220,7 @@ export class PhotoPanel {
       g.fillStyle = '#ffffff';
       g.fillRect(Math.round(X(st.vAK)) - 1, Math.round(Y(Math.abs(st.ammeter.reading))) - 1, 3, 3);
     }
-    byId('pe-iv-max').textContent = `세로 최대 ${(maxI * 1.1 * 1e6).toFixed(2)} µA`;
+    byId('pe-iv-max').textContent = `가로 ${vMin.toFixed(1)} ~ ${V_MAX} V (1칸 1 V) · 세로 최대 ${(maxI * 1.1 * 1e6).toFixed(2)} µA`;
   }
 
   /** V_s–f: 기록한 점 + 음극별 맞춤 직선 */

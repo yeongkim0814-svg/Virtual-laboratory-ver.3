@@ -85,14 +85,70 @@ export function surfaceBelow(x: number, z: number, maxY = Infinity): number {
   return y;
 }
 
+/** 장애물 상자 하나: 위에서 본 직사각형 + 윗면 높이. owner = 그 상자가 속한 기구 조립체(제외할 때 씀) */
+export interface Obstacle {
+  x1: number; z1: number; x2: number; z2: number;
+  top: number;
+  owner?: THREE.Object3D;
+}
+
+/** 가구 윗면 (한 번만 만든다) */
+const FURNITURE_BOXES: Obstacle[] = FURNITURE.map((f) => ({ ...f.rect, top: f.height }));
+
 /**
- * 가운데 점들이 가구 윗면·바닥을 뚫지 않게 올린다 (양 끝점은 그대로).
- * 끝점보다 높은 가구(예: 보관장 위)로는 올라가지 않는다 — 선이 그 옆을 지나간다고 본다.
+ * 장비 상자: main.ts가 매 프레임 장면에 놓인 기구들의 보이는 부품마다 채운다.
+ * (스탠드 막대처럼 가늘고 긴 부품은 넣지 않는다 — 선이 그 옆을 지나간다고 본다)
  */
-export function liftAboveFurniture(pts: THREE.Vector3[], clearance: number): void {
-  const top = Math.max(pts[0].y, pts[pts.length - 1].y) + 0.05;
-  for (let i = 1; i < pts.length - 1; i++) {
-    const p = pts[i];
-    p.y = Math.max(p.y, surfaceBelow(p.x, p.z, top) + clearance);
+export const equipmentBoxes: Obstacle[] = [];
+
+const MARGIN = 0.03; // 가장자리 여유: 선이 모서리를 깎아 먹지 않게
+
+/**
+ * 선 모양 다듬기 (양 끝점은 그대로)
+ * 1) 경로를 호의 길이로 고르게 다시 나눈다 (점 간격 < MARGIN 이 되도록 점을 충분히)
+ * 2) 가구 윗면·장비 위를 지나는 점은 그 윗면 위로 올린다 → 선이 물체 위에 걸쳐 눕는다
+ * 3) 올려진 점 바로 옆의 점은, 가장자리에서 MARGIN 안이면 같이 올린다
+ *    → 윗면 위 점과 바깥 아래 점을 잇는 선분이 모서리를 뚫고 지나가지 않고, 모서리를 넘어 늘어진다
+ * @param exclude 이 조립체의 상자는 무시 (전원선이 자기 기기 뒤에서 나올 때)
+ */
+export function drape(path: THREE.Vector3[], out: THREE.Vector3[], clearance: number, exclude?: THREE.Object3D): void {
+  resample(path, out);
+  const n = out.length;
+  const endTop = Math.max(out[0].y, out[n - 1].y);
+  const boxes = [
+    ...FURNITURE_BOXES.filter((b) => b.top <= endTop + 0.05),
+    ...equipmentBoxes.filter((b) => b.owner !== exclude && b.top <= endTop + 0.3),
+  ];
+  const liftedBy: (Obstacle | null)[] = new Array(n).fill(null);
+  const inside = (p: THREE.Vector3, b: Obstacle, m: number) => p.x > b.x1 - m && p.x < b.x2 + m && p.z > b.z1 - m && p.z < b.z2 + m;
+  for (let i = 1; i < n - 1; i++) {
+    const p = out[i];
+    for (const b of boxes) {
+      if (p.y < b.top + clearance && inside(p, b, 0)) {
+        p.y = b.top + clearance;
+        liftedBy[i] = b;
+      }
+    }
+  }
+  for (let i = 1; i < n - 1; i++) {
+    const p = out[i];
+    for (const b of [liftedBy[i - 1], liftedBy[i + 1]]) {
+      if (b && liftedBy[i] !== b && p.y < b.top + clearance && inside(p, b, MARGIN)) p.y = b.top + clearance;
+    }
+  }
+  for (const p of out) if (p.y < clearance) p.y = clearance; // 바닥
+}
+
+/** 꺾인 선 path를 out.length개의 점으로 호의 길이 기준 고르게 나눈다 */
+function resample(path: THREE.Vector3[], out: THREE.Vector3[]): void {
+  const cum = [0];
+  for (let i = 1; i < path.length; i++) cum.push(cum[i - 1] + path[i].distanceTo(path[i - 1]));
+  const total = cum[cum.length - 1] || 1;
+  let j = 0;
+  for (let k = 0; k < out.length; k++) {
+    const s = (k / (out.length - 1)) * total;
+    while (j < path.length - 2 && cum[j + 1] < s) j++;
+    const seg = cum[j + 1] - cum[j] || 1;
+    out[k].lerpVectors(path[j], path[j + 1], Math.min(1, (s - cum[j]) / seg));
   }
 }

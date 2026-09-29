@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { HITBOX_MAT, type Item } from './items';
 import type { Action } from './interactable';
-import { Cable, liftAboveFurniture } from './cable';
+import { Cable, drape } from './cable';
 
 const WIRE_MAX = 1.5; // m
 const KNOB_RED = new THREE.MeshLambertMaterial({ color: 0xc0302a });
@@ -31,6 +31,7 @@ export class Terminal {
     this.anchor.lookAt(local.clone().add(facing));
     const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.014, 6).rotateX(Math.PI / 2), polarity === '+' ? KNOB_RED : KNOB_BLACK);
     knob.position.z = 0.007;
+    knob.userData.cableIgnore = true; // 도선이 넘어가야 할 장애물로 보지 않음
     const pad = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 4), HITBOX_MAT); // 이웃 단자와 겹치지 않을 크기
     pad.position.z = 0.01;
     pad.userData.terminal = this;
@@ -47,11 +48,18 @@ export class Terminal {
     this.anchor.updateWorldMatrix(true, false);
     return this.anchor.localToWorld(new THREE.Vector3(0, 0, 0.014));
   }
+
+  /** 단자가 튀어나온 방향 (월드, 단위 벡터) */
+  worldFacing(): THREE.Vector3 {
+    this.anchor.updateWorldMatrix(true, false);
+    return new THREE.Vector3(0, 0, 1).transformDirection(this.anchor.matrixWorld);
+  }
 }
 
 export class Wire {
   readonly cable: Cable;
-  private pts = Array.from({ length: 18 }, () => new THREE.Vector3());
+  // 점 간격이 가장자리 여유(3 cm)보다 촘촘하도록: 최대 1.5 m + 처짐 → 72점
+  private pts = Array.from({ length: 72 }, () => new THREE.Vector3());
 
   constructor(readonly a: Terminal, readonly b: Terminal, color: number) {
     this.cable = new Cable(this.pts.length, 0.005, color);
@@ -65,18 +73,26 @@ export class Wire {
     return this.a.worldPosition().distanceTo(this.b.worldPosition());
   }
 
-  /** 가운데가 처지는 곡선으로 다시 그린다 (책상 윗면·바닥 아래로는 내려가지 않고 그 위에 눕는다) */
+  /**
+   * 단자에서 바깥으로 3 cm 뻗은 뒤, 가운데가 처지는 곡선으로 잇는다.
+   * 그다음 책상·장비를 뚫는 부분은 그 위로 올려 걸친다 (drape).
+   */
   redraw(): void {
     const p = this.a.worldPosition();
     const q = this.b.worldPosition();
-    const n = this.pts.length;
-    const sag = 0.15 + 0.2 * p.distanceTo(q);
-    for (let i = 0; i < n; i++) {
-      const t = i / (n - 1);
-      this.pts[i].lerpVectors(p, q, t);
-      this.pts[i].y -= sag * 4 * t * (1 - t);
+    const ps = p.clone().addScaledVector(this.a.worldFacing(), 0.03);
+    const qs = q.clone().addScaledVector(this.b.worldFacing(), 0.03);
+    const path = [p, ps];
+    const sag = 0.1 + 0.2 * ps.distanceTo(qs);
+    const n = 16;
+    for (let i = 1; i < n; i++) {
+      const t = i / n;
+      const m = ps.clone().lerp(qs, t);
+      m.y -= sag * 4 * t * (1 - t);
+      path.push(m);
     }
-    liftAboveFurniture(this.pts, 0.006);
+    path.push(qs, q);
+    drape(path, this.pts, 0.006);
     this.cable.setPoints(this.pts);
   }
 }
