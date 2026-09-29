@@ -2,6 +2,7 @@
  * 궤도 실험 패널: 레일 기울기 · 구름 저항 · 재생 속도, 수레마다 범퍼 · 미는 속력 · 밀기
  * 측정값(속도·가속도·운동량)은 일부러 보여 주지 않는다 — 나중에 센서로 잰다.
  */
+import { bus } from '../net/commands';
 import type { Cart, Rail } from '../equipment/track';
 import { BUMPER_NAME, type Bumper } from '../sim/track';
 import { G } from '../sim/pendulum';
@@ -17,25 +18,25 @@ export class TrackPanel {
 
   constructor(private onToggle: (open: boolean) => void) {
     const inc = byId<HTMLInputElement>('tr-inc');
-    inc.addEventListener('input', () => { this.target?.setIncline(Number(inc.value)); this.refresh(); });
+    inc.addEventListener('input', () => { if (this.target) bus.call(this.target, 'setIncline', Number(inc.value)); this.refresh(); });
     for (const b of byId('tr-fric').querySelectorAll<HTMLButtonElement>('button')) {
-      b.addEventListener('click', () => { if (this.target) this.target.sim.friction = Number(b.dataset.v); this.refresh(); });
+      b.addEventListener('click', () => { if (this.target) bus.set(this.target, 'sim.friction', Number(b.dataset.v)); this.refresh(); });
     }
     for (const b of byId('tr-speed').querySelectorAll<HTMLButtonElement>('button')) {
-      b.addEventListener('click', () => { if (this.target) this.target.speed = Number(b.dataset.v); this.refresh(); });
+      b.addEventListener('click', () => { if (this.target) bus.set(this.target, 'speed', Number(b.dataset.v)); this.refresh(); });
     }
-    byId('tr-stop').addEventListener('click', () => this.target?.stopAll());
+    byId('tr-stop').addEventListener('click', () => { if (this.target) bus.call(this.target, 'stopAll'); });
     byId('tr-reset').addEventListener('click', () => {
       const r = this.target;
       if (!r) return;
       for (const c of r.carts) {
         const s = this.starts.get(c);
-        if (s !== undefined) r.place(c, s);
+        if (s !== undefined) bus.call(r, 'place', c, s);
       }
-      r.stopAll();
+      bus.call(r, 'stopAll');
     });
     byId('tr-close').addEventListener('click', () => this.close());
-    byId('tr-release').addEventListener('click', () => { this.remember(); this.target?.release(); this.refresh(); });
+    byId('tr-release').addEventListener('click', () => { this.remember(); if (this.target) bus.call(this.target, 'release'); this.refresh(); });
   }
 
   get isOpen(): boolean {
@@ -130,18 +131,18 @@ export class TrackPanel {
           <button data-d="-1">← 밀기</button><button data-d="0">멈추기</button><button data-d="1">밀기 →</button>
         </div>`;
       for (const b of row.querySelectorAll<HTMLButtonElement>('button[data-b]')) {
-        b.addEventListener('click', () => { c.setBumper(b.dataset.b as Bumper); this.refresh(); });
+        b.addEventListener('click', () => { bus.call(c, 'setBumper', b.dataset.b as Bumper); this.refresh(); });
       }
       const slider = row.querySelector<HTMLInputElement>('input')!;
       slider.addEventListener('input', () => {
-        c.pushSpeed = Number(slider.value);
+        bus.set(c, 'pushSpeed', Number(slider.value));
         row.querySelector('.val')!.textContent = `${c.pushSpeed.toFixed(2)} m/s`;
       });
       for (const b of row.querySelectorAll<HTMLButtonElement>('button[data-d]')) {
         b.addEventListener('click', () => {
           const d = Number(b.dataset.d);
           if (d !== 0) this.remember();
-          this.target?.push(c, d * c.pushSpeed);
+          if (this.target) bus.call(this.target, 'push', c, d * c.pushSpeed);
         });
       }
       box.appendChild(row);

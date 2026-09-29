@@ -10,6 +10,7 @@
  */
 import * as THREE from 'three';
 import './style.css';
+import { applySet, bus, type Vec3 } from './net/commands';
 import { buildLab } from './world/buildLab';
 import { buildFurniture } from './world/buildFurniture';
 import { Door } from './world/door';
@@ -176,12 +177,12 @@ chemHooks.toast = toast;
 chemHooks.pour = (src, dst) => {
   if (dst.free <= 0) return toast(`${dst.name}이(가) 가득 참`);
   if (src.volume <= 0) return toast(`${src.name}이(가) 비어 있음`);
-  pourBar.open(src, dst, `${src.name} → ${dst.name}`, (mL) => transfer(src, dst, mL));
+  pourBar.open(src, dst, `${src.name} → ${dst.name}`, (mL) => bus.dispatch({ t: 'pour', by: bus.me, src: ref(src), dst: ref(dst), mL }));
 };
 chemHooks.dispense = (b) => {
   const t = containerBelow(b);
   if (!t) return toast(`${b.name} 끝 바로 아래에 그릇이 없음 — 클램프 높이·그릇 위치를 맞추세요`);
-  pourBar.open(b, t, `${b.name} → ${t.name} (적하)`, (mL) => transfer(b, t, mL));
+  pourBar.open(b, t, `${b.name} → ${t.name} (적하)`, (mL) => bus.dispatch({ t: 'pour', by: bus.me, src: ref(b), dst: ref(t), mL }));
 };
 /**
  * 뷰렛 콕이 열려 있으면 매 프레임 흘려보낸다 (속도 × 시간). 아래에 그릇이 없으면 책상에 흘러 버린다.
@@ -255,6 +256,115 @@ for (const p of stock.circuitParts) {
     if (st) circuitPanel.open(st.supply);
   };
   if (p instanceof Led) p.onBurn = (l) => toast(`<b>${l.name}</b> — 과전류로 타 버렸습니다 (접합 온도 150 °C 초과). LED에는 직렬 저항을 다세요 — 두 번 탭해 새 LED로 교체`);
+}
+
+// ---------- 명령 버스 (net/commands.ts): 세계를 바꾸는 조작은 모두 명령으로 ----------
+// 이름표는 만든 순서로 붙인다 → 같은 코드를 실행하는 모든 기기에서 같다 (멀티플레이어의 전제)
+{
+  const reg = bus.registry;
+  items.forEach((it, i) => {
+    reg.add(`item${i}`, it);
+    it.sockets.forEach((so, k) => reg.add(`item${i}/s${k}`, so));
+    terminalsOf(it).forEach((t, k) => reg.add(`item${i}/t${k}`, t));
+  });
+  doors.forEach((d, i) => reg.add(`door${i}`, d));
+  furniture.outlets.forEach((o, i) => reg.add(`outlet${i}`, o));
+  wasteCans.forEach((w, i) => reg.add(`waste${i}`, w));
+}
+/** 물체 → 이름표 (등록 안 된 물체면 개발 중 실수이므로 바로 알린다) */
+function ref(o: object | null): string {
+  const r = o && bus.registry.ref(o);
+  if (!r) throw new Error('명령에 쓸 수 없는 (등록되지 않은) 물체');
+  return r;
+}
+const get = <T,>(r: string) => bus.registry.get<T>(r);
+const vec = (p: Vec3) => new THREE.Vector3(...p);
+/** 이름이 같은, 명령으로 보낼 수 있는 동작 찾기 */
+const findAct = (acts: Action[], label: string) => acts.find((a) => a.label === label && !a.local);
+bus.on('act', (c) => {
+  const target = get<Interactable>(c.target);
+  const a = target && findAct(target.actions(), c.label);
+  if (!a) return false;
+  a.run();
+  return true;
+});
+bus.on('use', (c) => {
+  const item = get<Item>(c.item);
+  const target = get<Item>(c.target);
+  if (!item || !target || hand.held !== item) return false;
+  const a = findAct(item.useOn(target), c.label);
+  if (!a) return false;
+  a.run();
+  return true;
+});
+bus.on('place', (c) => {
+  if (!hand.held || hand.held !== get<Item>(c.item)) return false;
+  return hand.place({ point: vec(c.p), valid: true });
+});
+bus.on('attach', (c) => {
+  const item = get<Item>(c.item);
+  const socket = get<Socket>(c.socket);
+  const plug = item?.plugs[c.plug];
+  if (!item || !socket || !plug || hand.held !== item) return false;
+  hand.handOver();
+  socket.attach(item, plug, vec(c.p), vec(c.cam));
+  return true;
+});
+bus.on('wire', (c) => {
+  const a = get<Terminal>(c.a);
+  const b = get<Terminal>(c.b);
+  if (!a || !b) return false;
+  wires.connect(a, b);
+  return true;
+});
+bus.on('unwire', (c) => {
+  const a = get<Terminal>(c.a);
+  const b = get<Terminal>(c.b);
+  const w = a?.wires.find((x) => (x.a === a && x.b === b) || (x.a === b && x.b === a));
+  if (!w) return false;
+  wires.remove(w);
+  return true;
+});
+bus.on('pour', (c) => {
+  const src = get<Container>(c.src);
+  const dst = get<Container>(c.dst);
+  if (!src || !dst || !(c.mL > 0)) return false;
+  transfer(src, dst, Math.min(c.mL, src.volume, dst.free));
+  return true;
+});
+bus.on('set', (c) => {
+  const target = get<object>(c.target);
+  return !!target && applySet(target, c.key, bus.decode(c.value));
+});
+bus.on('call', (c) => {
+  const target = get<Record<string, unknown>>(c.target);
+  const fn = target?.[c.method];
+  if (typeof fn !== 'function') return false;
+  (fn as (...a: unknown[]) => unknown).apply(target, c.args.map((x) => bus.decode(x)));
+  return true;
+});
+wires.requestConnect = (a, b) => { bus.dispatch({ t: 'wire', by: bus.me, a: ref(a), b: ref(b) }); };
+wires.requestRemove = (w) => { bus.dispatch({ t: 'unwire', by: bus.me, a: ref(w.a), b: ref(w.b) }); };
+
+// 전구·LED 불빛: 공용 점광원 2개를 가장 밝은 부품에 옮겨 단다 (광원 수가 늘면 모든 표면이 느려진다)
+const glowLights = [0, 1].map(() => {
+  const l = new THREE.PointLight(0xffffff, 0, 1, 2);
+  scene.add(l);
+  return l;
+});
+function updateGlowLights(): void {
+  const lit = stock.circuitParts
+    .map((p) => ({ p, g: p.glowLight() }))
+    .filter((x) => x.g && x.p.root().object.parent === scene)
+    .sort((a, b) => b.g!.intensity - a.g!.intensity);
+  glowLights.forEach((l, i) => {
+    const x = lit[i];
+    l.intensity = x ? x.g!.intensity : 0;
+    if (!x) return;
+    l.color.setHex(x.g!.color);
+    l.distance = x.g!.distance;
+    l.position.copy(x.p.object.localToWorld(x.g!.local.clone()));
+  });
 }
 
 // 레이저 광선 추적
@@ -406,8 +516,12 @@ function pendingWireActions(hit: THREE.Intersection | null): Action[] {
     const ts = terminalsOf(owner).filter((t) => t !== p);
     if (ts.length) return ts.map((t) => wires.actionsFor(t)[0]);
   }
-  return [{ label: '도선 연결 취소', run: () => { wires.pending = null; } }];
+  return [{ label: '도선 연결 취소', local: true, run: () => { wires.pending = null; } }];
 }
+
+/** 대상(기구·문·콘센트·폐액통)의 동작을 명령으로 감싼다 */
+const cmdActions = (owner: Interactable, acts: Action[]) => acts.map((a) => bus.wrap(owner, a));
+const v3 = (p: THREE.Vector3): Vec3 => [p.x, p.y, p.z];
 
 /**
  * 한 번 탭: 빈손이면 기구 집기 · 문/콘센트 동작, 들고 있으면 놓기
@@ -418,12 +532,13 @@ function singleActionsAt(x: number, y: number): Action[] {
   if (wires.pending) return pendingWireActions(hit);
   const owner = hit && ownerOf(hit.object);
   if (hand.held) {
-    if (owner && !(owner instanceof Item)) return owner.actions(); // 들고 있어도 문·콘센트는 다룰 수 있다
+    if (owner && !(owner instanceof Item)) return cmdActions(owner, owner.actions()); // 들고 있어도 문·콘센트는 다룰 수 있다
     const place = hand.findTarget(x, y);
-    return place?.valid ? [{ label: '놓기', run: () => hand.place(place) }] : [];
+    const held = hand.held;
+    return place?.valid ? [{ label: '놓기', run: () => { bus.dispatch({ t: 'place', by: bus.me, item: ref(held), p: v3(place.point) }); } }] : [];
   }
-  if (owner instanceof Item) return owner.actions().filter((a) => a.kind === 'pick');
-  return owner ? owner.actions() : [];
+  if (owner instanceof Item) return cmdActions(owner, owner.actions().filter((a) => a.kind === 'pick'));
+  return owner ? cmdActions(owner, owner.actions()) : [];
 }
 
 /**
@@ -439,7 +554,7 @@ function doubleActionsAt(x: number, y: number): Action[] {
   if (held) {
     // 들고 있는 것으로 탭한 기구에 할 수 있는 일 (따르기·지시약 떨어뜨리기 등) + 끼우기
     const target = ownerOf(hit.object);
-    const use = target instanceof Item ? held.useOn(target) : [];
+    const use = target instanceof Item ? held.useOn(target).map((a) => bus.wrapUse(held, target, a)) : [];
     const att = findAttach(held, hit);
     if (!att) return use;
     const point = hit.point.clone();
@@ -448,8 +563,10 @@ function doubleActionsAt(x: number, y: number): Action[] {
     return [...use, {
       label: `연결 · ${held.name} → ${att.socket.label}${where}`,
       run: () => {
-        const item = hand.handOver();
-        if (item) att.socket.attach(item, att.plug, point, camera.getWorldPosition(camPos));
+        bus.dispatch({
+          t: 'attach', by: bus.me, item: ref(held), socket: ref(att.socket), plug: held.plugs.indexOf(att.plug),
+          p: v3(point), cam: v3(camera.getWorldPosition(camPos)),
+        });
       },
     }];
   }
@@ -457,12 +574,12 @@ function doubleActionsAt(x: number, y: number): Action[] {
   if (term) return wires.actionsFor(term); // 단자를 직접 두 번 탭 → 그 단자에서 도선 시작
   const owner = ownerOf(hit.object);
   if (!(owner instanceof Item)) return [];
-  const acts = owner.actions().filter((a) => a.kind !== 'pick');
+  const acts = cmdActions(owner, owner.actions().filter((a) => a.kind !== 'pick'));
   for (const t of terminalsOf(owner)) {
-    acts.push({ label: `도선 연결 시작 · ${t.name}`, run: () => { wires.pending = t; } });
+    acts.push({ label: `도선 연결 시작 · ${t.name}`, local: true, run: () => { wires.pending = t; } });
     for (const w of t.wires) {
       const other = w.a === t ? w.b : w.a;
-      acts.push({ label: `도선 빼기 · ${t.name} ↔ ${other.label}`, secondary: true, run: () => wires.remove(w) });
+      acts.push({ label: `도선 빼기 · ${t.name} ↔ ${other.label}`, secondary: true, run: () => wires.requestRemove(w) });
     }
   }
   return acts;
@@ -501,33 +618,40 @@ function runActions(actions: Action[], x: number, y: number): void {
 }
 
 /**
- * 한 번 탭 / 두 번 탭 구별: 탭하면 0.3초 기다렸다가 두 번째 탭이 같은 자리(60 px 안)에 오면 두 번 탭.
+ * 한 번 탭 / 두 번 탭 구별: 두 번째 탭이 0.3초 안에 같은 자리(60 px 안)에 오면 두 번 탭.
  * 그 자리에 두 번 탭 동작이 없으면 기다리지 않고 바로 한 번 탭으로 처리한다 (반응이 늦지 않게).
  */
 const DOUBLE_MS = 300;
-let firstTap: { x: number; y: number; t: number; timer: number; run: () => void } | null = null;
-function handleTap(px: number, py: number): void {
+let firstTap: { x: number; y: number; t: number; run: () => void } | null = null;
+function handleTap(px: number, py: number, t: number): void {
   const x = (px / stage.clientWidth) * 2 - 1;
   const y = -(py / stage.clientHeight) * 2 + 1;
-  const now = performance.now();
-  if (firstTap && now - firstTap.t < DOUBLE_MS && Math.hypot(px - firstTap.x, py - firstTap.y) < 60) {
-    clearTimeout(firstTap.timer);
+  if (firstTap && t - firstTap.t < DOUBLE_MS && Math.hypot(px - firstTap.x, py - firstTap.y) < 60) {
     firstTap = null;
     runActions(doubleActionsAt(x, y), px, py);
     return;
   }
-  if (firstTap) { // 다른 자리를 탭함 → 앞의 탭은 한 번 탭으로 바로 처리
-    clearTimeout(firstTap.timer);
-    firstTap.run();
-    firstTap = null;
-  }
+  flushFirstTap(Infinity); // 다른 자리를 탭함 → 앞의 탭은 한 번 탭으로 바로 처리
   const single = singleActionsAt(x, y);
   const run = () => runActions(single, px, py);
   if (wires.pending || !doubleActionsAt(x, y).length) {
     run();
     return;
   }
-  firstTap = { x: px, y: py, t: now, run, timer: window.setTimeout(() => { firstTap = null; run(); }, DOUBLE_MS) };
+  firstTap = { x: px, y: py, t, run };
+}
+/**
+ * 기다리던 한 번 탭이 두 번 탭 시간을 넘겼으면 실행.
+ * 타이머 대신 매 프레임 탭을 다 처리한 "뒤에" 확인하고, 한 프레임만큼 더 기다린다 — 기기가 바빠 두 번째 탭이
+ * 한 프레임 늦게 들어와도 한 번 탭 둘로 쪼개지지 않게 (느린 태블릿 대비)
+ */
+let frameMs = 16;
+function flushFirstTap(now: number): void {
+  if (firstTap && now - firstTap.t >= DOUBLE_MS + frameMs) {
+    const f = firstTap;
+    firstTap = null;
+    f.run();
+  }
 }
 
 // ---------- 메인 루프 ----------
@@ -582,7 +706,7 @@ function collectEquipmentBoxes(): void {
 
 // 테스트용: 주소 끝이 #debug일 때만 내부 객체를 노출 (자동 테스트가 조립을 빠르게 재현하는 데 씀)
 if (location.hash === '#debug') {
-  (window as unknown as Record<string, unknown>).lab = { THREE, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors };
+  (window as unknown as Record<string, unknown>).lab = { THREE, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt };
 }
 
 renderer.setAnimationLoop(() => {
@@ -621,6 +745,7 @@ renderer.setAnimationLoop(() => {
     s.hasTube = circuits.some((c) => c.supply === s && c.tube);
   }
   for (const p of stock.circuitParts) p.update(dt);
+  updateGlowLights();
   for (const a of stock.ammeters) a.update();
   beams.update();
   rotateBar.update();
@@ -641,7 +766,9 @@ renderer.setAnimationLoop(() => {
   if (input.interactKey) singleActionsAt(aimX, 0)[0]?.run();
 
   // 화면 탭 (한 번 / 두 번 구별)
-  for (const t of input.taps) handleTap(t.x, t.y);
+  for (const t of input.taps) handleTap(t.x, t.y, performance.now());
+  frameMs = Math.min(dt * 1000, 150);
+  flushFirstTap(performance.now());
   // 길게 누르기 = 두 번 탭과 같은 조작 메뉴
   for (const t of input.holds) {
     const x = (t.x / stage.clientWidth) * 2 - 1;

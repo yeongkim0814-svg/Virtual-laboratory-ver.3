@@ -3,6 +3,7 @@
  * 광전 효과뿐 아니라 어떤 회로 실험에서든 쓰는 범용 조절 패널.
  * (광전관이 회로에 있으면 "광전 효과 실험" 패널이 측정 기능까지 함께 보여 준다)
  */
+import { bus } from '../net/commands';
 import type { DCPowerSupply } from '../equipment/electrical';
 
 export class SupplyPanel {
@@ -17,11 +18,11 @@ export class SupplyPanel {
       b.addEventListener('click', () => this.target && this.setVoltage(this.target.voltage + Number(b.dataset.dv)));
     }
     for (const b of byId('sup-pol').querySelectorAll<HTMLButtonElement>('button')) {
-      b.addEventListener('click', () => { if (this.target) this.target.reversed = b.dataset.v === 'rev'; this.refresh(); });
+      b.addEventListener('click', () => { if (this.target) bus.set(this.target, 'reversed', b.dataset.v === 'rev'); this.refresh(); });
     }
     byId('sup-power').addEventListener('click', () => {
       const t = this.target;
-      if (t?.port) t.on = !t.on;
+      if (t?.port) bus.set(t, 'on', !t.on);
       this.refresh();
     });
     byId('sup-close').addEventListener('click', () => this.close());
@@ -46,7 +47,7 @@ export class SupplyPanel {
 
   private setVoltage(v: number): void {
     if (!this.target) return;
-    this.target.voltage = Math.min(5, Math.max(0, Math.round(v * 100) / 100));
+    bus.set(this.target, 'voltage', Math.min(5, Math.max(0, Math.round(v * 100) / 100)));
     this.refresh();
   }
 

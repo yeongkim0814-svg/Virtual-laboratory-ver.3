@@ -112,7 +112,7 @@ export class DCPowerSupply extends Item implements Powered {
     const out: Action[] = [];
     if (this.port) out.push({ label: this.on ? '전원 장치 끄기' : '전원 장치 켜기', run: () => { this.on = !this.on; } });
     out.push(...this.powerActions(this));
-    out.push({ label: '전압 조절', run: () => this.onOpenControls(this) });
+    out.push({ label: '전압 조절', local: true, run: () => this.onOpenControls(this) });
     return out;
   }
 

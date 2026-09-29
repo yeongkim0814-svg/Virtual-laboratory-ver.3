@@ -200,7 +200,10 @@ const BUILDERS: Record<Furniture['kind'], Builder> = {
   wasteCabinet(g, f) {
     const r = f.rect;
     const front = frontOf(r);
-    const cab = new StorageCabinet(r, front, f.height, 0, CAB_MATS, { shelves: [0.05, 0.45], solidDoors: true, doorTop: f.height - 0.12 });
+    const cab = new StorageCabinet(r, front, f.height, 0, CAB_MATS, {
+      // 칸 하나 + 양문: 넓은 수납 공간 하나를 가운데에서 양쪽으로 연다
+      sections: [1], shelves: [0.05, 0.45], solidDoors: true, doorTop: f.height - 0.12, doubleDoors: true,
+    });
     g.add(cab.group);
     cabinets.set(f.name, cab);
     // 경고 띠 (앞면 위쪽, 문 위)

@@ -179,6 +179,7 @@ export class Container extends Item {
   extraActions(): Action[] {
     const out: Action[] = [{
       label: '눈금 읽기',
+      local: true,
       run: () => chemHooks.toast(`${this.name}: ${this.volume > 0 ? `${this.reading()} · ${this.solution.colorName(this.pathCm)}` : '비어 있음'}`),
     }];
     if (this.kind === 'burette' && this.attachedTo) {
@@ -186,7 +187,7 @@ export class Container extends Item {
       else if (this.volume > 0) {
         out.unshift(
           ...FLOW_RATES.map(([n, r]) => ({ label: `콕 열기 · ${n} (${r} mL/s)`, run: () => { this.flowRate = r; } })),
-          { label: '정량 적하 (부피를 정해서)', run: () => chemHooks.dispense(this) },
+          { label: '정량 적하 (부피를 정해서)', local: true, run: () => chemHooks.dispense(this) },
         );
       }
     }
@@ -197,10 +198,10 @@ export class Container extends Item {
     if (!(target instanceof Container) || target === this) return [];
     if (target.kind === 'bottle') {
       if (this.kind === 'bottle') return [];
-      return [{ label: `받기 ← ${target.name}`, run: () => chemHooks.pour(target, this) }];
+      return [{ label: `받기 ← ${target.name}`, local: true, run: () => chemHooks.pour(target, this) }];
     }
-    if (this.volume <= 0) return [{ label: `${this.name}이(가) 비어 있음`, secondary: true, run: () => {} }];
-    return [{ label: `따르기 → ${target.name}`, run: () => chemHooks.pour(this, target) }];
+    if (this.volume <= 0) return [{ label: `${this.name}이(가) 비어 있음`, secondary: true, local: true, run: () => {} }];
+    return [{ label: `따르기 → ${target.name}`, local: true, run: () => chemHooks.pour(this, target) }];
   }
 }
 
@@ -345,6 +346,7 @@ export class PHPaper extends Item {
     if (!(target instanceof Container)) return [];
     return [{
       label: `pH 시험지 찍기 → ${target.name}`,
+      local: true, // 읽기만 한다 (용액은 그대로)
       run: () => {
         const pH = target.solution.pH();
         if (pH === null) {

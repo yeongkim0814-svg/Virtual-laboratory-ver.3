@@ -5,6 +5,7 @@
  * 운동 센서는 거리 x만 잰다. v·a는 x에서 계산한 값 (sim/logger.ts):
  * 창을 넓히면 매끄럽지만 충돌처럼 빠른 변화가 뭉개진다.
  */
+import { bus } from '../net/commands';
 import { MotionSensor, PHSensor, type DataSensor, type Laptop } from '../equipment/sensors';
 import { analyzeTitration, derive, intervalStats, type Derived } from '../sim/logger';
 import { downloadCsv, drawPlot, stamp, type Series } from './plotKit';
@@ -24,12 +25,11 @@ export class LoggerPanel {
     byId('lg-rec').addEventListener('click', () => {
       const l = this.target;
       if (!l || !l.sensors.length) return;
-      if (l.recording) l.stop();
-      else l.start();
+      bus.call(l, l.recording ? 'stop' : 'start');
       this.refresh(true);
     });
-    seg('lg-rate', (v) => { if (this.target) this.target.rate = v; this.refresh(true); });
-    seg('lg-dur', (v) => { if (this.target) this.target.duration = v; this.refresh(true); });
+    seg('lg-rate', (v) => { if (this.target) bus.set(this.target, 'rate', v); this.refresh(true); });
+    seg('lg-dur', (v) => { if (this.target) bus.set(this.target, 'duration', v); this.refresh(true); });
     seg('lg-win', (v) => { this.window = v; this.refresh(true); });
     const flip = byId<HTMLInputElement>('lg-flip');
     flip.addEventListener('change', () => { this.flip = flip.checked; this.refresh(true); });
@@ -60,7 +60,7 @@ export class LoggerPanel {
     this.sensor = target.sensors[0] ?? null;
     this.sensorKey = '';
     // 적정은 오래 걸리므로 pH 센서면 기록 시간 기본값(10 s)을 "계속"으로
-    if (this.sensor instanceof PHSensor && target.duration === 10) target.duration = 0;
+    if (this.sensor instanceof PHSensor && target.duration === 10) bus.set(target, 'duration', 0);
     this.el.hidden = false;
     byId('lg-title').textContent = `측정 프로그램 · ${target.name}`;
     this.onToggle(true);

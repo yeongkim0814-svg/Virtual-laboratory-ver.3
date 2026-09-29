@@ -8,6 +8,7 @@
  *      원점을 지나는 직선 I = V/R 맞춤 → 저항 R (옴의 법칙이면 점들이 이 직선 위)
  *      거듭제곱 I ∝ Vⁿ 맞춤 → n = 1이면 옴 소자, n < 1이면 전구처럼 전류가 커질수록 저항이 커지는 소자
  */
+import { bus } from '../net/commands';
 import type { DCPowerSupply } from '../equipment/electrical';
 import { Ammeter, Led, Voltmeter, type DCCircuitState } from '../equipment/circuitParts';
 import { downloadCsv, drawPlot, stamp, type Series } from './plotKit';
@@ -36,7 +37,7 @@ export class CircuitPanel {
     }
     byId('dc-power').addEventListener('click', () => {
       const t = this.target;
-      if (t?.port) t.on = !t.on;
+      if (t?.port) bus.set(t, 'on', !t.on);
       this.refresh(true);
     });
     byId('dc-close').addEventListener('click', () => this.close());
@@ -69,7 +70,7 @@ export class CircuitPanel {
 
   private setVoltage(v: number): void {
     if (!this.target) return;
-    this.target.voltage = Math.round(Math.min(5, Math.max(0, v)) * 100) / 100;
+    bus.set(this.target, 'voltage', Math.round(Math.min(5, Math.max(0, v)) * 100) / 100);
     this.refresh(true);
   }
 
@@ -96,7 +97,7 @@ export class CircuitPanel {
   private startSweep(): void {
     const t = this.target;
     if (!t?.port) return;
-    t.on = true;
+    bus.set(t, 'on', true);
     this.rows = [];
     this.sweep = { i: 0, t: performance.now() };
     this.setVoltage(SWEEP[0]);

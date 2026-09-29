@@ -145,7 +145,7 @@ export class Item implements Interactable {
   /** 보조 동작 "회전" (길게 누르면 나오는 메뉴에) → 1° 단위로 돌리는 막대가 열린다 */
   rotateAction(): Action[] {
     if (!this.rotationTarget()) return [];
-    return [{ label: `회전 · ${this.name}`, secondary: true, run: () => this.onRotate(this) }];
+    return [{ label: `회전 · ${this.name}`, secondary: true, local: true, run: () => this.onRotate(this) }];
   }
 
   /** 이 물체를 들고 다른 기구(target)를 두 번 탭했을 때 할 수 있는 동작 (예: 따르기, 지시약 떨어뜨리기) */
@@ -317,7 +317,8 @@ export class Socket {
 /** 조립체 전체에서 실험 열기 동작을 모은다 */
 export function assemblyExperiments(root: Item): Action[] {
   const out: Action[] = [];
-  for (const it of root.assembly()) out.push(...it.experimentActions());
+  // 실험 패널 열기는 내 화면에서만
+  for (const it of root.assembly()) out.push(...it.experimentActions().map((a) => ({ ...a, local: true })));
   return out;
 }
 

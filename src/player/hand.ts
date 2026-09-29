@@ -59,6 +59,8 @@ export class Hand {
     item.object.position.set(0.22 + 0.2 * h, -0.2 - 0.5 * h, -0.45 - 0.35 * h);
     item.object.rotation.set(0, 0, 0);
     setLayer(item.object, HELD_LAYER);
+    // 다음 프레임을 기다리지 않고 바로 끼울 곳을 찾을 수 있게 (집자마자 두 번 탭해도 위치가 맞도록)
+    item.object.updateWorldMatrix(true, true);
   }
 
   /** 지정한 자리에 내려놓는다. 성공하면 true */

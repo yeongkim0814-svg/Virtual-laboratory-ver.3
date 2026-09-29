@@ -268,7 +268,7 @@ export class Laptop extends Item {
 
   extraActions(): Action[] {
     return [
-      { label: '측정 프로그램 열기', run: () => this.onOpenPanel(this) },
+      { label: '측정 프로그램 열기', local: true, run: () => this.onOpenPanel(this) },
       ...this.linkActions(this),
       ...(this.sensors.length ? [{ label: this.recording ? '기록 멈추기' : '기록 시작', run: () => (this.recording ? this.stop() : this.start()) }] : []),
     ];
@@ -397,7 +397,7 @@ export class SensorNetwork {
     const l = this.nearestLaptop(s);
     return l
       ? [{ label: `노트북에 연결 · ${l.name}`, run: () => this.connect(s, l) }]
-      : [{ label: `노트북이 너무 멂 (USB ${USB_LENGTH} m)`, secondary: true, run: () => {} }];
+      : [{ label: `노트북이 너무 멂 (USB ${USB_LENGTH} m)`, secondary: true, local: true, run: () => {} }];
   }
 
   connect(s: DataSensor, l: Laptop): void {

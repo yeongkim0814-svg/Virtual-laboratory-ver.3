@@ -121,6 +121,15 @@ export class PendulumString extends Item {
     this.clearanceTimer = 0;
   }
 
+  /** 패널 "놓기"·"초기화" (명령 call로 불린다) */
+  releaseSim(): void {
+    this.sim.release();
+  }
+
+  resetSimClock(): void {
+    this.sim.reset();
+  }
+
   /** 실 길이·고리 위치를 반영 */
   layout(): void {
     const l = this.usedLength();

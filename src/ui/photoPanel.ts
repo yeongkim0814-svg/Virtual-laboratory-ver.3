@@ -6,6 +6,7 @@
  * 3. 파장을 바꿔 여러 번 기록하면 V_s–f 그래프에 직선을 맞춰
  *      기울기 = h/e → 플랑크 상수 h,   절편 = −W/e → 일함수 W
  */
+import { bus } from '../net/commands';
 import type { DCPowerSupply, PhotoCircuitState } from '../equipment/electrical';
 import { E_CHARGE, H, frequency, linearFit, photonEnergyEV } from '../sim/photoelectric';
 import { wavelengthToRGB } from '../sim/optics';
@@ -37,11 +38,11 @@ export class PhotoPanel {
       b.addEventListener('click', () => this.target && this.setVoltage(this.target.voltage + Number(b.dataset.dv)));
     }
     for (const b of byId('pe-pol').querySelectorAll<HTMLButtonElement>('button')) {
-      b.addEventListener('click', () => { if (this.target) this.target.reversed = b.dataset.v === 'rev'; this.refresh(true); });
+      b.addEventListener('click', () => { if (this.target) bus.set(this.target, 'reversed', b.dataset.v === 'rev'); this.refresh(true); });
     }
     byId('pe-power').addEventListener('click', () => {
       const t = this.target;
-      if (t?.port) t.on = !t.on;
+      if (t?.port) bus.set(t, 'on', !t.on);
       this.refresh(true);
     });
     byId('pe-theory-toggle').addEventListener('change', () => this.refresh(true));
@@ -70,7 +71,7 @@ export class PhotoPanel {
 
   private setVoltage(v: number): void {
     if (!this.target) return;
-    this.target.voltage = Math.round(Math.min(5, Math.max(0, v)) * 100) / 100;
+    bus.set(this.target, 'voltage', Math.round(Math.min(5, Math.max(0, v)) * 100) / 100);
     this.refresh(true);
   }
 

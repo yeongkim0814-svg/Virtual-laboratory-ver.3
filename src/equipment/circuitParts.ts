@@ -41,12 +41,20 @@ export abstract class CircuitPart extends Item {
   inCircuit = false;
   onOpenPanel: (p: CircuitPart) => void = () => {};
 
+  /**
+   * 빛을 내는 부품이면 주변을 비추는 빛 (없으면 null).
+   * 점광원은 개수만큼 모든 표면의 그리기 비용이 늘기 때문에 부품마다 달지 않고, main이 가장 밝은 몇 개에만 공용 광원을 옮겨 단다
+   */
+  glowLight(): { local: THREE.Vector3; color: number; intensity: number; distance: number } | null {
+    return null;
+  }
+
   /** 지금 이 부품의 저항 (Ω). null = 끊김(열린 스위치) */
   abstract resistance(): number | null;
 
   /** 두 번 탭 메뉴에 "직류 회로 실험" (왼쪽 위 바로 열기 버튼은 전원 장치 쪽에서 하나만) */
   protected circuitActions(): Action[] {
-    return this.inCircuit ? [{ label: '직류 회로 실험', run: () => this.onOpenPanel(this) }] : [];
+    return this.inCircuit ? [{ label: '직류 회로 실험', local: true, run: () => this.onOpenPanel(this) }] : [];
   }
 
   extraActions(): Action[] {
@@ -95,7 +103,7 @@ export class Bulb extends CircuitPart {
   readonly filament = new Filament(3.8, 0.3);
   private glow: THREE.MeshBasicMaterial;
   private glass: THREE.MeshLambertMaterial;
-  private light: THREE.PointLight;
+  private brightness = 0;
 
   constructor(name: string) {
     const g = new THREE.Group();
@@ -109,15 +117,16 @@ export class Bulb extends CircuitPart {
     super(g, { name, radius: 0.05, mass: 0.04, touchPad: false });
     this.glow = glow;
     this.glass = glass;
-    this.light = new THREE.PointLight(0xffc070, 0, 1.4, 2);
-    this.light.position.set(0, 0.046, 0);
-    g.add(this.light);
     this.a = new Terminal(this, '왼쪽 단자', 'n', v(-0.03, 0.02, 0.012), FRONT);
     this.b = new Terminal(this, '오른쪽 단자', 'n', v(0.03, 0.02, 0.012), FRONT);
   }
 
   resistance(): number {
     return this.filament.R;
+  }
+
+  glowLight() {
+    return this.brightness > 0.01 ? { local: new THREE.Vector3(0, 0.046, 0), color: 0xffc070, intensity: 0.9 * this.brightness, distance: 1.4 } : null;
   }
 
   update(): void {
@@ -127,7 +136,7 @@ export class Bulb extends CircuitPart {
     const c = new THREE.Color().setRGB(0.19 + b, 0.16 + 0.8 * b * Math.min(1, T / 2700), 0.12 + 0.55 * b * Math.min(1, (T / 2700) ** 3));
     this.glow.color.copy(c);
     this.glass.emissive.setRGB(0.9 * b, 0.65 * b, 0.3 * b);
-    this.light.intensity = 0.9 * b;
+    this.brightness = b;
   }
 }
 
@@ -152,7 +161,7 @@ export class Led extends CircuitPart {
   onBurn: (l: Led) => void = () => {};
   private dome: THREE.MeshLambertMaterial;
   private chip: THREE.MeshBasicMaterial;
-  private light: THREE.PointLight;
+  private brightness = 0;
   private readonly color: THREE.Color;
 
   /** @param vj20 20 mA에서의 접합 전압 (V) */
@@ -170,13 +179,14 @@ export class Led extends CircuitPart {
     this.dome = dome;
     this.chip = chip;
     this.color = new THREE.Color(color);
-    this.light = new THREE.PointLight(color, 0, 0.8, 2);
-    this.light.position.set(0, 0.04, 0);
-    g.add(this.light);
     this.junction = { a: 0, b: 0, Is: 0.02 / Math.exp(vj20 / Led.N_VT), nVt: Led.N_VT, vd: 0 };
     // 애노드(+, 긴 다리) · 캐소드(−)
     this.a = new Terminal(this, '+ (애노드)', '+', v(-0.022, 0.02, 0.012), FRONT);
     this.b = new Terminal(this, '− (캐소드)', '-', v(0.022, 0.02, 0.012), FRONT);
+  }
+
+  glowLight() {
+    return this.brightness > 0.01 ? { local: new THREE.Vector3(0, 0.04, 0), color: this.color.getHex(), intensity: 0.25 * this.brightness, distance: 0.8 } : null;
   }
 
   /** 옴 소자가 아님 — 회로 해석이 따로 다룬다 */
@@ -231,7 +241,7 @@ export class Led extends CircuitPart {
     this.dome.opacity = this.burnt ? 0.95 : 0.75;
     if (this.burnt) this.dome.color.setRGB(this.color.r * 0.25, this.color.g * 0.25, this.color.b * 0.25);
     else this.dome.color.copy(this.color);
-    this.light.intensity = 0.25 * b;
+    this.brightness = b;
   }
 }
 
@@ -379,25 +389,41 @@ export function solveDCCircuits(
     id(a);
     id(b);
   }
-  // LED마다 속 마디 하나 (애노드 ─ R_s ─ 속 마디 ─ 접합 ─ 캐소드)
-  const leds = parts.filter((p): p is Led => p instanceof Led);
-  const inner = new Map<Led, number>();
-  for (const l of leds) inner.set(l, idx.size + inner.size);
-  const n = idx.size + leds.length;
-  const comp = Array.from({ length: n }, (_, i) => i);
+  const comp = Array.from({ length: idx.size }, (_, i) => i);
   const find = (i: number): number => (comp[i] === i ? i : (comp[i] = find(comp[i])));
   for (const [a, b] of all) comp[find(id(a))] = find(id(b));
-  const tubeComp = new Set(tubes.map((t) => find(id(t.anode))));
-  const liveSupplies = supplies.filter((s) => s.on && s.port);
+  const compOf = (t: Terminal) => find(id(t));
+  const tubeComp = new Set(tubes.map((t) => compOf(t.anode)));
+  const liveSupplies = supplies.filter((s) => s.on && s.port && !tubeComp.has(compOf(s.plus)));
+  // 켜진 전원이 있는 회로만 푼다 (아무 데도 안 이어진 부품까지 매 프레임 풀면 태블릿에서 느려진다)
+  const active = new Set(liveSupplies.map((s) => compOf(s.plus)));
+  const on = (t: Terminal) => active.has(compOf(t));
+  // 푸는 회로의 마디만 0, 1, 2 … 로 다시 번호 매김
+  const local = new Map<number, number>();
+  const lid = (t: Terminal) => {
+    const g = id(t);
+    if (!local.has(g)) local.set(g, local.size);
+    return local.get(g)!;
+  };
+  const activeParts = parts.filter((p) => on(p.a));
+  const activeMeters = microammeters.filter((m) => on(m.plus));
+  for (const p of activeParts) { lid(p.a); lid(p.b); }
+  for (const m of activeMeters) { lid(m.plus); lid(m.minus); }
+  for (const s of liveSupplies) { lid(s.plus); lid(s.minus); }
+  // LED마다 속 마디 하나 (애노드 ─ R_s ─ 속 마디 ─ 접합 ─ 캐소드)
+  const leds = activeParts.filter((p): p is Led => p instanceof Led);
+  const inner = new Map<Led, number>();
+  for (const l of leds) inner.set(l, local.size + inner.size);
+  const n = local.size + leds.length;
 
   const conductors = (): Conductor[] => {
     const out: Conductor[] = [];
-    for (const p of parts) {
+    for (const p of activeParts) {
       const R = p.resistance();
-      if (R !== null) out.push({ a: id(p.a), b: id(p.b), R });
+      if (R !== null) out.push({ a: lid(p.a), b: lid(p.b), R });
     }
-    for (const m of microammeters) out.push({ a: id(m.plus), b: id(m.minus), R: 0.01 });
-    for (const l of leds) if (!l.burnt) out.push({ a: id(l.a), b: inner.get(l)!, R: Led.RS });
+    for (const m of activeMeters) out.push({ a: lid(m.plus), b: lid(m.minus), R: 0.01 });
+    for (const l of leds) if (!l.burnt) out.push({ a: lid(l.a), b: inner.get(l)!, R: Led.RS });
     return out;
   };
   const junctions = (): Junction[] => {
@@ -405,24 +431,22 @@ export function solveDCCircuits(
     for (const l of leds) {
       if (l.burnt) continue;
       l.junction.a = inner.get(l)!;
-      l.junction.b = id(l.b);
+      l.junction.b = lid(l.b);
       out.push(l.junction);
     }
     return out;
   };
-  const sources: Source[] = liveSupplies.map((s) => ({ a: id(s.plus), b: id(s.minus), E: s.output, r: SUPPLY_R, Imax: SUPPLY_IMAX }));
+  const sources: Source[] = liveSupplies.map((s) => ({ a: lid(s.plus), b: lid(s.minus), E: s.output, r: SUPPLY_R, Imax: SUPPLY_IMAX }));
 
-  const bulbs = parts.filter((p): p is Bulb => p instanceof Bulb);
-  const steps = Math.max(1, Math.min(12, Math.ceil(dt / 0.004)));
-  const ledCurrent = (l: Led, V: Float64Array) => (l.burnt ? 0 : (V[id(l.a)] - V[inner.get(l)!]) / Led.RS);
-  let res = solveDC(n, conductors(), sources, junctions());
-  for (let k = 0; k < steps; k++) {
-    for (const b of bulbs) {
-      const I = (res.V[id(b.a)] - res.V[id(b.b)]) / b.filament.R;
-      b.filament.heat(I, dt / steps);
-    }
+  const bulbs = activeParts.filter((p): p is Bulb => p instanceof Bulb);
+  const ledCurrent = (l: Led, V: Float64Array) => (l.burnt ? 0 : (V[lid(l.a)] - V[inner.get(l)!]) / Led.RS);
+  // 필라멘트·LED가 있을 때만 시간을 잘게 나눠 (풀기 → 가열) 되풀이
+  const steps = bulbs.length || leds.length ? Math.max(1, Math.min(12, Math.ceil(dt / 0.004))) : 0;
+  let res = n ? solveDC(n, conductors(), sources, junctions()) : null;
+  for (let k = 0; res && k < steps; k++) {
+    for (const b of bulbs) b.filament.heat((res.V[lid(b.a)] - res.V[lid(b.b)]) / b.filament.R, dt / steps);
     for (const l of leds) {
-      l.voltage = res.V[id(l.a)] - res.V[id(l.b)];
+      l.voltage = res.V[lid(l.a)] - res.V[lid(l.b)];
       l.current = ledCurrent(l, res.V);
       l.heat(dt / steps);
     }
@@ -430,33 +454,36 @@ export function solveDCCircuits(
   }
 
   for (const p of parts) {
-    const c = find(id(p.a));
     const R = p.resistance();
-    p.voltage = tubeComp.has(c) ? 0 : res.V[id(p.a)] - res.V[id(p.b)];
-    p.current = tubeComp.has(c) ? 0 : p instanceof Led ? ledCurrent(p, res.V) : R === null ? 0 : p.voltage / R;
+    const live = !!res && on(p.a);
+    p.voltage = live ? res!.V[lid(p.a)] - res!.V[lid(p.b)] : 0;
+    p.current = !live ? 0 : p instanceof Led ? ledCurrent(p, res!.V) : R === null ? 0 : p.voltage / R;
     p.inCircuit = false;
+    // 전원이 없는 회로의 필라멘트·LED는 식는다
+    if (!live && p instanceof Bulb) p.filament.heat(0, dt);
+    if (!live && p instanceof Led) p.heat(dt);
   }
   // 광전관이 없는 회로의 마이크로전류계는 여기서 채운다 (광전 효과 해석이 먼저 null로 비워 둠)
   for (const m of microammeters) {
-    if (tubeComp.has(find(id(m.plus)))) continue;
-    const I = (res.V[id(m.plus)] - res.V[id(m.minus)]) / 0.01;
+    if (tubeComp.has(compOf(m.plus))) continue;
+    const I = res && on(m.plus) ? (res.V[lid(m.plus)] - res.V[lid(m.minus)]) / 0.01 : 0;
     m.reading = Math.abs(I) > 1e-12 ? I : null;
   }
 
   const out: DCCircuitState[] = [];
   for (const s of supplies) {
-    const c = find(id(s.plus));
+    const c = compOf(s.plus);
     if (tubeComp.has(c)) continue;
     const k = liveSupplies.indexOf(s);
-    const inComp = parts.filter((p) => find(id(p.a)) === c);
+    const inComp = parts.filter((p) => compOf(p.a) === c);
     if (!inComp.length) continue;
     for (const p of inComp) p.inCircuit = true;
     out.push({
       supply: s,
       parts: inComp,
-      current: k < 0 ? 0 : res.sourceI[k],
-      terminalV: res.V[id(s.plus)] - res.V[id(s.minus)],
-      limited: k >= 0 && res.limited[k],
+      current: k < 0 || !res ? 0 : res.sourceI[k],
+      terminalV: k < 0 || !res ? 0 : res.V[lid(s.plus)] - res.V[lid(s.minus)],
+      limited: k >= 0 && !!res && res.limited[k],
     });
   }
   return out;

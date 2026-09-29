@@ -98,6 +98,15 @@ export class Spring extends Item {
     this.sim.reset();
   }
 
+  /** 패널 "놓기"·"초기화" (명령 call로 불린다) */
+  releaseSim(): void {
+    this.sim.release();
+  }
+
+  resetSimClock(): void {
+    this.sim.reset();
+  }
+
   /** 자연 길이보다 ext만큼 늘어난 모양으로 다시 그린다 */
   private shape(ext: number): void {
     if (Math.abs(ext - this.shownExt) < 1e-5) return;

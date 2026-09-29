@@ -8,6 +8,11 @@ export interface Action {
   secondary?: boolean;
   /** 'pick' = 집기. 배치된 기구는 한 번 탭하면 집기만, 나머지 조작은 두 번 탭 */
   kind?: 'pick';
+  /**
+   * 내 화면에서만 일어나는 동작 (패널·막대 열기, 눈금 읽기 안내 등) — 세계 상태를 바꾸지 않으므로 명령(net/commands.ts)으로 보내지 않는다.
+   * 나머지 동작은 모두 명령 버스를 거쳐 실행된다.
+   */
+  local?: boolean;
 }
 
 /**

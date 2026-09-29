@@ -2,6 +2,7 @@
  * 단진자 실험 패널: 조건 조절 · 실시간 측정값 · θ(t) 그래프 · 측정 기록 표
  * 직접 조립한 진자(클램프 → 실 → 추)의 추나 실을 탭하고 "진자 실험"을 고르면 그 진자에 연결된다.
  */
+import { bus } from '../net/commands';
 import type { PendulumString } from '../equipment/pendulumString';
 import { G, exactPeriod, smallAnglePeriod } from '../sim/pendulum';
 import { linearFit } from '../sim/photoelectric';
@@ -42,22 +43,22 @@ export class PendulumPanel {
     const conditionChanged = () => {
       const t = this.target;
       if (!t) return;
-      t.length = Number(this.lenInput.value);
-      t.sim.theta0 = Number(this.thInput.value) * DEG;
-      t.sim.airDrag = this.dragInput.checked;
-      t.resetSim();
+      bus.set(t, 'length', Number(this.lenInput.value));
+      bus.set(t, 'sim.theta0', Number(this.thInput.value) * DEG);
+      bus.set(t, 'sim.airDrag', this.dragInput.checked);
+      bus.call(t, 'resetSim');
       this.refreshControls();
     };
     this.lenInput.addEventListener('input', conditionChanged);
     this.thInput.addEventListener('input', conditionChanged);
     this.dragInput.addEventListener('change', conditionChanged);
 
-    segmented('pp-method', (v) => { if (this.target) this.target.sim.method = v as Method; conditionChanged(); });
-    segmented('pp-dt', (v) => { if (this.target) this.target.sim.dt = Number(v); conditionChanged(); });
+    segmented('pp-method', (v) => { if (this.target) bus.set(this.target, 'sim.method', v as Method); conditionChanged(); });
+    segmented('pp-dt', (v) => { if (this.target) bus.set(this.target, 'sim.dt', Number(v)); conditionChanged(); });
     segmented('pp-speed', (v) => { this.speed = Number(v); this.refreshControls(); });
 
-    byId('pp-release').addEventListener('click', () => { if (this.target?.isPendulum) this.target.sim.release(); });
-    byId('pp-reset').addEventListener('click', () => { this.target?.sim.reset(); });
+    byId('pp-release').addEventListener('click', () => { if (this.target?.isPendulum) bus.call(this.target, 'releaseSim'); });
+    byId('pp-reset').addEventListener('click', () => { if (this.target) bus.call(this.target, 'resetSimClock'); });
     byId('pp-close').addEventListener('click', () => this.close());
     byId('pp-record').addEventListener('click', () => this.record());
     byId('pp-clear').addEventListener('click', () => { this.log = []; saveLog(this.log); this.renderLog(); });

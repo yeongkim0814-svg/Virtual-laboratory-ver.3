@@ -4,6 +4,7 @@
  *  - ±1° 버튼: 붙지 않고 정확히 1°씩 (미세 조정)
  *  - ±15° 버튼: 15°씩
  */
+import { bus } from '../net/commands';
 import type { Item } from '../world/items';
 
 /** 15°의 배수에서 ±2° 안이면 그 배수로 */
@@ -40,7 +41,7 @@ export class RotateBar {
   }
 
   private set(deg: number): void {
-    this.target?.setYawDeg(norm(deg));
+    if (this.target) bus.call(this.target, 'setYawDeg', norm(deg));
     this.refresh();
   }
 

@@ -26,7 +26,7 @@ export class Textbook extends Item {
   }
 
   extraActions(): Action[] {
-    return [{ label: '교재 펼치기', run: () => this.onOpen(this) }];
+    return [{ label: '교재 펼치기', local: true, run: () => this.onOpen(this) }];
   }
 }
 

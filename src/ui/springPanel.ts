@@ -5,6 +5,7 @@
  *   → 기울기 a = 4π²/k  →  k = 4π²/a
  *   → 절편 b = a·(m_s/3)  →  m_s = 3b/a   (그래프가 원점을 지나지 않는 이유 = 용수철 자신의 질량)
  */
+import { bus } from '../net/commands';
 import type { Spring } from '../equipment/spring';
 import { G } from '../sim/pendulum';
 import { linearFit } from '../sim/photoelectric';
@@ -36,9 +37,9 @@ export class SpringPanel {
     const changed = () => {
       const t = this.target;
       if (!t) return;
-      t.sim.amplitude = Number(this.aInput.value);
-      t.sim.airDrag = this.dragInput.checked;
-      t.resetSim();
+      bus.set(t, 'sim.amplitude', Number(this.aInput.value));
+      bus.set(t, 'sim.airDrag', this.dragInput.checked);
+      bus.call(t, 'resetSim');
       this.refreshControls();
     };
     this.aInput.addEventListener('input', changed);
@@ -48,9 +49,9 @@ export class SpringPanel {
     }
     byId('sg-release').addEventListener('click', () => {
       const t = this.target;
-      if (t?.isOscillator && !t.touchesTable) t.sim.release();
+      if (t?.isOscillator && !t.touchesTable) bus.call(t, 'releaseSim');
     });
-    byId('sg-reset').addEventListener('click', () => this.target?.sim.reset());
+    byId('sg-reset').addEventListener('click', () => { if (this.target) bus.call(this.target, 'resetSimClock'); });
     byId('sg-close').addEventListener('click', () => this.close());
     byId('sg-record').addEventListener('click', () => this.record());
     byId('sg-clear').addEventListener('click', () => { this.log = []; saveLog(this.log); this.renderLog(); });

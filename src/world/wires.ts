@@ -90,6 +90,9 @@ export class WireSystem {
   readonly wires: Wire[] = [];
   /** 연결을 시작한 단자 (다른 단자를 탭하기를 기다리는 중) */
   pending: Terminal | null = null;
+  /** 도선 잇기·빼기를 실제로 하는 곳 — main이 명령 버스로 바꿔 끼운다 (기본은 바로 실행) */
+  requestConnect: (a: Terminal, b: Terminal) => void = (a, b) => this.connect(a, b);
+  requestRemove: (w: Wire) => void = (w) => this.remove(w);
   /** 연결 중일 때 단자 → 조준점까지 보여 주는 미리 보기 선 */
   private preview = new Cable(20, 0.004, 0xffd27a);
   private previewPts = Array.from({ length: 20 }, () => new THREE.Vector3());
@@ -120,14 +123,15 @@ export class WireSystem {
     if (p && p !== t) {
       const far = p.worldPosition().distanceTo(t.worldPosition()) > WIRE_MAX;
       return far
-        ? [{ label: `도선이 닿지 않음 (최대 ${WIRE_MAX} m)`, run: () => { this.pending = null; } }]
-        : [{ label: `도선 연결 → ${t.label}`, run: () => this.connect(p, t) }];
+        ? [{ label: `도선이 닿지 않음 (최대 ${WIRE_MAX} m)`, local: true, run: () => { this.pending = null; } }]
+        : [{ label: `도선 연결 → ${t.label}`, run: () => { this.pending = null; this.requestConnect(p, t); } }];
     }
-    if (p === t) return [{ label: '도선 연결 취소', run: () => { this.pending = null; } }];
-    const out: Action[] = [{ label: `도선 연결 시작 · ${t.label}`, run: () => { this.pending = t; } }];
+    // 연결 시작·취소는 내 손의 상태일 뿐 (도선이 실제로 생기는 순간만 명령)
+    if (p === t) return [{ label: '도선 연결 취소', local: true, run: () => { this.pending = null; } }];
+    const out: Action[] = [{ label: `도선 연결 시작 · ${t.label}`, local: true, run: () => { this.pending = t; } }];
     for (const w of t.wires) {
       const other = w.a === t ? w.b : w.a;
-      out.push({ label: `도선 빼기 (↔ ${other.label})`, run: () => this.remove(w) });
+      out.push({ label: `도선 빼기 (↔ ${other.label})`, run: () => this.requestRemove(w) });
     }
     return out;
   }

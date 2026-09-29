@@ -179,7 +179,7 @@ export class PowerSystem {
   deviceActions(d: Powered): Action[] {
     if (d.port) return [{ label: `전원 뽑기 · ${d.name}`, secondary: true, run: () => this.unplug(d) }];
     // 닿는 콘센트가 없으면 안내만 (보조 동작이라 짧은 탭의 "집기"를 방해하지 않음)
-    if (!this.nearestFreePort(d)) return [{ label: `콘센트가 너무 멂 (전원선 ${d.cordLength} m)`, secondary: true, run: () => {} }];
+    if (!this.nearestFreePort(d)) return [{ label: `콘센트가 너무 멂 (전원선 ${d.cordLength} m)`, secondary: true, local: true, run: () => {} }];
     return [{ label: '전원 연결', run: () => this.plug(d) }];
   }
 
