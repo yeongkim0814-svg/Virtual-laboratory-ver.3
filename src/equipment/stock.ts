@@ -11,8 +11,9 @@
  *   칸 7                    : 이중 슬릿 d = 0.10 · 0.20 mm, 단일 슬릿 a = 0.10 mm
  *   칸 6, 7 아래 선반 (불투명 문 안) : 직류 전원 장치, 마이크로전류계, 광전관 2개 (Cs · Na 음극)
  *
- * 뒤쪽 벽 수납장(높이 0.9 m) 위: 역학 레일 1.2 m, 수레 2대, 질량 막대 250 g × 4 (길어서 보관장에 안 들어감)
- * 칠판 앞 교탁 위: 노트북 2대 (측정 프로그램), 운동 센서 2개
+ * 뒤쪽 벽 낮은 수납장(여닫는 칸): 칸 0 역학 레일 1.2 m, 칸 1 수레 2대 + 질량 막대 250 g × 4, 칸 2 운동 센서 2개
+ * 칠판 앞 교탁: 노트북 1·2, 스탠딩 테이블: 노트북 3 (측정 프로그램)
+ * 준비실은 화학 실험용 (시약장 추가 예정) — 물리 기구는 넣지 않는다
  */
 import type { StorageCabinet } from '../world/cabinet';
 import { at, type Item } from '../world/items';
@@ -39,7 +40,9 @@ export interface Stock {
   motionSensors: MotionSensor[];
 }
 
-export function stockEquipment(cab: StorageCabinet): Stock {
+export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
+  const cab = cabs.get('실험 기구 보관장')!;
+  const low = cabs.get('실험 기구 수납장')!; // 뒤쪽 벽 낮은 수납장
   const strings = [new PendulumString(), new PendulumString()];
   // 용수철: k, 자연 길이, 자기 질량, 탄성 한계 늘어남
   const springs = [
@@ -53,25 +56,26 @@ export function stockEquipment(cab: StorageCabinet): Stock {
   const tubes = [new Phototube('Cs', 2.14), new Phototube('Na', 2.28)];
   const rails = [new Rail()];
   const carts = [new Cart('수레 A', 0x2f6fb0), new Cart('수레 B', 0xd07a2a)];
-  const top = (x: number, z: number) => new THREE.Vector3(x, 0.9, z);
-  // 교탁(높이 0.76 m): 화면이 실험실 쪽(+x)을 보게 90° 돌려 놓는다
-  const laptops = [new Laptop('노트북 1'), new Laptop('노트북 2')];
+  // 교탁(높이 0.76 m): 화면이 실험실 쪽(+x)을 보게 90° 돌려 놓는다. 스탠딩 테이블(1.05 m): 교사 쪽(−x)을 보게
+  const laptops = [new Laptop('노트북 1'), new Laptop('노트북 2'), new Laptop('노트북 3')];
   const motionSensors = [new MotionSensor('운동 센서 1'), new MotionSensor('운동 센서 2')];
-  const desk = (it: Item, x: number, z: number, yaw: number) => {
-    at(it, new THREE.Vector3(x, 0.76, z));
+  const desk = (it: Item, x: number, z: number, yaw: number, y = 0.76) => {
+    at(it, new THREE.Vector3(x, y, z));
     it.object.rotation.y = yaw;
     it.yaw = yaw;
     return it;
   };
   const items: Item[] = [
-    desk(laptops[0], 2.3, 2.1, Math.PI / 2),
-    desk(laptops[1], 2.3, 3.4, Math.PI / 2),
-    desk(motionSensors[0], 2.35, 2.65, Math.PI / 2),
-    desk(motionSensors[1], 2.35, 2.85, Math.PI / 2),
-    at(rails[0], top(7.6, 7.3)),
-    at(carts[0], top(6.45, 7.3)),
-    at(carts[1], top(6.75, 7.3)),
-    ...[8.45, 8.58, 8.71, 8.84].map((x) => at(massBar(), top(x, 7.3))),
+    desk(laptops[0], 2.3, 2.25, Math.PI / 2),
+    desk(laptops[1], 2.3, 3.25, Math.PI / 2),
+    desk(laptops[2], 2.15, 4.92, -Math.PI / 2, 1.05),
+    // 뒤쪽 벽 수납장: 칸 0(넓은 칸) 레일, 칸 1(넓은 칸) 수레·질량 막대, 칸 2 운동 센서
+    at(rails[0], low.slot(0, 0, 0.5)),
+    at(carts[0], low.slot(1, 0, 0.25)),
+    at(carts[1], low.slot(1, 0, 0.75)),
+    ...[0.15, 0.38, 0.62, 0.85].map((t) => at(massBar(), low.slot(1, 1, t))),
+    at(motionSensors[0], low.slot(2, 0, 0.25)),
+    at(motionSensors[1], low.slot(2, 0, 0.75)),
     at(new Stand(), cab.slot(0, 0, 0.2)),
     at(new Stand(), cab.slot(0, 0, 0.8)),
     at(new Stand(), cab.slot(1, 0, 0.2)),

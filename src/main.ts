@@ -87,7 +87,7 @@ const door = new Door();
 scene.add(door.object);
 
 // 기구: 테이블 위의 비커 등 + 보관장 속 역학·광학 기구
-const stock = stockEquipment(furniture.cabinets.get('실험 기구 보관장')!);
+const stock = stockEquipment(furniture.cabinets);
 const items: Item[] = [...createBenchItems(), ...stock.items];
 for (const it of items) scene.add(it.object);
 

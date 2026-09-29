@@ -358,3 +358,9 @@ canvas.plot {
 .cart-row h3 { margin: 0 0 6px; font-size: 15px; }
 .cart-row .segmented { margin-top: 6px; }
 .cart-row label { margin: 8px 0 0; }
+
+/* 측정 프로그램 그래프: 크게, 제목 줄에 세로 범위 */
+canvas.plot.tall { height: 130px; }
+.exp-panel .plot-title { margin: 10px 0 3px; font-size: 13px; color: var(--amber); display: flex; justify-content: space-between; }
+.exp-panel .plot-title span { color: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; }
+#log-panel { padding-bottom: 40px; }

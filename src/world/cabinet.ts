@@ -59,19 +59,35 @@ export class CabinetDoor implements Interactable {
   }
 }
 
+/** 보관장 모양 선택 (없으면 실험 기구 보관장처럼 키 큰 장) */
+export interface CabinetOptions {
+  /** 칸 폭 목록 (합이 장의 폭). 없으면 약 0.6 m씩 같게 */
+  sections?: number[];
+  /** 일반 칸 선반 윗면 높이 (첫 값 = 바닥 받침) */
+  shelves?: number[];
+  /** 위쪽 유리문 없이 한 짝(불투명)짜리 문만 — 낮은 수납장 */
+  solidDoors?: boolean;
+  /** 문 윗끝 높이 (기본 H − 0.04) */
+  doorTop?: number;
+  /** 윗판을 만들지 (위에 따로 상판을 얹는 가구는 false) */
+  top?: boolean;
+}
+
 export class StorageCabinet {
   readonly group = new THREE.Group();
   readonly doors: CabinetDoor[] = [];
   private sections: { x0: number; x1: number; tall: boolean }[] = [];
+  private shelves: number[];
 
   /**
    * @param rect 도면상 차지 영역
    * @param front 앞면이 향하는 방향 (axis 축의 sign 쪽)
    * @param tallCount 앞쪽(로컬 −x 끝)부터 긴 칸의 개수
    */
-  constructor(rect: Rect, front: { axis: 'x' | 'z'; sign: 1 | -1 }, H: number, tallCount: number, m: CabinetMaterials) {
+  constructor(rect: Rect, front: { axis: 'x' | 'z'; sign: 1 | -1 }, H: number, tallCount: number, m: CabinetMaterials, o: CabinetOptions = {}) {
     const W = front.axis === 'x' ? rect.z2 - rect.z1 : rect.x2 - rect.x1;
     const D = front.axis === 'x' ? rect.x2 - rect.x1 : rect.z2 - rect.z1;
+    this.shelves = o.shelves ?? SHELVES;
     // 로컬 +z(앞)를 세계의 앞 방향으로: y축 회전 θ는 (0,0,1) → (sinθ, 0, cosθ)
     this.group.rotation.y = front.axis === 'x' ? (front.sign * Math.PI) / 2 : front.sign > 0 ? 0 : Math.PI;
     this.group.position.set((rect.x1 + rect.x2) / 2, 0, (rect.z1 + rect.z2) / 2);
@@ -85,36 +101,47 @@ export class StorageCabinet {
     };
     const hw = W / 2;
     const hd = D / 2;
+    const base = this.shelves[0];
     add(-hw, hw, 0, H, -hd, -hd + T); // 뒤판
     add(-hw, -hw + T, 0, H, -hd, hd); // 옆판
     add(hw - T, hw, 0, H, -hd, hd);
-    add(-hw, hw, H - T, H, -hd, hd); // 윗판
-    add(-hw, hw, 0, SHELVES[0], -hd, hd); // 바닥 받침
+    if (o.top ?? true) add(-hw, hw, H - T, H, -hd, hd); // 윗판
+    add(-hw, hw, 0, base, -hd, hd); // 바닥 받침
 
-    const n = Math.max(1, Math.round(W / 0.6));
-    const w = W / n;
-    for (let i = 0; i < n; i++) {
-      const x0 = -hw + i * w;
+    let widths = o.sections;
+    if (!widths) {
+      const n = Math.max(1, Math.round(W / 0.6));
+      widths = new Array(n).fill(W / n);
+    }
+    const scale = W / widths.reduce((a, b) => a + b, 0);
+    let x0 = -hw;
+    widths.forEach((w0, i) => {
+      const w = w0 * scale;
       const x1 = x0 + w;
       const tall = i < tallCount;
       this.sections.push({ x0, x1, tall });
-      if (i > 0) add(x0 - T / 2, x0 + T / 2, SHELVES[0], H - T, -hd + T, hd); // 칸막이
-      for (const y of (tall ? TALL_SHELVES : SHELVES).slice(1)) add(x0, x1, y - T, y, -hd + T, hd - 0.01); // 선반
+      if (i > 0) add(x0 - T / 2, x0 + T / 2, base, H - T, -hd + T, hd); // 칸막이
+      for (const y of (tall ? TALL_SHELVES : this.shelves).slice(1)) add(x0, x1, y - T, y, -hd + T, hd - 0.01); // 선반
 
-      // 문: 모든 칸이 왼쪽 경첩. (양문처럼 번갈아 달면 두 칸이 한 칸막이에 경첩을 같이 써서
+      // 문: 모든 문이 왼쪽 경첩. (양문처럼 번갈아 달면 두 칸이 한 칸막이에 경첩을 같이 써서
       // 둘 다 열었을 때 문짝이 같은 자리로 돌아와 겹친다. 같은 쪽에 달면 열린 문짝끼리 칸 폭만큼 떨어진다)
-      const hingeLeft = true;
-      const hx = hingeLeft ? x0 : x1;
-      const spans: [number, number, boolean][] = tall
-        ? [[SHELVES[0] + 0.01, H - 0.04, true]]
-        : [[SHELVES[0] + 0.01, 0.97, false], [1.0, H - 0.04, true]];
-      for (const [y1, y2, glass] of spans) {
-        const door = new CabinetDoor(w, y1, y2, hingeLeft, glass, m);
-        door.object.position.set(hx, 0, hd + 0.011);
-        this.group.add(door.object);
-        this.doors.push(door);
+      // 넓은 칸은 폭 0.7 m 이하의 문 여러 짝으로 나눈다
+      const top = o.doorTop ?? H - 0.04;
+      const spans: [number, number, boolean][] = tall || o.solidDoors
+        ? [[base + 0.01, top, !o.solidDoors && tall]]
+        : [[base + 0.01, 0.97, false], [1.0, top, true]];
+      const leaves = Math.max(1, Math.ceil(w / 0.7));
+      const lw = w / leaves;
+      for (let k = 0; k < leaves; k++) {
+        for (const [y1, y2, glass] of spans) {
+          const door = new CabinetDoor(lw, y1, y2, true, glass, m);
+          door.object.position.set(x0 + k * lw, 0, hd + 0.011);
+          this.group.add(door.object);
+          this.doors.push(door);
+        }
       }
-    }
+      x0 = x1;
+    });
   }
 
   /**
@@ -125,7 +152,7 @@ export class StorageCabinet {
    */
   slot(section: number, shelf: number, t = 0.5): THREE.Vector3 {
     const s = this.sections[section];
-    const ys = s.tall ? TALL_SHELVES : SHELVES;
+    const ys = s.tall ? TALL_SHELVES : this.shelves;
     const x = s.x0 + 0.06 + t * (s.x1 - s.x0 - 0.12);
     this.group.updateMatrixWorld(true);
     return this.group.localToWorld(new THREE.Vector3(x, ys[shelf], 0.02));

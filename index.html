@@ -360,6 +360,24 @@
           <button id="lg-rec" class="primary"></button>
           <button id="lg-csv">CSV</button>
         </div>
+        <dl class="readout">
+          <dt>지금 거리</dt><dd id="lg-now"></dd>
+        </dl>
+        <p class="plot-title">x 위치 (m) <span id="lg-x-leg"></span></p>
+        <canvas id="lg-x" class="plot tall"></canvas>
+        <p class="plot-title">v 속도 (m/s) <span id="lg-v-leg"></span></p>
+        <canvas id="lg-v" class="plot tall"></canvas>
+        <p class="plot-title">a 가속도 (m/s²) <span id="lg-a-leg"></span></p>
+        <canvas id="lg-a" class="plot tall"></canvas>
+        <p class="legend" id="lg-t-leg"></p>
+        <label>커서 A (흰색) <span id="lg-ta-val"></span>
+          <input id="lg-ta" type="range" min="0" max="1000" step="1" value="200" />
+        </label>
+        <label>커서 B (빨강) <span id="lg-tb-val"></span>
+          <input id="lg-tb" type="range" min="0" max="1000" step="1" value="800" />
+        </label>
+        <dl class="readout" id="lg-stats"></dl>
+        <h3>설정</h3>
         <div class="field">표본 속도
           <div id="lg-rate" class="segmented">
             <button data-v="10">10 Hz</button><button data-v="20">20 Hz</button><button data-v="30">30 Hz</button>
@@ -376,22 +394,6 @@
           </div>
         </div>
         <label class="row"><input id="lg-flip" type="checkbox" /> 방향 반대 (센서 쪽으로 오는 것을 +)</label>
-        <dl class="readout">
-          <dt>지금 거리</dt><dd id="lg-now"></dd>
-        </dl>
-        <canvas id="lg-x" class="plot"></canvas>
-        <p class="legend" id="lg-x-leg"></p>
-        <canvas id="lg-v" class="plot"></canvas>
-        <p class="legend" id="lg-v-leg"></p>
-        <canvas id="lg-a" class="plot"></canvas>
-        <p class="legend" id="lg-a-leg"></p>
-        <label>커서 A <span id="lg-ta-val"></span>
-          <input id="lg-ta" type="range" min="0" max="1000" step="1" value="200" />
-        </label>
-        <label>커서 B <span id="lg-tb-val"></span>
-          <input id="lg-tb" type="range" min="0" max="1000" step="1" value="800" />
-        </label>
-        <dl class="readout" id="lg-stats"></dl>
       </section>
 
       <!-- 조작 방법 도움말 (? 버튼) -->
@@ -432,7 +434,7 @@
         <h3>전원</h3>
         <p>전원이 필요한 기기(레이저, 직류 전원 장치)는 실험 테이블 짧은 옆면의 콘센트에 꽂아야 작동한다. 전원선은 2 m, 도선은 1.5 m — 더 멀어지면 빠진다.</p>
         <h3>기구 위치</h3>
-        <p>주 실험실 오른쪽 벽 보관장: 스탠드·클램프·실·용수철·추·레이저·슬릿·스크린, 아래 칸(불투명 문)에 전원 장치·전류계·광전관. 레일과 수레는 뒤쪽 벽 수납장 위. 노트북 2대와 운동 센서 2개는 칠판 앞 교탁 위.</p>
+        <p>주 실험실 오른쪽 벽 보관장: 스탠드·클램프·실·용수철·추·레이저·슬릿·스크린, 아래 칸(불투명 문)에 전원 장치·전류계·광전관. 뒤쪽 벽 낮은 수납장(문을 열어 꺼냄): 레일(오른쪽 끝 넓은 칸), 수레·질량 막대, 운동 센서. 노트북: 교탁 위 2대, 스탠딩 테이블 위 1대. 실험대 아래 수납장도 모두 여닫을 수 있다. 준비실은 화학 실험용.</p>
         <h3>실험 패널</h3>
         <p>기구가 실험할 수 있게 조립되면 화면 왼쪽 위에 <b>▸ 실험 이름</b> 버튼이 뜬다. 패널은 한 번에 하나, 화면 오른쪽에 열린다.</p>
       </div>

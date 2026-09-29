@@ -120,31 +120,53 @@ export class LoggerPanel {
     const tMax = Math.max(d.length ? d[d.length - 1].t : 0, 1);
     const ta = (Number(byId<HTMLInputElement>('lg-ta').value) / 1000) * tMax;
     const tb = (Number(byId<HTMLInputElement>('lg-tb').value) / 1000) * tMax;
-    const plots: [string, 'x' | 'v' | 'a', string, string][] = [
-      ['lg-x', 'x', '#9dffb8', 'x (m)'],
-      ['lg-v', 'v', '#ffd27a', 'v (m/s)'],
-      ['lg-a', 'a', '#7fd7ff', 'a (m/s²)'],
+    const plots: [string, 'x' | 'v' | 'a', string][] = [
+      ['lg-x', 'x', '#9dffb8'],
+      ['lg-v', 'v', '#ffd27a'],
+      ['lg-a', 'a', '#7fd7ff'],
     ];
-    for (const [id, k, color, name] of plots) {
-      const pts = d.filter((p) => p[k] !== null).map((p) => [p.t, p[k] as number] as [number, number]);
+    // 센서가 범위 밖(값 없음)이던 시각 — 그 사이에서만 선을 끊는다 (프레임이 늦어 표본 간격이 벌어진 것은 잇는다)
+    const missing = (this.sensor?.samples ?? []).filter((p) => p.x === null).map((p) => p.t);
+    for (const [id, k, color] of plots) {
+      const pts: [number, number][] = [];
+      let prevT = -Infinity;
+      let mi = 0;
+      for (const p of d) {
+        const y = p[k];
+        if (y === null) continue;
+        let broke = false;
+        while (mi < missing.length && missing[mi] < p.t) {
+          if (missing[mi] > prevT) broke = true;
+          mi++;
+        }
+        if (broke && pts.length) pts.push([p.t, NaN]); // 빈 구간
+        pts.push([p.t, y]);
+        prevT = p.t;
+      }
       let lo = Infinity;
       let hi = -Infinity;
       for (const [, y] of pts) {
+        if (!Number.isFinite(y)) continue;
         lo = Math.min(lo, y);
         hi = Math.max(hi, y);
       }
-      if (!pts.length) { lo = -1; hi = 1; }
+      if (lo === Infinity) { lo = -1; hi = 1; }
       if (k !== 'x') { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
       const span = Math.max(hi - lo, k === 'x' ? 0.02 : 0.05);
-      lo -= span * 0.08;
-      hi = lo + span * 1.16;
+      lo -= span * 0.1;
+      hi = lo + span * 1.2;
       const cursor = (t: number, c: string): Series => ({ color: c, line: true, points: [[t, lo], [t, hi]] });
       drawPlot(byId<HTMLCanvasElement>(id), {
         x: [0, tMax], y: [lo, hi], grid: [1, niceStep(hi - lo)],
-        series: [cursor(ta, 'rgba(255,255,255,0.55)'), cursor(tb, 'rgba(255,120,120,0.7)'), { color, points: pts, size: 2 }],
+        series: [
+          cursor(ta, 'rgba(255,255,255,0.6)'), cursor(tb, 'rgba(255,120,120,0.75)'),
+          { color, line: true, points: pts }, { color, points: pts, size: 2 },
+        ],
       });
-      byId(`${id}-leg`).textContent = `${name} · 세로 ${lo.toFixed(k === 'x' ? 3 : 2)} ~ ${hi.toFixed(k === 'x' ? 3 : 2)}, 가로 0 ~ ${tMax.toFixed(1)} s (1칸 1 s)`;
+      const f = k === 'x' ? 3 : 2;
+      byId(`${id}-leg`).textContent = `${lo.toFixed(f)} ~ ${hi.toFixed(f)} · 1칸 ${Number(niceStep(hi - lo).toPrecision(2))}`;
     }
+    byId('lg-t-leg').textContent = `가로: 시간 0 ~ ${tMax.toFixed(1)} s (세로선 1 s마다)`;
     const at = (t: number) => d.reduce<Derived | null>((b, p) => (!b || Math.abs(p.t - t) < Math.abs(b.t - t) ? p : b), null);
     const A = at(ta);
     const B = at(tb);

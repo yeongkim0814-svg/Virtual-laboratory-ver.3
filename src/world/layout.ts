@@ -77,8 +77,8 @@ export interface Furniture {
 export const FURNITURE: Furniture[] = [
   // ---- 주 실험실 ----
   { kind: 'blackboard', name: '칠판', rect: { x1: 0, z1: 1.4, x2: 0.08, z2: 6.4 }, height: 2.1 },
-  { kind: 'desk', name: '교탁', rect: { x1: 1.45, z1: 1.35, x2: 2.85, z2: 4.15 }, height: 0.76 },
-  { kind: 'standingDesk', name: '스탠딩 테이블', rect: { x1: 1.45, z1: 4.25, x2: 2.85, z2: 5.6 }, height: 1.05 },
+  { kind: 'desk', name: '교탁', rect: { x1: 1.45, z1: 1.7, x2: 2.85, z2: 3.8 }, height: 0.76 }, // 폭 2.8 → 2.1 m
+  { kind: 'standingDesk', name: '스탠딩 테이블', rect: { x1: 1.45, z1: 4.42, x2: 2.85, z2: 5.43 }, height: 1.05 }, // 폭 1.35 → 1.01 m
   { kind: 'labBench', name: '실험 테이블 1', rect: { x1: 4.3, z1: 1.4, x2: 6.45, z2: 5.0 }, height: 0.85 },
   { kind: 'labBench', name: '실험 테이블 2', rect: { x1: 7.8, z1: 1.35, x2: 10.1, z2: 5.0 }, height: 0.85 },
   { kind: 'tallCabinet', name: '실험 기구 보관장', rect: { x1: 11.4, z1: 0, x2: 12.0, z2: 4.95 }, height: 2.1 },

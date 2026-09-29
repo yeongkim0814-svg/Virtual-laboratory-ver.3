@@ -47,13 +47,20 @@ export function drawPlot(c: HTMLCanvasElement, spec: PlotSpec): void {
     if (s.line) {
       g.strokeStyle = s.color;
       g.beginPath();
-      s.points.forEach(([x, y], k) => (k ? g.lineTo(X(x) + 0.5, Y(y) + 0.5) : g.moveTo(X(x) + 0.5, Y(y) + 0.5)));
+      // y가 NaN인 점에서 선을 끊는다 (측정 범위 밖 등 빈 구간)
+      let pen = false;
+      for (const [x, y] of s.points) {
+        if (!Number.isFinite(y)) { pen = false; continue; }
+        if (pen) g.lineTo(X(x) + 0.5, Y(y) + 0.5);
+        else g.moveTo(X(x) + 0.5, Y(y) + 0.5);
+        pen = true;
+      }
       g.stroke();
     } else {
       g.fillStyle = s.color;
       const d = s.size ?? 3;
       const o = Math.floor(d / 2);
-      for (const [x, y] of s.points) g.fillRect(Math.round(X(x)) - o, Math.round(Y(y)) - o, d, d);
+      for (const [x, y] of s.points) if (Number.isFinite(y)) g.fillRect(Math.round(X(x)) - o, Math.round(Y(y)) - o, d, d);
     }
   }
 }
