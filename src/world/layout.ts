@@ -58,10 +58,44 @@ export const WALLS: Rect[] = [
   { x1: PARTITION.x1, z1: DOOR.z2, x2: PARTITION.x2, z2: MAIN_ROOM.z2 },
 ];
 
+/** 가구 종류 — buildFurniture.ts가 종류별로 다른 모양을 만든다 */
+export type FurnitureKind =
+  | 'blackboard' | 'desk' | 'standingDesk' | 'labBench'
+  | 'tallCabinet' | 'lowCabinet' | 'prepTable' | 'wasteCabinet' | 'bin' | 'largeEquipment';
+
+export interface Furniture {
+  kind: FurnitureKind;
+  name: string;
+  rect: Rect; // 위에서 본 차지 영역 (충돌 판정에도 그대로 사용)
+  height: number; // 윗면 높이 (m) — 물체를 놓을 수 있는 면
+}
+
+/**
+ * 가구 배치 (손그림 도면에서 환산, 단위 m)
+ * 높이는 실제 학교 실험실 가구의 일반적인 치수를 사용했다.
+ */
+export const FURNITURE: Furniture[] = [
+  // ---- 주 실험실 ----
+  { kind: 'blackboard', name: '칠판', rect: { x1: 0, z1: 1.4, x2: 0.08, z2: 6.4 }, height: 2.1 },
+  { kind: 'desk', name: '교탁', rect: { x1: 1.45, z1: 1.35, x2: 2.85, z2: 4.15 }, height: 0.76 },
+  { kind: 'standingDesk', name: '스탠딩 테이블', rect: { x1: 1.45, z1: 4.25, x2: 2.85, z2: 5.6 }, height: 1.05 },
+  { kind: 'labBench', name: '실험 테이블 1', rect: { x1: 4.3, z1: 1.4, x2: 6.45, z2: 5.0 }, height: 0.85 },
+  { kind: 'labBench', name: '실험 테이블 2', rect: { x1: 7.8, z1: 1.35, x2: 10.1, z2: 5.0 }, height: 0.85 },
+  { kind: 'tallCabinet', name: '실험 기구 보관장', rect: { x1: 11.4, z1: 0, x2: 12.0, z2: 4.95 }, height: 2.1 },
+  { kind: 'lowCabinet', name: '실험 기구 수납장', rect: { x1: 2.15, z1: 7.05, x2: 12.0, z2: 7.6 }, height: 0.9 },
+  { kind: 'bin', name: '쓰레기통', rect: { x1: 0.25, z1: 6.8, x2: 0.85, z2: 7.4 }, height: 0.7 },
+  // ---- 준비실 ----
+  { kind: 'tallCabinet', name: '준비실 보관장 (왼쪽)', rect: { x1: 12.7, z1: 0, x2: 13.45, z2: 4.95 }, height: 2.1 },
+  { kind: 'prepTable', name: '준비 테이블', rect: { x1: 13.45, z1: 0, x2: 16.25, z2: 1.1 }, height: 0.85 },
+  { kind: 'tallCabinet', name: '준비실 보관장 (오른쪽)', rect: { x1: 16.25, z1: 0, x2: 17.2, z2: 5.65 }, height: 2.1 },
+  { kind: 'wasteCabinet', name: '폐시약 보관함', rect: { x1: 12.7, z1: 7.05, x2: 14.15, z2: 7.6 }, height: 0.9 },
+  { kind: 'largeEquipment', name: '대형 실험 기구', rect: { x1: 14.7, z1: 6.4, x2: 17.0, z2: 7.6 }, height: 1.2 },
+];
+
 /** 처음 들어왔을 때의 위치와 바라보는 방향 */
 export const SPAWN = {
-  x: 9.5,
-  z: 4.5,
+  x: 9.0,
+  z: 6.2,
   // yaw = 0 이면 -z(도면 위쪽)를 본다. +π/2 이면 -x(칠판 쪽)를 본다.
   yaw: Math.PI / 2,
 };

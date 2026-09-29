@@ -11,7 +11,7 @@
  * 이동 입력 (mx, my)는 속도 v = speed · (mx·right + my·forward) 로 바뀐다.
  */
 import * as THREE from 'three';
-import { WALLS } from '../world/layout';
+import { FURNITURE, WALLS } from '../world/layout';
 import type { Door } from '../world/door';
 import { pushOutOfRect, pushOutOfSegment, clamp, type Vec2 } from './collision';
 import type { InputState } from '../input/controls';
@@ -89,6 +89,7 @@ export class Player {
     for (let iter = 0; iter < 2; iter++) {
       pushOutOfSegment(this.pos, RADIUS, seg.a, seg.b, seg.thickness);
       for (const w of WALLS) pushOutOfRect(this.pos, RADIUS, w);
+      for (const f of FURNITURE) pushOutOfRect(this.pos, RADIUS, f.rect);
     }
   }
 }

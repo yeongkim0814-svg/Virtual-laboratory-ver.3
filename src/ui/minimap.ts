@@ -1,7 +1,9 @@
-/** 오른쪽 위 미니맵: 도면(layout.ts) + 문 + 내 위치와 시선 방향 */
-import { MAIN_ROOM, PREP_ROOM, ROOMS, WALLS } from '../world/layout';
+/** 오른쪽 위 미니맵: 도면(layout.ts) + 가구 + 물체 + 문 + 내 위치와 시선 방향 */
+import { Scene } from 'three';
+import { FURNITURE, MAIN_ROOM, PREP_ROOM, ROOMS, WALLS } from '../world/layout';
 import type { Door } from '../world/door';
 import type { Player } from '../player/player';
+import type { Item } from '../world/items';
 
 const PAD = 0.4; // 도면 바깥 여백 (m)
 
@@ -9,7 +11,7 @@ export class Minimap {
   private ctx: CanvasRenderingContext2D;
   private scale = 1; // px per m
 
-  constructor(private canvas: HTMLCanvasElement, private player: Player, private door: Door) {
+  constructor(private canvas: HTMLCanvasElement, private player: Player, private door: Door, private items: Item[]) {
     this.ctx = canvas.getContext('2d')!;
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -38,6 +40,19 @@ export class Minimap {
 
     g.fillStyle = 'rgba(255,255,255,0.10)';
     for (const { rect: r } of ROOMS) g.fillRect(this.tx(r.x1), this.tz(r.z1), (r.x2 - r.x1) * s, (r.z2 - r.z1) * s);
+
+    // 가구
+    g.fillStyle = 'rgba(160,170,180,0.45)';
+    for (const { rect: r } of FURNITURE) g.fillRect(this.tx(r.x1), this.tz(r.z1), (r.x2 - r.x1) * s, (r.z2 - r.z1) * s);
+
+    // 바닥이나 가구 위에 놓인 물체 (들고 있는 물체는 제외)
+    g.fillStyle = '#f5b04a';
+    for (const it of this.items) {
+      if (!(it.object.parent instanceof Scene)) continue; // 손에 든 물체는 카메라에 붙어 있음
+      g.beginPath();
+      g.arc(this.tx(it.object.position.x), this.tz(it.object.position.z), Math.max(2, 0.12 * s), 0, Math.PI * 2);
+      g.fill();
+    }
 
     g.fillStyle = 'rgba(255,255,255,0.85)';
     for (const r of WALLS) g.fillRect(this.tx(r.x1), this.tz(r.z1), (r.x2 - r.x1) * s, (r.z2 - r.z1) * s);

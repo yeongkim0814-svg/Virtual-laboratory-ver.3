@@ -5,6 +5,8 @@
   --muted: #a9b1bb;
   --accent: #5ab4ff;
   --radius: 14px;
+  --letterbox: #0b0d10; /* 16:9 무대 바깥 여백 색 */
+  --place: #4ade80;
   color-scheme: dark;
 }
 
@@ -14,7 +16,7 @@ html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--letterbox);
   color: var(--text);
   font-family: system-ui, -apple-system, "Noto Sans KR", sans-serif;
   /* 스크롤·새로고침 당기기·텍스트 선택 등 브라우저 기본 제스처를 끈다 */
@@ -27,8 +29,23 @@ html, body {
 
 [hidden] { display: none !important; }
 
+/* ---------- 16:9 무대 ----------
+   화면 안에 들어가는 가장 큰 16:9 직사각형: 폭은 (화면 폭)과 (화면 높이 × 16/9) 중 작은 값.
+   갤럭시 탭(16:10)에서는 위아래에 얇은 띠가 생긴다. */
+#stage {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(100vw, 100vh * 16 / 9);
+  height: min(100vh, 100vw * 9 / 16);
+  width: min(100vw, 100dvh * 16 / 9);
+  height: min(100dvh, 100vw * 9 / 16);
+  overflow: hidden;
+  background: var(--bg);
+}
+
 #scene {
-  position: fixed;
+  position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
@@ -50,7 +67,7 @@ button:active { transform: scale(0.97); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #06223a; font-weight: 600; }
 
 /* ---------- HUD ---------- */
-#hud { position: fixed; inset: 0; pointer-events: none; }
+#hud { position: absolute; inset: 0; pointer-events: none; }
 #hud button { pointer-events: auto; }
 
 #crosshair {
@@ -77,23 +94,37 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 
 #minimap {
   position: absolute; right: 16px; top: 14px;
-  width: min(260px, 32vw);
+  width: min(280px, 24%);
   background: var(--panel); border-radius: 10px;
 }
 
 .icon-btn {
-  position: absolute; right: calc(16px + min(260px, 32vw) + 10px); top: 14px;
+  position: absolute; right: calc(16px + min(280px, 24%) + 10px); top: 14px;
   width: 44px; height: 44px; padding: 0;
   font-size: 22px; background: var(--panel);
 }
 
-#btn-interact {
+/* 오른쪽 아래 동작 버튼들 (놓기 위, 상호작용 아래) */
+.actions {
   position: absolute; right: 32px; bottom: 40px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 12px;
+}
+.actions button {
   min-width: 120px; padding: 18px 26px;
   font-size: 18px; font-weight: 700;
-  background: var(--accent); color: #06223a; border: none;
-  border-radius: 999px;
+  border: none; border-radius: 999px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+#btn-interact { background: var(--accent); color: #06223a; }
+#btn-place { background: var(--place); color: #05301a; }
+#btn-place:disabled { background: var(--panel); color: var(--muted); box-shadow: none; }
+
+#held {
+  position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
+  padding: 8px 14px;
+  background: var(--panel); border-radius: 10px;
+  font-size: 14px; font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 #hint {
@@ -105,7 +136,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 
 /* ---------- 조이스틱 ---------- */
 #joy-base {
-  position: fixed; width: 120px; height: 120px;
+  position: absolute; width: 120px; height: 120px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.12);
@@ -123,7 +154,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 
 /* ---------- 패널 ---------- */
 .panel {
-  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   width: min(380px, calc(100% - 32px));
   padding: 20px 22px;
   background: var(--panel); border-radius: var(--radius);
@@ -140,7 +171,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 
 /* ---------- 시작 화면 ---------- */
 #start {
-  position: fixed; inset: 0;
+  position: absolute; inset: 0;
   display: grid; place-items: center;
   padding: 16px;
   background: radial-gradient(ellipse at center, rgba(32, 36, 42, 0.75), rgba(10, 12, 15, 0.95));
