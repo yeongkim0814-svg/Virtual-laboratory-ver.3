@@ -12,6 +12,8 @@ const HITBOX_MAT = new THREE.MeshBasicMaterial({ visible: false });
 
 export class Item implements Interactable {
   onPick: (item: Item) => void = () => {};
+  /** 보이는 모양의 높이 (m) — 진자에 매달 때 무게 중심 위치 계산에 사용 */
+  readonly height: number;
 
   constructor(
     readonly object: THREE.Group,
@@ -20,11 +22,16 @@ export class Item implements Interactable {
     readonly radius: number,
     /** 질량 (kg) */
     readonly mass: number,
+    /** 진자 추로 매달 수 있는가 */
+    readonly hangable = false,
+    /** 공기 저항 계수 × 단면적 C_d·A (m²) — 공기 저항 계산용 */
+    readonly dragArea = 0,
   ) {
+    const box = new THREE.Box3().setFromObject(object);
+    this.height = box.max.y - box.min.y;
     // 작은 물체도 손가락으로 쉽게 탭할 수 있도록, 보이지 않는 더 큰 원기둥을 터치 판정용으로 붙인다
     // (material.visible = false → 그려지지 않지만 광선(raycast)에는 맞는다)
-    const box = new THREE.Box3().setFromObject(object);
-    const h = Math.max(box.max.y - box.min.y, 0.08) + 0.02;
+    const h = Math.max(this.height, 0.08) + 0.02;
     const hit = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(radius, 0.06), Math.max(radius, 0.06), h, 12), HITBOX_MAT);
     hit.position.y = h / 2;
     object.add(hit);
@@ -72,14 +79,14 @@ function flask(liquidColor: number): THREE.Group {
   return g;
 }
 
-function hangingMass(): THREE.Group {
+/** 황동 추 (밀도 ≈ 8500 kg/m³): 반지름 r, 높이 h인 원기둥 + 고리 */
+function hangingMass(r: number, h: number): THREE.Group {
   const g = new THREE.Group();
   const brass = new THREE.MeshLambertMaterial({ color: 0xc9a54a });
-  // 황동(밀도 ≈ 8500 kg/m³) 100 g → 부피 ≈ 11.8 cm³ → 반지름 1.3 cm, 높이 2.2 cm
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.022, 8), brass);
-  body.position.y = 0.011;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 8), brass);
+  body.position.y = h / 2;
   const hook = new THREE.Mesh(new THREE.TorusGeometry(0.007, 0.002, 4, 8), brass);
-  hook.position.y = 0.03;
+  hook.position.y = h + 0.008;
   g.add(body, hook);
   return g;
 }
@@ -103,18 +110,22 @@ function steelBall(): THREE.Group {
 
 /** 실험실에 처음 놓여 있는 물체들 (위치: 가구 윗면 위) */
 export function createItems(): Item[] {
-  const items: [THREE.Group, string, number, number, [number, number, number]][] = [
-    // [모양, 이름, 반지름, 질량(kg), 위치(x, y, z)]
+  // C_d·A: 옆에서 본 단면적 × 항력 계수 (구 0.47, 짧은 원기둥 ≈ 0.8)
+  const cylDrag = (r: number, h: number) => 0.8 * 2 * r * h;
+  const items: [THREE.Group, string, number, number, [number, number, number], boolean, number][] = [
+    // [모양, 이름, 반지름, 질량(kg), 위치(x, y, z), 매달기 가능, C_d·A]
     // 질량 = 부피 × 밀도로 계산한 값 (예: 쇠공 4/3·π·(0.025 m)³ × 7850 kg/m³ ≈ 0.51 kg)
-    [beaker(0x4a9fd8), '비커 (물)', 0.045, 0.38, [5.0, 0.85, 2.4]],
-    [flask(0xd86a8a), '삼각 플라스크', 0.058, 0.17, [5.7, 0.85, 2.7]],
-    [hangingMass(), '추 100 g', 0.015, 0.1, [8.5, 0.85, 2.3]],
-    [woodBlock(), '나무 도막', 0.065, 0.21, [9.0, 0.85, 2.9]],
-    [steelBall(), '쇠공', 0.03, 0.51, [9.4, 0.85, 2.3]],
-    [beaker(0xe0c040), '비커 (용액)', 0.045, 0.38, [14.6, 0.85, 0.55]],
+    [beaker(0x4a9fd8), '비커 (물)', 0.045, 0.38, [5.0, 0.85, 2.4], false, 0],
+    [flask(0xd86a8a), '삼각 플라스크', 0.058, 0.17, [5.7, 0.85, 2.7], false, 0],
+    // 황동 100 g → 부피 11.8 cm³ → 반지름 1.3 cm, 높이 2.2 cm / 200 g → 반지름 1.6 cm, 높이 2.9 cm
+    [hangingMass(0.013, 0.022), '추 100 g', 0.015, 0.1, [4.75, 0.85, 4.55], true, cylDrag(0.013, 0.022)],
+    [hangingMass(0.016, 0.029), '추 200 g', 0.018, 0.2, [4.95, 0.85, 4.7], true, cylDrag(0.016, 0.029)],
+    [steelBall(), '쇠공', 0.03, 0.51, [5.95, 0.85, 4.6], true, 0.47 * Math.PI * 0.025 ** 2],
+    [woodBlock(), '나무 도막', 0.065, 0.21, [9.0, 0.85, 2.9], false, 0],
+    [beaker(0xe0c040), '비커 (용액)', 0.045, 0.38, [14.6, 0.85, 0.55], false, 0],
   ];
-  return items.map(([g, name, r, m, [x, y, z]]) => {
+  return items.map(([g, name, r, m, [x, y, z], hangable, cda]) => {
     g.position.set(x, y, z);
-    return new Item(g, name, r, m);
+    return new Item(g, name, r, m, hangable, cda);
   });
 }

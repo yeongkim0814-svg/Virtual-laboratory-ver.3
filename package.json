@@ -7,7 +7,8 @@
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
-    "build:single": "vite build --mode single"
+    "build:single": "vite build --mode single",
+    "build:docs": "tsc --noEmit && vite build --mode docs"
   },
   "dependencies": {
     "three": "^0.186.1"

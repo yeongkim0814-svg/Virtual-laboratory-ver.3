@@ -49,7 +49,7 @@ export class Hand {
   pickUp(item: Item): void {
     if (this.held) return;
     this.held = item;
-    this.scene.remove(item.object);
+    item.object.removeFromParent(); // 책상 위(장면)든 진자 스탠드든 원래 붙어 있던 곳에서 떼어 낸다
     this.camera.add(item.object);
     item.object.position.copy(HOLD_OFFSET);
     item.object.rotation.set(0, 0, 0);
@@ -69,6 +69,18 @@ export class Hand {
     this.held = null;
     this.marker.visible = false;
     return true;
+  }
+
+  /** 들고 있던 물체를 다른 곳(예: 진자 스탠드)에 넘겨준다 */
+  handOver(): Item | null {
+    const item = this.held;
+    if (!item) return null;
+    this.camera.remove(item.object);
+    setOnTop(item.object, false);
+    item.object.rotation.set(0, 0, 0);
+    this.held = null;
+    this.marker.visible = false;
+    return item;
   }
 
   /** 화면 좌표(ndc)에서 놓을 자리를 찾는다 */
@@ -98,9 +110,9 @@ export class Hand {
     return { point: hit.point.clone(), valid };
   }
 
-  /** 매 프레임: 조준점 기준 놓을 자리 표시 */
-  update(): void {
-    this.aim = this.findTarget(0, 0);
+  /** 매 프레임: 조준점 기준 놓을 자리 표시 (aimX = 조준점의 화면 x 좌표, ndc) */
+  update(aimX = 0): void {
+    this.aim = this.findTarget(aimX, 0);
     const m = this.marker;
     m.visible = !!this.held && !!this.aim;
     if (!m.visible || !this.aim || !this.held) return;

@@ -17,6 +17,8 @@
   --text: #ffd9a8;
   --bad: #ff5a3c;
   --font: 'Galmuri11', ui-monospace, monospace;
+  --aim-shift: 0px;           /* 실험 패널이 열리면 조준점이 왼쪽으로 이동하는 거리 */
+  --panel-w: min(44%, 520px); /* 실험 패널 폭 */
   color-scheme: dark;
 }
 
@@ -98,7 +100,7 @@ button.primary { border-color: var(--amber); }
 #hud button { pointer-events: auto; }
 
 #crosshair {
-  position: absolute; left: 50%; top: 50%;
+  position: absolute; left: calc(50% - var(--aim-shift)); top: 50%;
   width: 4px; height: 4px; margin: -2px 0 0 -2px;
   background: var(--amber);
   box-shadow: 0 0 4px rgba(255, 140, 30, 0.8);
@@ -106,7 +108,7 @@ button.primary { border-color: var(--amber); }
 
 /* 조준점 바로 아래 안내 문구 ("[탭] 집기 · 비커") */
 #prompt {
-  position: absolute; left: 50%; top: calc(50% + 18px);
+  position: absolute; left: calc(50% - var(--aim-shift)); top: calc(50% + 18px);
   transform: translateX(-50%);
   font-size: 16px;
   white-space: nowrap;
@@ -191,6 +193,67 @@ button.primary { border-color: var(--amber); }
 .panel .segmented button { flex: 1; padding: 8px 0; }
 .panel .buttons { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
 .panel .buttons button { flex: 1; }
+
+/* ---------- 실험 패널 (화면 오른쪽에 붙음) ---------- */
+.exp-panel {
+  position: absolute; top: 12px; right: 12px; bottom: 12px;
+  width: var(--panel-w);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 16px 18px;
+  background: var(--panel);
+  border: 2px solid var(--amber);
+  color: var(--amber);
+  font-size: 14px;
+  touch-action: pan-y;
+}
+.exp-panel header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.exp-panel h2 { margin: 0; font-size: 18px; letter-spacing: 2px; }
+.exp-panel h3 { margin: 0; font-size: 15px; letter-spacing: 1px; flex: 1; }
+.exp-panel header button { padding: 6px 12px; }
+.exp-panel .status { margin: 8px 0 2px; color: var(--text); min-height: 1.4em; }
+.exp-panel label { display: block; margin: 8px 0; }
+/* 선택 버튼 줄: 왼쪽에 이름, 오른쪽에 버튼 (한 줄로 → 패널 높이 절약) */
+.exp-panel .field { display: grid; grid-template-columns: 5.2em 1fr; align-items: center; gap: 8px; margin: 6px 0; }
+.exp-panel label span { float: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.exp-panel input[type='range'] { width: 100%; margin-top: 4px; accent-color: var(--amber); height: 24px; }
+.exp-panel label.row { display: flex; align-items: center; gap: 10px; }
+.exp-panel input[type='checkbox'] { width: 22px; height: 22px; accent-color: var(--amber); }
+.exp-panel .segmented { display: flex; gap: 6px; }
+.exp-panel .segmented button { flex: 1; padding: 7px 0; font-size: 13px; }
+.exp-panel .buttons { display: flex; gap: 8px; margin: 10px 0 12px; }
+.exp-panel .buttons button { flex: 1; padding: 10px 0; font-size: 16px; }
+.exp-panel button:disabled { opacity: 0.35; }
+
+.readout {
+  display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;
+  margin: 0 0 12px;
+  font-variant-numeric: tabular-nums;
+}
+.readout dt { color: var(--amber-dim); }
+.readout dd { margin: 0; text-align: right; color: var(--text); }
+
+#pp-graph {
+  display: block; width: 100%; height: 110px;
+  border: 1px solid var(--amber-dim);
+  background: rgba(0, 0, 0, 0.35);
+  image-rendering: pixelated;
+}
+.legend { margin: 6px 0 14px; font-size: 12px; color: var(--amber-dim); }
+.legend .solid { color: var(--amber); }
+.legend .dotted { color: var(--text); }
+
+.log-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.log-head button { padding: 6px 12px; font-size: 13px; }
+.table-wrap { overflow-x: auto; }
+#pp-log { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+#pp-log th, #pp-log td { padding: 4px 5px; border-bottom: 1px solid var(--amber-faint); text-align: right; white-space: nowrap; }
+#pp-log th { color: var(--amber-dim); font-weight: 400; }
+#pp-log td { color: var(--text); }
+#pp-log td.empty { text-align: left; color: var(--amber-dim); white-space: normal; }
+
+/* 패널이 열리면 미니맵·설정 버튼은 가리고, 조준점은 남은 왼쪽 영역 가운데로 */
+#stage.panel-open #minimap, #stage.panel-open .icon-btn, #stage.panel-open #hint { display: none; }
 
 /* ---------- 시작 화면 ---------- */
 #start {

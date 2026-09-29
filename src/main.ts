@@ -18,6 +18,8 @@ import { Controls } from './input/controls';
 import { Minimap } from './ui/minimap';
 import { bindSettingsPanel, enterFullscreen, loadSettings } from './ui/settings';
 import { RetroPipeline, applyRetroMaterials } from './render/retro';
+import { PendulumStation } from './experiments/pendulumStation';
+import { PendulumPanel } from './ui/pendulumPanel';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -36,11 +38,25 @@ scene.add(camera); // 카메라에 붙인 물체도 그려지도록 장면에 �
 const settings = loadSettings();
 const retro = new RetroPipeline(renderer, scene, camera);
 
+/**
+ * 실험 패널이 오른쪽을 가리면, 시선 방향(화면 중심)을 남은 왼쪽 영역의 가운데로 옮긴다.
+ * setViewOffset: 가로로 (W + 2d)만큼 넓은 가상 화면을 그리고 그중 오른쪽 W만 보여 주면
+ * 가상 화면의 중심(W/2 + d)이 실제 화면의 W/2 − d 위치에 나타난다. (d = 옮길 거리)
+ */
+let aimShift = 0; // px
+let aimX = 0; // 조준점의 ndc x 좌표 (패널이 없으면 0 = 화면 가운데)
+
 function resize(): void {
-  const aspect = stage.clientWidth / stage.clientHeight || 16 / 9;
-  retro.setResolution(settings.pixelHeight, aspect); // 화면 크기와 무관하게 내부 해상도는 작게 고정
-  camera.aspect = aspect;
+  const W = stage.clientWidth || 16;
+  const H = stage.clientHeight || 9;
+  retro.setResolution(settings.pixelHeight, W / H); // 화면 크기와 무관하게 내부 해상도는 작게 고정
+  const d = aimShift;
+  camera.aspect = (W + 2 * d) / H; // 가로로 넓힌 가상 화면의 비율 (픽셀이 찌그러지지 않게)
+  if (d > 0) camera.setViewOffset(W + 2 * d, H, 2 * d, 0, W, H);
+  else camera.clearViewOffset();
   camera.updateProjectionMatrix();
+  aimX = (-2 * d) / W;
+  stage.style.setProperty('--aim-shift', `${d}px`);
 }
 new ResizeObserver(resize).observe(stage);
 resize();
@@ -54,12 +70,24 @@ scene.add(door.object);
 const items = createItems();
 for (const it of items) scene.add(it.object);
 
-/** 상호작용 가능한 물체 목록 */
-const interactables: Interactable[] = [door, ...items];
-
-// ---------- 플레이어·손·입력·UI ----------
+// ---------- 플레이어·손 ----------
 const player = new Player(camera, door, SPAWN);
 const hand = new Hand(scene, camera, items);
+
+// ---------- 실험: 단진자 (실험 테이블 1 위) ----------
+const pendulum = new PendulumStation(hand, new THREE.Vector3(5.375, 0.85, 3.6));
+scene.add(pendulum.object);
+const pendulumPanel = new PendulumPanel(pendulum, (open) => {
+  stage.classList.toggle('panel-open', open);
+  aimShift = open ? (pendulumPanel.el.offsetWidth + 12) / 2 : 0;
+  resize();
+});
+pendulum.onOpenPanel = () => pendulumPanel.open();
+
+/** 상호작용 가능한 물체 목록 */
+const interactables: Interactable[] = [door, pendulum, ...items];
+
+// ---------- 입력·UI ----------
 for (const it of items) it.onPick = (item) => hand.pickUp(item);
 const controls = new Controls(canvas);
 const minimap = new Minimap($<HTMLCanvasElement>('minimap'), player, door, items);
@@ -126,12 +154,13 @@ renderer.setAnimationLoop(() => {
 
   player.update(dt, input, settings);
   door.update(dt);
+  pendulum.update(dt, pendulumPanel.speed);
   updateLights(now / 1000);
   camera.updateMatrixWorld();
-  hand.update();
+  hand.update(aimX);
 
   // 조준점 아래 안내 문구: 조준한 물체 → "[탭] 집기 · 비커", 들고 있으면 → 놓기 가능 여부
-  focused = usable(pick(0, 0));
+  focused = usable(pick(aimX, 0));
   let prompt = '';
   if (focused) prompt = `[탭] ${focused.label()}`;
   else if (hand.held && hand.aim) prompt = hand.aim.valid ? '[탭] 놓기' : '여기에는 놓을 수 없음';
@@ -158,6 +187,7 @@ renderer.setAnimationLoop(() => {
 
   retro.render();
   minimap.draw();
+  pendulumPanel.update();
   roomLabel.textContent = roomNameAt(player.pos.x, player.pos.z);
 
   fpsFrames++;
