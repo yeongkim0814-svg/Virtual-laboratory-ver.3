@@ -3,7 +3,9 @@
  * 직접 조립한 진자(클램프 → 실 → 추)의 추나 실을 탭하고 "진자 실험"을 고르면 그 진자에 연결된다.
  */
 import type { PendulumString } from '../equipment/pendulumString';
-import { exactPeriod, smallAnglePeriod } from '../sim/pendulum';
+import { G, exactPeriod, smallAnglePeriod } from '../sim/pendulum';
+import { linearFit } from '../sim/photoelectric';
+import { downloadCsv, drawPlot, stamp, type Series } from './plotKit';
 import type { Method } from '../sim/integrators';
 
 const DEG = Math.PI / 180;
@@ -33,6 +35,7 @@ export class PendulumPanel {
   private lenInput = byId<HTMLInputElement>('pp-l');
   private thInput = byId<HTMLInputElement>('pp-th');
   private dragInput = byId<HTMLInputElement>('pp-drag');
+  private plotMode: 'L' | 'th' = 'L';
 
   constructor(private onToggle: (open: boolean) => void) {
     // 조건을 바꾸면 추를 처음 각도로 되돌린다 (진행 중인 측정은 무효)
@@ -58,6 +61,11 @@ export class PendulumPanel {
     byId('pp-close').addEventListener('click', () => this.close());
     byId('pp-record').addEventListener('click', () => this.record());
     byId('pp-clear').addEventListener('click', () => { this.log = []; saveLog(this.log); this.renderLog(); });
+    byId('pp-csv').addEventListener('click', () => downloadCsv(`pendulum-${stamp()}.csv`,
+      ['L (m)', 'theta0 (deg)', 'm (kg)', '적분', 'dt (s)', '공기 저항', 'T 측정 (s)', 'T0 작은 각 (s)', 'T 정확 (s)'],
+      this.log.map((r) => [r.L.toFixed(4), r.th0, r.mass, METHOD_NAME[r.method], r.dt, r.drag ? 'O' : 'X', r.T.toFixed(5), r.T0.toFixed(5), r.Te.toFixed(5)])));
+    segmented('pp-plotmode', (v) => { this.plotMode = v as 'L' | 'th'; pressed('pp-plotmode', v); this.drawLogPlot(); });
+    pressed('pp-plotmode', this.plotMode);
     this.renderLog();
   }
 
@@ -74,6 +82,7 @@ export class PendulumPanel {
     this.refreshControls();
     this.el.hidden = false;
     this.onToggle(true);
+    this.drawLogPlot(); // 숨겨져 있을 때는 캔버스 크기가 0이라 열 때 다시 그린다
   }
 
   close(): void {
@@ -153,7 +162,6 @@ export class PendulumPanel {
     body.innerHTML = '';
     if (!this.log.length) {
       body.innerHTML = '<tr><td colspan="7" class="empty">아직 기록이 없습니다. 주기가 측정되면 "기록"을 누르세요.</td></tr>';
-      return;
     }
     for (const r of this.log) {
       const tr = document.createElement('tr');
@@ -169,6 +177,45 @@ export class PendulumPanel {
       }
       body.appendChild(tr);
     }
+    this.drawLogPlot();
+  }
+
+  /**
+   * 기록 그래프
+   *  T – √L : 작은 각이면 T = (2π/√g)·√L → 원점을 지나는 직선. 기울기 a에서 g = (2π/a)²
+   *           (θ₀가 20° 이하인 기록만 맞춤 — 큰 각은 주기가 길어져 직선에서 벗어난다)
+   *  T/T₀ – θ₀ : 진폭이 커지면 주기가 길어지는 정도. 곡선 = 타원 적분 이론 T(θ₀)/T₀
+   */
+  private drawLogPlot(): void {
+    const c = byId<HTMLCanvasElement>('pp-plot');
+    const series: Series[] = [];
+    let fitText = '';
+    if (this.plotMode === 'L') {
+      const xMax = Math.max(1.05, ...this.log.map((r) => Math.sqrt(r.L) * 1.05));
+      const small = this.log.filter((r) => r.th0 <= 20);
+      const big = this.log.filter((r) => r.th0 > 20);
+      series.push({ color: 'rgba(255,230,190,0.5)', line: true, points: [[0, 0], [xMax, (2 * Math.PI / Math.sqrt(G)) * xMax]] });
+      series.push({ color: '#7fd7ff', points: big.map((r) => [Math.sqrt(r.L), r.T]) });
+      series.push({ color: '#ffd27a', points: small.map((r) => [Math.sqrt(r.L), r.T]) });
+      const fit = linearFit(small.map((r) => Math.sqrt(r.L)), small.map((r) => r.T));
+      if (fit && new Set(small.map((r) => r.L.toFixed(3))).size >= 2) {
+        series.push({ color: '#ffd27a', line: true, points: [[0, fit.b], [xMax, fit.a * xMax + fit.b]] });
+        const g = (2 * Math.PI / fit.a) ** 2;
+        fitText = `θ₀ ≤ 20° 기록 ${small.length}개 맞춤: 기울기 ${fit.a.toFixed(4)} s/√m, 절편 ${fit.b.toFixed(4)} s → g = (2π/기울기)² = ${g.toFixed(3)} m/s² (${fmtPct((g - G) / G)})`;
+      } else fitText = 'θ₀ ≤ 20°로 L을 2가지 이상 바꿔 기록하면 g를 구합니다.';
+      drawPlot(c, { x: [0, xMax], y: [0, (2 * Math.PI / Math.sqrt(G)) * xMax * 1.15], grid: [0.1, 0.5], series });
+      byId('pp-plot-legend').textContent = '가로 √L (1칸 0.1 √m), 세로 T (1칸 0.5 s) · 노랑 = θ₀ ≤ 20°, 파랑 = 큰 각, 흐린 선 = 이론 2π√(L/g)';
+    } else {
+      const theory: [number, number][] = [];
+      for (let d = 0; d <= 80; d += 2) theory.push([d, exactPeriod(1, d * DEG) / smallAnglePeriod(1)]);
+      series.push({ color: 'rgba(255,230,190,0.6)', line: true, points: theory });
+      series.push({ color: '#ffd27a', points: this.log.map((r) => [r.th0, r.T / r.T0]) });
+      const yMax = Math.max(1.14, ...this.log.map((r) => r.T / r.T0 + 0.01));
+      drawPlot(c, { x: [0, 80], y: [0.98, yMax], grid: [10, 0.02], series });
+      byId('pp-plot-legend').textContent = '가로 θ₀ (1칸 10°), 세로 T/T₀ (1칸 0.02, 아래 끝 0.98) · 선 = 타원 적분 이론 (≈ 1 + θ₀²/16)';
+      fitText = '같은 L에서 θ₀만 바꿔 기록하면 곡선을 따라갑니다. 20°에서 약 0.8 %, 60°에서 약 7 % 길어짐.';
+    }
+    byId('pp-fit').textContent = fitText;
   }
 
   /** θ(t) 그래프: 최근 8초. 실선 = 시뮬레이션, 점선 = 작은 각 근사 θ₀·cos(2πt/T₀) */

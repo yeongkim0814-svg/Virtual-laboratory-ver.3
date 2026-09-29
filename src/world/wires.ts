@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { HITBOX_MAT, type Item } from './items';
 import type { Action } from './interactable';
+import { Cable, liftAboveFurniture } from './cable';
 
 const WIRE_MAX = 1.5; // m
 const KNOB_RED = new THREE.MeshLambertMaterial({ color: 0xc0302a });
@@ -49,36 +50,34 @@ export class Terminal {
 }
 
 export class Wire {
-  readonly line: THREE.Line;
-  private pts = new Float32Array(3 * 14);
+  readonly cable: Cable;
+  private pts = Array.from({ length: 18 }, () => new THREE.Vector3());
 
   constructor(readonly a: Terminal, readonly b: Terminal, color: number) {
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(this.pts, 3));
-    this.line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color }));
-    this.line.raycast = () => {};
-    this.line.frustumCulled = false;
-    this.line.userData.noPick = true;
+    this.cable = new Cable(this.pts.length, 0.005, color);
+  }
+
+  get line(): THREE.Object3D {
+    return this.cable.mesh;
   }
 
   length(): number {
     return this.a.worldPosition().distanceTo(this.b.worldPosition());
   }
 
-  /** 가운데가 처지는 곡선으로 다시 그린다 (바닥 아래로는 내려가지 않음) */
+  /** 가운데가 처지는 곡선으로 다시 그린다 (책상 윗면·바닥 아래로는 내려가지 않고 그 위에 눕는다) */
   redraw(): void {
     const p = this.a.worldPosition();
     const q = this.b.worldPosition();
-    const n = this.pts.length / 3;
+    const n = this.pts.length;
     const sag = 0.15 + 0.2 * p.distanceTo(q);
     for (let i = 0; i < n; i++) {
       const t = i / (n - 1);
-      const x = p.x + (q.x - p.x) * t;
-      const z = p.z + (q.z - p.z) * t;
-      const y = Math.max(0.005, p.y + (q.y - p.y) * t - sag * 4 * t * (1 - t));
-      this.pts.set([x, y, z], i * 3);
+      this.pts[i].lerpVectors(p, q, t);
+      this.pts[i].y -= sag * 4 * t * (1 - t);
     }
-    (this.line.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    liftAboveFurniture(this.pts, 0.006);
+    this.cable.setPoints(this.pts);
   }
 }
 
@@ -110,8 +109,8 @@ export class WireSystem {
   connect(a: Terminal, b: Terminal): void {
     this.pending = null;
     if (a.wires.some((w) => w.a === b || w.b === b)) return; // 이미 이어져 있음
-    // 빨강 선(+ 쪽이 끼면)·검정 선. 검정은 검은 책상 위에서도 보이게 약간 밝은 회흑색
-    const w = new Wire(a, b, a.polarity === '+' || b.polarity === '+' ? 0xe0463c : 0x5a5e58);
+    // 빨강 선(+ 쪽이 끼면)·파랑 선. (검정 선은 검은 실험대 위에서 보이지 않아 교육용 키트처럼 파랑을 쓴다)
+    const w = new Wire(a, b, a.polarity === '+' || b.polarity === '+' ? 0xe0463c : 0x3f7fd8);
     a.wires.push(w);
     b.wires.push(w);
     this.wires.push(w);

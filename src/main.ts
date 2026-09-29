@@ -23,6 +23,7 @@ import { Minimap } from './ui/minimap';
 import { bindSettingsPanel, enterFullscreen, loadSettings } from './ui/settings';
 import { RetroPipeline, applyRetroMaterials } from './render/retro';
 import { PendulumPanel } from './ui/pendulumPanel';
+import { SpringPanel } from './ui/springPanel';
 import { SlitPanel } from './ui/slitPanel';
 import { stockEquipment } from './equipment/stock';
 import { BeamSystem } from './equipment/beams';
@@ -106,13 +107,15 @@ function panelToggled(panel: { el: HTMLElement }, open: boolean): void {
   resize();
 }
 const pendulumPanel = new PendulumPanel((open) => panelToggled(pendulumPanel, open));
+const springPanel = new SpringPanel((open) => panelToggled(springPanel, open));
 const slitPanel = new SlitPanel((open) => panelToggled(slitPanel, open));
 // 광전 효과: 도선으로 이은 회로를 매 프레임 해석한 결과
 const wires = new WireSystem(scene);
 let circuits: PhotoCircuitState[] = [];
 const photoPanel = new PhotoPanel((open) => panelToggled(photoPanel, open), (s) => circuits.find((c) => c.supply === s) ?? null);
-const panels = [pendulumPanel, slitPanel, photoPanel];
+const panels = [pendulumPanel, springPanel, slitPanel, photoPanel];
 for (const s of stock.strings) s.onOpenPanel = (str) => pendulumPanel.open(str);
+for (const s of stock.springs) s.onOpenPanel = (sp) => springPanel.open(sp);
 for (const l of stock.lasers) l.onOpenPanel = (laser) => slitPanel.open(laser);
 
 // 전원: 실험 테이블 옆면의 콘센트 ↔ 전원이 필요한 기기(레이저)
@@ -320,7 +323,7 @@ let fps = 0;
 
 // 테스트용: 주소 끝이 #debug일 때만 내부 객체를 노출 (자동 테스트가 조립을 빠르게 재현하는 데 씀)
 if (location.hash === '#debug') {
-  (window as unknown as Record<string, unknown>).lab = { THREE, scene, camera, player, hand, items, stock, power, wires };
+  (window as unknown as Record<string, unknown>).lab = { THREE, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors };
 }
 
 renderer.setAnimationLoop(() => {
@@ -337,6 +340,7 @@ renderer.setAnimationLoop(() => {
   for (const s of stock.strings) {
     s.update(dt, pendulumPanel.speed, pendulumPanel.target === s);
   }
+  for (const s of stock.springs) s.update(dt, springPanel.speed, springPanel.target === s);
   updateLights(now / 1000);
   camera.updateMatrixWorld();
   power.update();
@@ -382,6 +386,7 @@ renderer.setAnimationLoop(() => {
   retro.render();
   minimap.draw();
   pendulumPanel.update();
+  springPanel.update();
   slitPanel.update();
   photoPanel.update();
   updateDock();

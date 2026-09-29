@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import type { Action, Interactable } from './interactable';
 import { FURNITURE } from './layout';
+import { Cable, liftAboveFurniture } from './cable';
 
 export interface Powered {
   readonly name: string;
@@ -76,22 +77,16 @@ const CORD_PTS = 24;
  *   → 가장자리에서 콘센트까지 아래로 처지며 늘어짐 (바닥 아래로는 내려가지 않음)
  */
 class Cord {
-  readonly line: THREE.Line;
-  private pts = new Float32Array(3 * CORD_PTS);
+  private cable = new Cable(CORD_PTS, 0.0045, 0xc8cac2);
+  readonly line = this.cable.mesh;
 
   constructor(scene: THREE.Scene) {
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(this.pts, 3));
-    this.line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x8c8e88 }));
-    this.line.raycast = () => {};
-    this.line.frustumCulled = false;
-    this.line.userData.noPick = true;
     scene.add(this.line);
   }
 
   set(a: THREE.Vector3, b: THREE.Vector3, restY: number): void {
     const path: THREE.Vector3[] = [a.clone()];
-    const onTop = new THREE.Vector3(a.x, restY + 0.004, a.z);
+    const onTop = new THREE.Vector3(a.x, restY + 0.006, a.z);
     path.push(onTop);
     // 기기가 가구 윗면 위에 있으면: 콘센트 방향으로 그 면의 가장자리까지 면을 따라 간다
     const top = FURNITURE.find((f) => Math.abs(f.height - restY) < 0.03
@@ -104,7 +99,11 @@ class Cord {
       const tx = dx > 0 ? (top.rect.x2 - a.x) / dx : dx < 0 ? (top.rect.x1 - a.x) / dx : Infinity;
       const tz = dz > 0 ? (top.rect.z2 - a.z) / dz : dz < 0 ? (top.rect.z1 - a.z) / dz : Infinity;
       const t = Math.min(tx, tz, 1);
-      hangFrom = new THREE.Vector3(a.x + dx * t, restY + 0.004, a.z + dz * t);
+      // 가장자리 위의 점: 모서리에 걸쳐 넘어가도록 가장자리보다 1 cm 바깥
+      const len = Math.hypot(dx, dz) || 1;
+      hangFrom = new THREE.Vector3(a.x + dx * t + (dx / len) * 0.01, restY + 0.006, a.z + dz * t + (dz / len) * 0.01);
+      // 윗면을 따라가는 동안 점을 몇 개 더 찍어 둔다 (관 모양이 곧게 눕도록)
+      for (const s of [0.33, 0.66]) path.push(onTop.clone().lerp(hangFrom, s));
       path.push(hangFrom);
     }
     // 가장자리 → 콘센트: 처지는 곡선
@@ -113,11 +112,11 @@ class Cord {
     for (let i = 1; i <= n; i++) {
       const t = i / n;
       const p = hangFrom.clone().lerp(b, t);
-      p.y = Math.max(0.005, p.y - sag * 4 * t * (1 - t));
+      p.y -= sag * 4 * t * (1 - t);
       path.push(p);
     }
-    path.forEach((p, i) => p.toArray(this.pts, i * 3));
-    (this.line.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    liftAboveFurniture(path, 0.005);
+    this.cable.setPoints(path);
     this.line.visible = true;
   }
 

@@ -21,7 +21,7 @@ export interface CabinetMaterials {
 const T = 0.02; // 판 두께
 const SHELVES = [0.05, 0.52, 0.99, 1.52]; // 일반 칸 선반 윗면 높이
 const TALL_SHELVES = [0.05, 1.52]; // 긴 칸
-const OPEN = 1.75; // 문이 열리는 각도 (rad, 약 100°)
+const OPEN = Math.PI / 2; // 문이 열리는 각도 (90° — 더 열면 옆 칸 앞을 가린다)
 
 /** 경첩으로 돌아가는 보관장 문 한 짝 */
 export class CabinetDoor implements Interactable {
@@ -101,8 +101,9 @@ export class StorageCabinet {
       if (i > 0) add(x0 - T / 2, x0 + T / 2, SHELVES[0], H - T, -hd + T, hd); // 칸막이
       for (const y of (tall ? TALL_SHELVES : SHELVES).slice(1)) add(x0, x1, y - T, y, -hd + T, hd - 0.01); // 선반
 
-      // 문: 짝수 칸은 왼쪽 경첩, 홀수 칸은 오른쪽 경첩 (이웃한 두 칸이 양문처럼)
-      const hingeLeft = i % 2 === 0;
+      // 문: 모든 칸이 왼쪽 경첩. (양문처럼 번갈아 달면 두 칸이 한 칸막이에 경첩을 같이 써서
+      // 둘 다 열었을 때 문짝이 같은 자리로 돌아와 겹친다. 같은 쪽에 달면 열린 문짝끼리 칸 폭만큼 떨어진다)
+      const hingeLeft = true;
       const hx = hingeLeft ? x0 : x1;
       const spans: [number, number, boolean][] = tall
         ? [[SHELVES[0] + 0.01, H - 0.04, true]]

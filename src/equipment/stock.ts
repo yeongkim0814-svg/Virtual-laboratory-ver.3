@@ -4,7 +4,8 @@
  *   칸 0, 1 (긴 칸, 바닥)   : 스탠드 2개씩 (모두 4개)
  *   칸 2 (위 선반 2개)      : 클램프 2개씩 (모두 4개)
  *   칸 3                    : 실 2개, 각도기
- *   칸 4                    : 추 50 g · 100 g · 200 g
+ *   칸 3 아래 선반          : 용수철 2개 (k = 10 · 25 N/m)
+ *   칸 4                    : 추 50 g · 100 g · 200 g, 아래 선반에 추 20 g · 150 g
  *   칸 5                    : 쇠공, 추 100 g
  *   칸 6                    : 레이저 (650 · 532 · 405 nm 선택), 스크린
  *   칸 7                    : 이중 슬릿 d = 0.10 · 0.20 mm, 단일 슬릿 a = 0.10 mm
@@ -14,12 +15,14 @@ import type { StorageCabinet } from '../world/cabinet';
 import { at, type Item } from '../world/items';
 import { Clamp, Stand, hangingMass, protractor, steelBall } from './mechanics';
 import { PendulumString } from './pendulumString';
+import { Spring } from './spring';
 import { Laser, OpticScreen, SlitPlate } from './optics';
 import { DCPowerSupply, Microammeter, Phototube } from './electrical';
 
 export interface Stock {
   items: Item[];
   strings: PendulumString[];
+  springs: Spring[];
   lasers: Laser[];
   supplies: DCPowerSupply[];
   ammeters: Microammeter[];
@@ -28,6 +31,11 @@ export interface Stock {
 
 export function stockEquipment(cab: StorageCabinet): Stock {
   const strings = [new PendulumString(), new PendulumString()];
+  // 용수철: k, 자연 길이, 자기 질량, 탄성 한계 늘어남
+  const springs = [
+    new Spring({ k: 10, L0: 0.1, ms: 0.012, limit: 0.35 }, 0xb8bcc0, '용수철 k 10 N/m'),
+    new Spring({ k: 25, L0: 0.08, ms: 0.02, limit: 0.3 }, 0xc9a456, '용수철 k 25 N/m'),
+  ];
   const lasers = [new Laser()];
   const supplies = [new DCPowerSupply()];
   const ammeters = [new Microammeter()];
@@ -50,6 +58,10 @@ export function stockEquipment(cab: StorageCabinet): Stock {
     at(hangingMass(50, 0.011, 0.0155), cab.slot(4, 2, 0.15)),
     at(hangingMass(100, 0.013, 0.022), cab.slot(4, 2, 0.5)),
     at(hangingMass(200, 0.016, 0.029), cab.slot(4, 2, 0.85)),
+    at(springs[0], cab.slot(3, 1, 0.3)),
+    at(springs[1], cab.slot(3, 1, 0.7)),
+    at(hangingMass(20, 0.009, 0.011), cab.slot(4, 1, 0.3)),
+    at(hangingMass(150, 0.015, 0.026), cab.slot(4, 1, 0.7)),
     at(steelBall(), cab.slot(5, 2, 0.3)),
     at(hangingMass(100, 0.013, 0.022), cab.slot(5, 2, 0.75)),
     // ---- 광학 ----
@@ -65,5 +77,5 @@ export function stockEquipment(cab: StorageCabinet): Stock {
     at(tubes[0], cab.slot(7, 1, 0.55)),
     at(tubes[1], cab.slot(7, 1, 0.85)),
   ];
-  return { items, strings, lasers, supplies, ammeters, tubes };
+  return { items, strings, springs, lasers, supplies, ammeters, tubes };
 }

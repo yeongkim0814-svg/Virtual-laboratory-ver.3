@@ -103,6 +103,7 @@
         <div class="log-head">
           <h3>측정 기록</h3>
           <button id="pp-record">기록</button>
+          <button id="pp-csv">CSV</button>
           <button id="pp-clear">지우기</button>
         </div>
         <div class="table-wrap">
@@ -111,6 +112,68 @@
             <tbody></tbody>
           </table>
         </div>
+        <div class="log-head">
+          <h3>기록 그래프</h3>
+          <div id="pp-plotmode" class="segmented">
+            <button data-v="L">T – √L</button>
+            <button data-v="th">T/T₀ – θ₀</button>
+          </div>
+        </div>
+        <canvas id="pp-plot" class="plot"></canvas>
+        <p id="pp-plot-legend" class="legend"></p>
+        <p id="pp-fit" class="fit"></p>
+      </section>
+
+      <!-- 용수철 진자 패널 -->
+      <section id="spring-panel" class="exp-panel" hidden>
+        <header>
+          <h2>용수철 진자</h2>
+          <button id="sg-close">닫기</button>
+        </header>
+        <p id="sg-status" class="status"></p>
+        <label>처음 당긴 거리 A (평형에서 아래로) <span id="sg-a-val"></span>
+          <input id="sg-a" type="range" min="0.005" max="0.06" step="0.005" />
+        </label>
+        <div class="field">재생 속도
+          <div id="sg-speed" class="segmented">
+            <button data-v="1">1×</button>
+            <button data-v="0.5">½×</button>
+            <button data-v="0.25">¼×</button>
+          </div>
+        </div>
+        <label class="row"><input id="sg-drag" type="checkbox" /> 공기 저항 (항력 ∝ v²)</label>
+        <div class="buttons">
+          <button id="sg-release" class="primary">놓기</button>
+          <button id="sg-reset">초기화</button>
+        </div>
+        <dl class="readout">
+          <dt>용수철 (k, 자연 길이, 자기 질량 m_s)</dt><dd id="sg-spec"></dd>
+          <dt>정적 늘어남 x_eq = (m + m_s/2)g/k</dt><dd id="sg-xeq"></dd>
+          <dt>경과 시간</dt><dd id="sg-t"></dd>
+          <dt>측정 주기 T</dt><dd id="sg-T"></dd>
+          <dt>이상적 T = 2π√(m/k)</dt><dd id="sg-Ti"></dd>
+          <dt>보정 T = 2π√((m + m_s/3)/k)</dt><dd id="sg-Tc"></dd>
+          <dt>T ÷ 이상적 T</dt><dd id="sg-ratio"></dd>
+          <dt>진동 에너지 변화</dt><dd id="sg-E"></dd>
+        </dl>
+        <canvas id="sg-graph"></canvas>
+        <p class="legend"><span class="solid">━</span> 시뮬레이션 y(t) &nbsp; <span class="dotted">┅</span> 이상적 A·cos(2πt/T) — 어긋나는 만큼이 용수철 질량의 효과 (1칸 = 1 s)</p>
+        <div class="log-head">
+          <h3>측정 기록</h3>
+          <button id="sg-record">기록</button>
+          <button id="sg-csv">CSV</button>
+          <button id="sg-clear">지우기</button>
+        </div>
+        <div class="table-wrap">
+          <table id="sg-log" class="log">
+            <thead><tr><th>k</th><th>m (g)</th><th>A (cm)</th><th>T 측정</th><th>T²</th><th>이상적 대비</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <h3>T² – m 그래프</h3>
+        <canvas id="sg-plot" class="plot"></canvas>
+        <p class="legend">가로 추 질량 m (kg, 1칸 50 g), 세로 T² (1칸 0.1 s²) · 점 = 기록, 선 = 용수철별 맞춤 직선</p>
+        <p id="sg-fit" class="fit"></p>
       </section>
 
       <!-- 간섭무늬 관찰 패널 (화면 오른쪽) -->
