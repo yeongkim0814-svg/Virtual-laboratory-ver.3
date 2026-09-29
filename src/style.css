@@ -385,3 +385,8 @@ canvas.plot.tall { height: 130px; }
   background: rgba(10, 8, 4, 0.88); border: 1px solid var(--amber);
   pointer-events: none;
 }
+
+/* 알림창 */
+#alert { z-index: 20; border-color: var(--bad, #e05a3c); pointer-events: auto; }
+#alert h2 { color: var(--bad, #e05a3c); }
+#alert p { color: var(--text); line-height: 1.5; font-size: 15px; }

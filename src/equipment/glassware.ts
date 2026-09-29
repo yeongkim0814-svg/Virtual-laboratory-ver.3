@@ -361,13 +361,53 @@ export class PHPaper extends Item {
 }
 
 /** 폐액통 (폐시약 보관함 위): 들고 있는 그릇을 탭하면 비운다 */
+/**
+ * 폐액통: 유기 폐액 / 무기 폐액으로 나눠 버린다 (실험실 폐기 규칙)
+ *   유기: 탄소 화합물이 든 용액 — 여기서는 아세트산(CH₃COOH)이 든 것
+ *   무기: 무기산·염기·염 수용액 — HCl, NaOH, NH₃와 그 중화물(NaCl 등)
+ *   (지시약도 유기물이지만 몇 방울이라 분류를 바꾸지 않는다. 증류수만 든 것은 어느 통에 버려도 된다)
+ * 잘못 고르면 버리지 않고 알림창으로 이유를 알려 준다.
+ */
+export type WasteKind = 'organic' | 'inorganic';
+export const WASTE_NAME: Record<WasteKind, string> = { organic: '유기 폐액통', inorganic: '무기 폐액통' };
+
+/** 용액이 어느 폐액통으로 가야 하나 (증류수만 → null = 아무 곳) */
+export function wasteKindOf(s: Solution): WasteKind | null {
+  if ((s.n.Ac ?? 0) > 1e-12) return 'organic';
+  if ((s.n.Na ?? 0) > 1e-12 || (s.n.Cl ?? 0) > 1e-12 || (s.n.N ?? 0) > 1e-12) return 'inorganic';
+  return null;
+}
+
+export const wasteHooks = { alert: (_title: string, _body: string) => {} };
+
 export class WasteCan implements Interactable {
   /** 모인 폐액 (mL) */
   volume = 0;
   getHeld: () => Item | null = () => null;
+  readonly name: string;
 
-  constructor(readonly object: THREE.Object3D, readonly name: string) {
+  constructor(readonly object: THREE.Object3D, readonly kind: WasteKind) {
+    this.name = WASTE_NAME[kind];
     object.userData.interactable = this;
+    // 통 앞에 라벨
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 64;
+    const x = c.getContext('2d')!;
+    x.fillStyle = kind === 'organic' ? '#d8a02a' : '#2f6fb0';
+    x.fillRect(0, 0, 128, 64);
+    x.fillStyle = '#ffffff';
+    x.font = 'bold 26px sans-serif';
+    x.textAlign = 'center';
+    x.fillText(kind === 'organic' ? '유기' : '무기', 64, 30);
+    x.font = 'bold 14px sans-serif';
+    x.fillText('폐액', 64, 54);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.06), new THREE.MeshBasicMaterial({ map: tex }));
+    label.position.set(0, 0.18, 0.121);
+    label.raycast = () => {};
+    object.add(label);
   }
 
   actions(): Action[] {
@@ -376,8 +416,16 @@ export class WasteCan implements Interactable {
     return [{
       label: `${this.name}에 버리기 (${h.reading()})`,
       run: () => {
+        const need = wasteKindOf(h.solution);
+        if (need && need !== this.kind) {
+          wasteHooks.alert('잘못된 폐액통', need === 'organic'
+            ? `${h.name}에는 아세트산(CH₃COOH, 탄소 화합물)이 들어 있습니다. <b>유기 폐액통</b>에 버리세요.<br>유기물은 무기 폐액과 섞이면 따로 처리할 수 없고, 소각 등 다른 방법으로 처리해야 합니다.`
+            : `${h.name}에는 무기산·염기(HCl, NaOH, NH₃ 또는 그 중화물)만 들어 있습니다. <b>무기 폐액통</b>에 버리세요.<br>유기 폐액통은 탄소 화합물(아세트산 등)을 모으는 곳입니다.`);
+          return;
+        }
         this.volume += h.volume;
         h.solution.clear();
+        h.titrantAdded = 0;
         h.refresh();
         chemHooks.toast(`${this.name}에 버림 · 모인 폐액 ${this.volume.toFixed(0)} mL`);
       },

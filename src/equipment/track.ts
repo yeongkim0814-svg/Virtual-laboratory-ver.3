@@ -11,8 +11,9 @@
  */
 import * as THREE from 'three';
 import { Item, Socket } from '../world/items';
+import { Cable, surfaceBelow } from '../world/cable';
 import type { Action } from '../world/interactable';
-import { BUMPER_NAME, TrackSim, type Bumper, type CartBody } from '../sim/track';
+import { BUMPER_NAME, TrackSim, type Bumper, type CartBody, type HangingLoad } from '../sim/track';
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
@@ -102,7 +103,7 @@ export class Rail extends Item {
       end.rotation.y = i ? Math.PI : 0;
       body.add(end);
       end.add(mesh(new THREE.BoxGeometry(0.06, 0.004, 0.08), DARK, -0.03, 0.022, 0)); // 받침판
-      return new Socket(this, `레일 ${i ? '오른쪽' : '왼쪽'} 끝 센서 받침`, ['sensorMount'], v(-0.055, RAIL_TOP + 0.032, 0), { hitRadius: 0.035 }, end);
+      return new Socket(this, `레일 ${i ? '오른쪽' : '왼쪽'} 끝 받침`, ['sensorMount', 'railEnd'], v(-0.055, RAIL_TOP + 0.032, 0), { hitRadius: 0.035 }, end);
     });
   }
 
@@ -126,6 +127,7 @@ export class Rail extends Item {
 
   extraActions(): Action[] {
     return [
+      ...(this.holding ? [{ label: '수레 놓기 (도르래 추가 끌기 시작)', run: () => this.release() }] : []),
       { label: `기울기 +0.5° (지금 ${this.inclineDeg.toFixed(1)}°)`, secondary: true, run: () => this.setIncline(this.inclineDeg + 0.5) },
       { label: `기울기 −0.5° (지금 ${this.inclineDeg.toFixed(1)}°)`, secondary: true, run: () => this.setIncline(this.inclineDeg - 0.5) },
     ];
@@ -144,7 +146,26 @@ export class Rail extends Item {
     const b = this.bodies.get(c);
     if (!b) return;
     this.sim.unstick(b.id);
+    b.locked = false;
     b.v = speed;
+  }
+
+  /** 도르래 실험: 잡고 있던 수레를 놓는다 (추가 끌기 시작) */
+  release(): void {
+    for (const b of this.bodies.values()) b.locked = false;
+  }
+
+  /** 실이 묶인(잡혀 있는) 수레가 있는가 */
+  get holding(): boolean {
+    return [...this.bodies.values()].some((b) => b.locked);
+  }
+
+  /** 도르래에 걸린 추 정보 (패널 표시용) */
+  loadInfo(): { cart: Cart; m: number; M: number; dir: 1 | -1 } | null {
+    const L = this.sim.load;
+    if (!L) return null;
+    for (const [c, b] of this.bodies) if (b.id === L.cartId) return { cart: c, m: L.m, M: b.mass, dir: L.dir };
+    return null;
   }
 
   stopAll(): void {
@@ -159,11 +180,21 @@ export class Rail extends Item {
     const b = this.bodies.get(c);
     const a = c.object.parent;
     if (!b || !a) return;
+    this.shiftLoad(b, s);
     b.s = s;
     b.v = 0;
     this.sim.unstick(b.id);
     a.position.x = s + HALF;
     this.written.set(c, a.position.x);
+  }
+
+  /** 추와 이어진 수레를 손으로 옮기면 실 길이만큼 추도 오르내리고, 수레는 다시 잡은 상태가 된다 */
+  private shiftLoad(b: CartBody, s: number): void {
+    const L = this.sim.load;
+    if (!L || L.cartId !== b.id) return;
+    L.drop = Math.min(L.maxDrop, Math.max(L.minDrop, L.drop + L.dir * (s - b.s)));
+    L.taut = true;
+    b.locked = true;
   }
 
   onChildDetached(child: Item): void {
@@ -188,12 +219,14 @@ export class Rail extends Item {
         this.sim.carts.push(b);
       } else if (this.written.get(c) !== a.position.x) {
         // 사용자가 위치를 옮김 (±1 cm) → 그 자리에서 멈춘 상태로
+        this.shiftLoad(b, a.position.x - HALF);
         b.s = a.position.x - HALF;
         b.v = 0;
       }
       b.mass = c.totalMass;
       b.bumper = c.bumper;
     }
+    this.syncLoad();
     // 레일을 들고 있으면 멈춤
     if (this.object.parent?.type === 'Scene' && this.speed > 0) this.sim.advance(dt * this.speed);
     for (const c of this.carts) {
@@ -204,6 +237,85 @@ export class Rail extends Item {
       this.written.set(c, a.position.x);
       c.roll(a.position.x - old);
     }
+    this.drawString();
+  }
+
+  /** 끝 받침에 끼운 도르래 (있으면)와 그 쪽 방향 */
+  private pulley(): { p: Pulley; dir: 1 | -1 } | null {
+    for (let i = 0; i < 2; i++) {
+      const p = this.mounts[i].children[0];
+      if (p instanceof Pulley) return { p, dir: i === 1 ? 1 : -1 };
+    }
+    return null;
+  }
+
+  /**
+   * 도르래에 추가 걸려 있으면 시뮬레이션에 "추" 를 만든다.
+   * 실은 도르래 쪽에서 가장 가까운 수레에 묶인다. 새로 걸면 그 수레를 잡고 있는 상태로 시작 (놓기를 기다림).
+   */
+  private syncLoad(): void {
+    const pu = this.pulley();
+    const hanger = pu?.p.hook.children[0];
+    const carts = [...this.bodies.values()];
+    if (!pu || !hanger || !carts.length || this.object.parent?.type !== 'Scene') {
+      if (this.sim.load) for (const b of carts) b.locked = false;
+      this.sim.load = null;
+      return;
+    }
+    const tied = carts.reduce((a, b) => (pu.dir * b.s > pu.dir * a.s ? b : a));
+    // 추가 내려갈 수 있는 거리: 도르래 바로 아래 면(바닥·책상)까지 − 추 높이
+    pu.p.object.updateWorldMatrix(true, false);
+    const top = pu.p.object.localToWorld(pu.p.hookLocal(0));
+    const maxDrop = Math.max(0.05, top.y - surfaceBelow(top.x, top.z, top.y) - hanger.height - 0.015);
+    let L = this.sim.load;
+    if (!L || L.cartId !== tied.id || L.dir !== pu.dir) {
+      L = {
+        cartId: tied.id, dir: pu.dir, m: hanger.mass, inertia: Pulley.INERTIA, fp: Pulley.FRICTION,
+        drop: Math.min(0.12, maxDrop), minDrop: 0.03, maxDrop, taut: true, sRest: tied.s,
+      } satisfies HangingLoad;
+      this.sim.load = L;
+      tied.locked = true; // 추를 걸자마자 끌려가지 않게 손으로 잡고 있음
+      tied.v = 0;
+    }
+    L.m = hanger.mass;
+    L.maxDrop = maxDrop;
+    pu.p.setDrop(L.drop);
+  }
+
+  /** 실: 수레 앞 끝 → 도르래 바퀴 위 → 바퀴 바깥쪽으로 감겨 → 추 고리 */
+  private stringCable: Cable | null = null;
+  private stringPts = Array.from({ length: 12 }, () => new THREE.Vector3());
+  private drawString(): void {
+    const pu = this.pulley();
+    const L = this.sim.load;
+    const info = this.loadInfo();
+    const show = !!(pu && L && info && this.object.parent?.type === 'Scene');
+    if (!show) {
+      if (this.stringCable) this.stringCable.mesh.visible = false;
+      return;
+    }
+    if (!this.stringCable) {
+      this.stringCable = new Cable(this.stringPts.length, 0.0012, 0xe8e0c8);
+      this.object.parent!.add(this.stringCable.mesh);
+    }
+    const c = info!.cart;
+    c.object.updateWorldMatrix(true, false);
+    const tie = c.object.localToWorld(new THREE.Vector3(L!.dir * 0.095, 0.045, 0)); // 수레 도르래 쪽 범퍼
+    const p = pu!.p;
+    const top = p.object.localToWorld(new THREE.Vector3(0, 0, -0.03));
+    const pts: THREE.Vector3[] = [tie, top];
+    // 바퀴를 따라 90° 감기는 부분 (바퀴 중심 기준)
+    const ctr = p.object.localToWorld(new THREE.Vector3(0, -Pulley.R, -0.03));
+    const outward = p.object.localToWorld(new THREE.Vector3(0, -Pulley.R, -0.03 - Pulley.R)).sub(ctr);
+    const up = top.clone().sub(ctr);
+    for (let k = 1; k <= 8; k++) {
+      const a = (k / 8) * (Math.PI / 2);
+      pts.push(ctr.clone().addScaledVector(up, Math.cos(a)).addScaledVector(outward, Math.sin(a)));
+    }
+    pts.push(p.object.localToWorld(p.hookLocal(L!.drop)));
+    this.stringPts.forEach((q, i) => q.copy(pts[Math.min(i, pts.length - 1)]));
+    this.stringCable.setPoints(this.stringPts);
+    this.stringCable.mesh.visible = true;
   }
 }
 
@@ -272,6 +384,7 @@ export class Cart extends Item {
     const rail = this.rail;
     const out: Action[] = [];
     if (rail) {
+      if (rail.holding) out.push({ label: '놓기 (도르래 추가 끌기 시작)', run: () => rail.release() });
       out.push(
         { label: `밀기 → ${this.pushSpeed.toFixed(2)} m/s`, run: () => rail.push(this, this.pushSpeed) },
         { label: `밀기 ← ${this.pushSpeed.toFixed(2)} m/s`, run: () => rail.push(this, -this.pushSpeed) },
@@ -282,6 +395,48 @@ export class Cart extends Item {
       if (b !== this.bumper) out.push({ label: `범퍼 → ${BUMPER_NAME[b]}`, secondary: true, run: () => this.setBumper(b) });
     }
     return out;
+  }
+}
+
+/**
+ * 도르래: 레일 끝 받침에 끼운다. 바퀴 윗면이 수레 몸통 높이(실 높이)에 오고, 레일 바깥쪽으로 튀어나온다.
+ * 바퀴 바깥쪽으로 내려온 실 끝 고리에 추(추 20 ~ 200 g, 쇠공)를 건다.
+ * 물체 좌표: 받침에 끼우면 +z가 레일 가운데를 향한다 (plug rotY = 90°)
+ *   바퀴 중심 (0, −R, −0.03), 축은 x 방향. 실은 바퀴 위(0, 0, −0.03)를 지나 바깥쪽(z = −0.03 − R)으로 내려간다.
+ */
+export class Pulley extends Item {
+  static readonly R = 0.022;
+  /** 바퀴 관성 I/r² = m_p/2 (얇은 원판, 바퀴 20 g) */
+  static readonly INERTIA = 0.01;
+  /** 축 마찰력 (N) */
+  static readonly FRICTION = 0.003;
+  readonly hook: Socket;
+
+  constructor() {
+    const g = new THREE.Group();
+    const R = Pulley.R;
+    const wheel = mesh(new THREE.CylinderGeometry(R, R, 0.008, 14).rotateZ(Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x3a3d40 }), 0, -R, -0.03);
+    const hub = mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.02, 8).rotateZ(Math.PI / 2), ALU, 0, -R, -0.03);
+    const arm = mesh(new THREE.BoxGeometry(0.004, 0.03, 0.05), ALU, 0.008, -R, -0.01);
+    const arm2 = mesh(new THREE.BoxGeometry(0.004, 0.03, 0.05), ALU, -0.008, -R, -0.01);
+    const clamp = mesh(new THREE.BoxGeometry(0.03, 0.02, 0.02), DARK, 0, -R - 0.005, 0.02);
+    g.add(wheel, hub, arm, arm2, clamp);
+    super(g, { name: '도르래', radius: 0.04, mass: 0.06, plugs: [{ type: 'railEnd', point: v(0, 0, 0), rotY: Math.PI / 2 }] });
+    this.hook = new Socket(this, '도르래 실 끝 고리', ['hook'], this.hookLocal(0.12), { hitRadius: 0.03 });
+  }
+
+  /** 추가 drop만큼 내려갔을 때 실 끝 고리 (물체 좌표) */
+  hookLocal(drop: number): THREE.Vector3 {
+    return v(0, -Pulley.R - drop, -0.03 - Pulley.R);
+  }
+
+  setDrop(drop: number): void {
+    this.hook.anchor.position.copy(this.hookLocal(drop));
+  }
+
+  /** 받침에 끼워져 있으면 돌리지 않는다 */
+  rotateAction(): Action[] {
+    return this.attachedTo ? [] : super.rotateAction();
   }
 }
 

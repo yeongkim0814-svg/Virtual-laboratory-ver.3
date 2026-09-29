@@ -20,7 +20,14 @@
  *
  * 3) 레일 양 끝의 고무 멈추개: 벽과 충돌 (벽의 질량 = ∞) → v' = −e_end·v
  *
- * 센서(나중에 구현)가 읽을 수 있도록 수레마다 (t, s, v) 기록과 충돌 기록을 남긴다.
+ * 4) 도르래 + 추 (뉴턴 운동 제2법칙): 레일 끝 도르래에 걸린 추(질량 m)가 실로 가장 가까운 수레(M)를 끈다.
+ *    실이 팽팽한 동안 수레와 추는 한 덩어리로 같은 가속도로 움직인다:
+ *      (M + m + I/r²)·a = m·g − M·g·sinθ − μ·M·g·cosθ·sign(v) − f_도르래·sign(v)
+ *      I/r² : 도르래 바퀴도 함께 돌아야 하므로 관성이 더해진다 (얇은 원판 I = ½·m_p·r² → I/r² = m_p/2)
+ *    이상적(마찰·도르래 없음, 수평)이면  a = m·g/(M + m),  실의 장력 T = M·a = M·m·g/(M + m) < m·g
+ *    추가 바닥(또는 책상)에 닿으면 실이 느슨해져 수레는 그때의 속도로 굴러간다 (구름 저항만).
+ *
+ * 센서가 읽을 수 있도록 수레마다 (t, s, v) 기록과 충돌 기록을 남긴다.
  */
 import { G } from './pendulum';
 
@@ -39,6 +46,22 @@ export interface CartBody {
   v: number;
   /** (t, s, v) 기록 — 10 ms마다, 최근 30초 */
   history: [number, number, number][];
+  /** 손으로 잡고 있음 (도르래 실험 시작 전) — 움직이지 않는다 */
+  locked?: boolean;
+}
+
+/** 도르래에 걸린 추 */
+export interface HangingLoad {
+  cartId: number; // 실이 묶인 수레
+  dir: 1 | -1; // 도르래 쪽 방향 (+1 = 레일 오른쪽 끝)
+  m: number; // 추 질량 (kg)
+  inertia: number; // 도르래 관성 I/r² (kg)
+  fp: number; // 도르래 축 마찰력 (N)
+  drop: number; // 추가 도르래 아래로 내려간 거리 (m)
+  minDrop: number; // 이보다 올라가면 도르래에 닿음
+  maxDrop: number; // 이보다 내려가면 바닥에 닿음
+  taut: boolean; // 실이 팽팽한가
+  sRest: number; // 추가 바닥에 닿았을 때 수레 위치 (느슨해진 실이 다시 팽팽해지는 기준)
 }
 
 export interface Collision {
@@ -60,6 +83,8 @@ export class TrackSim {
   max = 0.58;
   readonly carts: CartBody[] = [];
   readonly collisions: Collision[] = [];
+  /** 도르래에 걸린 추 (없으면 null) */
+  load: HangingLoad | null = null;
   time = 0;
   /** 벨크로로 붙은 쌍 ("i-j") — 함께 움직인다 */
   private stuck = new Set<string>();
@@ -86,15 +111,43 @@ export class TrackSim {
     }
   }
 
+  /** 추와 함께 움직이는 수레의 가속도 (실이 팽팽할 때) */
+  private accelLoaded(c: CartBody, L: HangingLoad): number {
+    const Mtot = c.mass + L.m + L.inertia;
+    const drive = L.dir * L.m * G - c.mass * G * Math.sin(this.incline); // 추의 무게 − 경사 성분
+    const resist = this.friction * c.mass * G * Math.cos(this.incline) + L.fp; // 구름 저항 + 도르래 마찰
+    if (Math.abs(c.v) < 1e-4) {
+      if (Math.abs(drive) <= 1.5 * resist) return 0; // 정지 마찰을 못 이김
+      return (drive - Math.sign(drive) * resist) / Mtot;
+    }
+    return (drive - Math.sign(c.v) * resist) / Mtot;
+  }
+
+  /** 충돌 계산에 쓰는 질량: 팽팽한 실로 추와 이어진 수레는 추 질량까지 */
+  private inertMass(c: CartBody): number {
+    const L = this.load;
+    return L && L.taut && L.cartId === c.id ? c.mass + L.m + L.inertia : c.mass;
+  }
+
   private step(): void {
     const cs = this.carts;
-    // 붙은 쌍은 하나의 물체로: 가속도를 질량 가중 평균
+    const L = this.load;
     for (const c of cs) {
-      const a = this.accel(c);
+      if (c.locked) {
+        c.v = 0;
+        continue;
+      }
+      const tied = L && L.cartId === c.id;
+      const a = tied && L.taut ? this.accelLoaded(c, L) : this.accel(c);
       const nv = c.v + a * DT;
-      // 마찰로 멈추는 순간 반대로 넘어가지 않게
-      c.v = Math.abs(c.v) > 1e-4 && Math.sign(nv) !== Math.sign(c.v) && Math.abs(G * Math.sin(this.incline)) <= 1.5 * this.friction * G * Math.cos(this.incline) ? 0 : nv;
+      if (Math.abs(c.v) > 1e-4 && Math.sign(nv) !== Math.sign(c.v)) {
+        // 속도가 0을 지나감: 멈춘 상태에서 정지 마찰을 이기지 못하면 그대로 멈춘다 (반대로 넘어가지 않게)
+        const rest = { ...c, v: 0 };
+        const a0 = tied && L.taut ? this.accelLoaded(rest, L) : this.accel(rest);
+        c.v = a0 === 0 ? 0 : nv;
+      } else c.v = nv;
       c.s += c.v * DT;
+      if (tied) this.moveLoad(c, L);
     }
     this.time += DT;
     cs.sort((p, q) => p.s - q.s);
@@ -117,11 +170,13 @@ export class TrackSim {
         if (i.v > j.v) {
           const stick = i.bumper === 'velcro' && j.bumper === 'velcro';
           const e = stick ? 0 : Math.min(BUMPER_E[i.bumper], BUMPER_E[j.bumper]);
-          const P = i.mass * i.v + j.mass * j.v;
-          const M = i.mass + j.mass;
+          const mi = this.inertMass(i);
+          const mj = this.inertMass(j);
+          const P = mi * i.v + mj * j.v;
+          const M = mi + mj;
           const rel = i.v - j.v;
-          const vi = (P - j.mass * e * rel) / M;
-          const vj = (P + i.mass * e * rel) / M;
+          const vi = (P - mj * e * rel) / M;
+          const vj = (P + mi * e * rel) / M;
           this.collisions.push({ t: this.time, a: i.id, b: j.id, e, before: [i.v, j.v], after: [vi, vj] });
           if (this.collisions.length > 50) this.collisions.shift();
           i.v = vi;
@@ -157,6 +212,29 @@ export class TrackSim {
         c.history.push([this.time, c.s, c.v]);
         if (c.history.length > 3000) c.history.shift();
       }
+    }
+  }
+
+  /**
+   * 실로 이어진 추 움직이기: 수레가 도르래 쪽으로 가면 추가 내려간다 (실 길이 일정).
+   * 바닥에 닿으면 실이 느슨해지고, 수레가 다시 멀어져 실이 팽팽해지면 추가 들린다.
+   */
+  private moveLoad(c: CartBody, L: HangingLoad): void {
+    if (L.taut) {
+      L.drop += L.dir * c.v * DT;
+      if (L.drop >= L.maxDrop) {
+        L.drop = L.maxDrop;
+        L.taut = false; // 추가 바닥에 닿음 → 실이 느슨
+        L.sRest = c.s;
+      } else if (L.drop <= L.minDrop) {
+        L.drop = L.minDrop; // 추가 도르래에 닿음 → 더 끌려오지 않게 수레를 멈춤
+        if (L.dir * c.v < 0) c.v = 0;
+      }
+    } else if (L.dir * (c.s - L.sRest) < 0) {
+      // 수레가 추를 다시 들어 올림: 실이 팽팽해지는 순간 운동량을 나눠 가짐 (완전 비탄성)
+      L.taut = true;
+      L.drop = L.maxDrop + L.dir * (c.s - L.sRest);
+      c.v = (c.mass * c.v) / (c.mass + L.m + L.inertia);
     }
   }
 

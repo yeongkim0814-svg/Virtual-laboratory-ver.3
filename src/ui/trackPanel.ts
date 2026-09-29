@@ -4,6 +4,8 @@
  */
 import type { Cart, Rail } from '../equipment/track';
 import { BUMPER_NAME, type Bumper } from '../sim/track';
+import { G } from '../sim/pendulum';
+import { Pulley } from '../equipment/track';
 
 export class TrackPanel {
   readonly el = byId('track-panel');
@@ -33,6 +35,7 @@ export class TrackPanel {
       r.stopAll();
     });
     byId('tr-close').addEventListener('click', () => this.close());
+    byId('tr-release').addEventListener('click', () => { this.remember(); this.target?.release(); this.refresh(); });
   }
 
   get isOpen(): boolean {
@@ -85,6 +88,23 @@ export class TrackPanel {
     pressed('tr-fric', String(r.sim.friction));
     pressed('tr-speed', String(r.speed));
 
+    // 도르래 + 추
+    const li = r.loadInfo();
+    byId('tr-pulley').hidden = !li;
+    if (li) {
+      const { m, M } = li;
+      const th = r.sim.incline;
+      const aIdeal = (m * G) / (M + m);
+      const drive = li.dir * m * G - M * G * Math.sin(th);
+      const resist = r.sim.friction * M * G * Math.cos(th) + Pulley.FRICTION;
+      const aCorr = Math.abs(drive) > resist ? (drive - Math.sign(drive) * resist) / (M + m + Pulley.INERTIA) : 0;
+      byId('tr-pl-mm').textContent = `${(m * 1000).toFixed(0)} g · ${li.cart.name} ${(M * 1000).toFixed(0)} g`;
+      byId('tr-pl-ai').textContent = `${aIdeal.toFixed(3)} m/s²`;
+      byId('tr-pl-ac').textContent = `${Math.abs(aCorr).toFixed(3)} m/s² (${(((Math.abs(aCorr) - aIdeal) / aIdeal) * 100).toFixed(1)} %)`;
+      byId('tr-pl-t').textContent = `${(M * aIdeal).toFixed(3)} N  (추 무게 mg = ${(m * G).toFixed(3)} N)`;
+      byId<HTMLButtonElement>('tr-release').disabled = !r.holding;
+      byId('tr-release').textContent = r.holding ? '수레 놓기' : '움직이는 중 (처음 자리로 → 다시 잡힘)';
+    }
     // 수레 목록이 바뀌면 줄을 다시 만든다
     const key = carts.map((c) => `${c.name}:${c.bumper}:${c.totalMass}`).join('|');
     if (key !== this.cartKey) {

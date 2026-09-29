@@ -22,7 +22,8 @@ export type PlugType =
   | 'railMount' // 역학 레일에 올리는 수레 바퀴
   | 'cartMass' // 수레 위에 얹는 질량 막대
   | 'sensorMount' // 레일 끝 센서 받침에 끼우는 센서 뒷면
-  | 'probe'; // 그릇에 꽂는 pH 전극
+  | 'probe' // 그릇에 꽂는 pH 전극
+  | 'railEnd'; // 레일 끝 받침에 끼우는 도르래
 
 export interface Plug {
   type: PlugType;

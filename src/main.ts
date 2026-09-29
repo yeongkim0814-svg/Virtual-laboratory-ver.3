@@ -30,7 +30,7 @@ import { TrackPanel } from './ui/trackPanel';
 import { LoggerPanel } from './ui/loggerPanel';
 import { SensorNetwork } from './equipment/sensors';
 import { Rail } from './equipment/track';
-import { Container, WasteCan, chemHooks } from './equipment/glassware';
+import { Container, WasteCan, chemHooks, wasteHooks } from './equipment/glassware';
 import { PourBar } from './ui/pourBar';
 import { SlitPanel } from './ui/slitPanel';
 import { stockEquipment } from './equipment/stock';
@@ -211,7 +211,16 @@ function updateBurettes(dt: number): void {
   }
 }
 
-const wasteCans = furniture.wasteCans.map((o, i) => new WasteCan(o, `폐액통 ${i + 1}`));
+// 폐시약 보관함 위 두 통: 왼쪽 = 무기, 오른쪽 = 유기
+const wasteCans = furniture.wasteCans.map((o, i) => new WasteCan(o, i === 0 ? 'inorganic' : 'organic'));
+// 알림창 (잘못된 폐기 등): 확인을 누를 때까지 떠 있다
+const alertEl = $('alert');
+$('alert-ok').addEventListener('click', () => { alertEl.hidden = true; });
+wasteHooks.alert = (title, body) => {
+  $('alert-title').textContent = title;
+  $('alert-body').innerHTML = body;
+  alertEl.hidden = false;
+};
 for (const w of wasteCans) w.getHeld = () => hand.held;
 for (const s of stock.motionSensors) {
   // 레일 끝에 끼워져 있으면 레일의 재생 속도(느리게 보기)만큼 시간도 느리게 흐른다 → 측정값은 실제 물리량

@@ -24,7 +24,7 @@ import { PendulumString } from './pendulumString';
 import { Spring } from './spring';
 import { Laser, OpticScreen, SlitPlate } from './optics';
 import { DCPowerSupply, Microammeter, Phototube } from './electrical';
-import { Cart, Rail, massBar } from './track';
+import { Cart, Pulley, Rail, massBar } from './track';
 import { Laptop, MotionSensor, PHSensor } from './sensors';
 import { Container, DropperBottle, PHPaper, REAGENTS, beaker, burette, cylinder, flask, reagentBottle } from './glassware';
 import * as THREE from 'three';
@@ -116,6 +116,7 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(phSensors[1], glass.slot(5, 2, 0.7)),
     at(motionSensors[0], low.slot(2, 0, 0.25)),
     at(motionSensors[1], low.slot(2, 0, 0.75)),
+    at(new Pulley(), low.slot(3, 0, 0.5)),
     at(new Stand(), cab.slot(0, 0, 0.2)),
     at(new Stand(), cab.slot(0, 0, 0.8)),
     at(new Stand(), cab.slot(1, 0, 0.2)),
