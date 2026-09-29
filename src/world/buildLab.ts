@@ -38,7 +38,10 @@ export function buildLab(scene: THREE.Scene): (time: number) => void {
 
   // ---- 조명 ----
   // 약한 전체광: 불빛이 닿지 않는 곳도 완전히 새까맣지는 않게
-  scene.add(new THREE.AmbientLight(0x7d8a6c, 0.32));
+  // 조명은 모든 레이어를 비춘다 (손에 든 물체는 레이어 1에서 따로 그려지므로)
+  const ambient = new THREE.AmbientLight(0x7d8a6c, 0.32);
+  ambient.layers.enableAll();
+  scene.add(ambient);
 
   // 천장 형광등: 빛나는 패널 + 그 아래 점광원 (거리에 따라 어두워짐 → 빛 웅덩이)
   const panelMat = new THREE.MeshBasicMaterial({ color: 0xfff2cf });
@@ -61,6 +64,7 @@ export function buildLab(scene: THREE.Scene): (time: number) => void {
       const long = rect.x2 - rect.x1 >= rect.z2 - rect.z1;
       const t = (k + 0.5) / n;
       const light = new THREE.PointLight(0xffe4b0, 16, 12, 1.6);
+      light.layers.enableAll();
       light.position.set(
         long ? rect.x1 + t * (rect.x2 - rect.x1) : (rect.x1 + rect.x2) / 2,
         WALL_HEIGHT - 0.3,

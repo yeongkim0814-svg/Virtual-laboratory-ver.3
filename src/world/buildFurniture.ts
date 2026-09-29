@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { FURNITURE, ROOMS, type Furniture, type Rect } from './layout';
 import { grimeTexture, woodTexture, worldUV } from '../render/textures';
+import { StorageCabinet, type CabinetDoor } from './cabinet';
 
 // ---- 재질 (여러 가구가 함께 쓴다) — 픽셀 텍스처 × 색 ----
 const grime = grimeTexture();
@@ -24,13 +25,24 @@ const M = {
   white: lambert(0xd8d6c8),
 };
 
-export function buildFurniture(scene: THREE.Scene): void {
+/** 만들어진 보관장들 (이름 → 보관장) — 기구를 넣을 자리를 찾을 때 쓴다 */
+const cabinets = new Map<string, StorageCabinet>();
+
+export interface FurnitureResult {
+  cabinets: Map<string, StorageCabinet>;
+  /** 여닫을 수 있는 보관장 문 전부 */
+  doors: CabinetDoor[];
+}
+
+export function buildFurniture(scene: THREE.Scene): FurnitureResult {
+  cabinets.clear();
   for (const f of FURNITURE) {
     const g = new THREE.Group();
     g.name = f.name;
     BUILDERS[f.kind](g, f);
     scene.add(g);
   }
+  return { cabinets, doors: [...cabinets.values()].flatMap((c) => c.doors) };
 }
 
 type Builder = (g: THREE.Group, f: Furniture) => void;
@@ -93,11 +105,12 @@ const BUILDERS: Record<Furniture['kind'], Builder> = {
   },
 
   tallCabinet(g, f) {
-    const r = f.rect;
-    const front = frontOf(r);
-    box(g, r, 0, f.height, M.cabinet);
-    doors(g, r, front, 0.05, 0.95, false); // 아래: 불투명 문
-    doors(g, r, front, 1.0, f.height - 0.05, true); // 위: 유리문
+    // 속이 빈 보관장: 칸마다 여닫는 문과 선반 (앞쪽 2칸은 스탠드 같은 긴 기구용)
+    const cab = new StorageCabinet(f.rect, frontOf(f.rect), f.height, 2, {
+      body: M.cabinet, door: M.door, glass: M.glass, handle: M.handle,
+    });
+    g.add(cab.group);
+    cabinets.set(f.name, cab);
   },
 
   lowCabinet(g, f) {

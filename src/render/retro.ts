@@ -165,9 +165,23 @@ export class RetroPipeline {
   }
 
   render(): void {
-    this.renderer.setRenderTarget(this.target);
-    this.renderer.render(this.scene, this.camera);
-    this.renderer.setRenderTarget(null);
+    const r = this.renderer;
+    r.setRenderTarget(this.target);
+    // 1) 레이어 0: 실험실 전체
+    this.camera.layers.set(0);
+    r.render(this.scene, this.camera);
+    // 2) 레이어 1: 손에 든 물체 — 깊이만 지우고 위에 덧그린다 (벽에 파묻히지 않음)
+    //    배경색이 설정돼 있으면 three.js가 autoClear와 상관없이 화면을 지워 버리므로 잠시 끈다
+    const bg = this.scene.background;
+    this.scene.background = null;
+    r.autoClear = false;
+    r.clearDepth();
+    this.camera.layers.set(1);
+    r.render(this.scene, this.camera);
+    r.autoClear = true;
+    this.scene.background = bg;
+    this.camera.layers.set(0);
+    r.setRenderTarget(null);
     this.renderer.render(this.quadScene, this.quadCam);
   }
 }

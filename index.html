@@ -24,6 +24,8 @@
         <canvas id="minimap"></canvas>
         <button id="btn-settings" class="icon-btn" aria-label="설정">⚙</button>
         <div id="prompt" hidden></div>
+        <!-- 탭한 물체에 동작이 여러 개일 때 그 자리에 뜨는 선택 메뉴 -->
+        <div id="action-menu" hidden></div>
         <div id="held" hidden></div>
         <div id="hint">왼쪽: 이동 · 드래그: 둘러보기 · 탭: 집기/놓기/열기</div>
       </div>
@@ -36,8 +38,8 @@
         </header>
         <p id="pp-bob" class="status"></p>
 
-        <label>줄 길이 L (받침점 ~ 추의 중심) <span id="pp-L-val"></span>
-          <input id="pp-L" type="range" min="0.1" max="0.9" step="0.01" />
+        <label>실 길이 ℓ (집게 ~ 실 끝 고리) <span id="pp-l-val"></span>
+          <input id="pp-l" type="range" min="0.05" max="1" step="0.01" />
         </label>
         <label>처음 각도 θ₀ <span id="pp-th-val"></span>
           <input id="pp-th" type="range" min="1" max="80" step="1" />
@@ -71,6 +73,7 @@
         </div>
 
         <dl class="readout">
+          <dt>진자 길이 L (받침점 ~ 추 중심)</dt><dd id="pp-Lr"></dd>
           <dt>경과 시간</dt><dd id="pp-t"></dd>
           <dt>측정 주기 T</dt><dd id="pp-T"></dd>
           <dt>작은 각 근사 T₀ = 2π√(L/g)</dt><dd id="pp-T0"></dd>
@@ -129,7 +132,8 @@
             <li><b>이동</b> 화면 왼쪽을 누른 채 밀기 (PC: WASD)</li>
             <li><b>둘러보기</b> 화면 오른쪽 드래그 (PC: 마우스 드래그)</li>
             <li><b>집기</b> 물체를 탭 (PC: 클릭 / E)</li>
-            <li><b>놓기</b> 들고 있을 때 책상·바닥을 탭</li>
+            <li><b>놓기·연결</b> 들고 있을 때 책상이나 다른 기구를 탭</li>
+            <li><b>기구</b> 오른쪽 벽 보관장의 문을 열어 꺼내기</li>
           </ul>
           <button id="btn-enter" class="primary big">실험실 입장</button>
           <p class="note">태블릿을 가로로 들고 사용하세요.</p>

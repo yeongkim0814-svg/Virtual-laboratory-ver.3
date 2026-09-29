@@ -115,6 +115,15 @@ button.primary { border-color: var(--amber); }
   letter-spacing: 0.5px;
 }
 
+#action-menu {
+  position: absolute;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px;
+  background: var(--panel);
+  border: 2px solid var(--amber);
+}
+#action-menu button { text-align: left; padding: 10px 16px; font-size: 15px; white-space: nowrap; }
+
 #room {
   position: absolute; left: 16px; top: 14px;
   font-size: 18px;

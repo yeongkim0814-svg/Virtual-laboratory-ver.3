@@ -7,7 +7,7 @@
  */
 import * as THREE from 'three';
 import { DOOR, DOOR_HEIGHT, PARTITION } from './layout';
-import type { Interactable } from './interactable';
+import type { Action, Interactable } from './interactable';
 import type { Vec2 } from '../player/collision';
 import { woodTexture } from '../render/textures';
 
@@ -49,11 +49,11 @@ export class Door implements Interactable {
     return this.target !== 0;
   }
 
-  label(): string {
-    return this.isOpen ? '문 닫기' : '문 열기';
+  actions(): Action[] {
+    return [{ label: this.isOpen ? '문 닫기' : '문 열기', run: () => this.toggle() }];
   }
 
-  interact(): void {
+  toggle(): void {
     this.target = this.isOpen ? 0 : OPEN_ANGLE;
   }
 

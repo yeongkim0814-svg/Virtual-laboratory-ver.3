@@ -2,24 +2,28 @@
  * 프로그램 시작점: 모든 부품을 만들고 연결한 뒤, 매 프레임 루프를 돌린다.
  *
  * 매 프레임 순서
- *   1. 입력 읽기  →  2. 플레이어·문·손 갱신  →  3. 상호작용 판정  →  4. 그리기  →  5. 입력 비우기
+ *   1. 입력 읽기  →  2. 플레이어·문·기구 갱신  →  3. 상호작용 판정  →  4. 그리기  →  5. 입력 비우기
+ *
+ * 탭 한 번의 의미 (위에서부터 먼저 맞는 것)
+ *   물체를 들고 있을 때: ① 맞는 소켓이면 연결  ② 문·보관장 문이면 열고 닫기  ③ 평평한 면이면 놓기
+ *   빈손일 때: 탭한 물체의 동작 — 하나면 바로 실행, 여러 개면 탭한 자리에 선택 메뉴
  */
 import * as THREE from 'three';
 import './style.css';
 import { buildLab } from './world/buildLab';
 import { buildFurniture } from './world/buildFurniture';
 import { Door } from './world/door';
-import { createItems, Item } from './world/items';
+import { createBenchItems, Item, type Plug, type Socket } from './world/items';
 import { SPAWN, roomNameAt } from './world/layout';
-import { INTERACT_RANGE, type Interactable } from './world/interactable';
+import { INTERACT_RANGE, type Action, type Interactable } from './world/interactable';
 import { Player } from './player/player';
-import { Hand, isNoPick } from './player/hand';
+import { Hand, isPickable } from './player/hand';
 import { Controls } from './input/controls';
 import { Minimap } from './ui/minimap';
 import { bindSettingsPanel, enterFullscreen, loadSettings } from './ui/settings';
 import { RetroPipeline, applyRetroMaterials } from './render/retro';
-import { PendulumStation } from './experiments/pendulumStation';
 import { PendulumPanel } from './ui/pendulumPanel';
+import { stockMechanics } from './equipment/stock';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -64,31 +68,33 @@ retro.setJitter(settings.jitter);
 
 // ---------- 실험실 만들기 ----------
 const updateLights = buildLab(scene);
-buildFurniture(scene);
+const furniture = buildFurniture(scene);
 const door = new Door();
 scene.add(door.object);
-const items = createItems();
+
+// 기구: 테이블 위의 비커 등 + 보관장 속 역학 기구
+const stock = stockMechanics(furniture.cabinets.get('실험 기구 보관장')!);
+const items: Item[] = [...createBenchItems(), ...stock.items];
 for (const it of items) scene.add(it.object);
+
+// 문·보관장 문은 광선에 맞은 부분에서 주인을 찾을 수 있게 표시해 둔다 (기구는 userData.item)
+const doors: (Interactable & { update(dt: number): void })[] = [door, ...furniture.doors];
+for (const d of doors) d.object.userData.interactable = d;
 
 // ---------- 플레이어·손 ----------
 const player = new Player(camera, door, SPAWN);
 const hand = new Hand(scene, camera, items);
+for (const it of items) it.onPick = (item) => hand.pickUp(item);
 
-// ---------- 실험: 단진자 (실험 테이블 1 위) ----------
-const pendulum = new PendulumStation(hand, new THREE.Vector3(5.375, 0.85, 3.6));
-scene.add(pendulum.object);
-const pendulumPanel = new PendulumPanel(pendulum, (open) => {
+// ---------- 실험 패널: 단진자 ----------
+const pendulumPanel = new PendulumPanel((open) => {
   stage.classList.toggle('panel-open', open);
   aimShift = open ? (pendulumPanel.el.offsetWidth + 12) / 2 : 0;
   resize();
 });
-pendulum.onOpenPanel = () => pendulumPanel.open();
-
-/** 상호작용 가능한 물체 목록 */
-const interactables: Interactable[] = [door, pendulum, ...items];
+for (const s of stock.strings) s.onOpenPanel = (str) => pendulumPanel.open(str);
 
 // ---------- 입력·UI ----------
-for (const it of items) it.onPick = (item) => hand.pickUp(item);
 const controls = new Controls(canvas);
 const minimap = new Minimap($<HTMLCanvasElement>('minimap'), player, door, items);
 bindSettingsPanel(settings, {
@@ -104,6 +110,7 @@ const roomLabel = $('room');
 const debugEl = $('debug');
 const heldEl = $('held');
 const promptEl = $('prompt');
+const menuEl = $('action-menu');
 
 $('btn-enter').addEventListener('click', () => {
   $('start').hidden = true;
@@ -111,31 +118,111 @@ $('btn-enter').addEventListener('click', () => {
   void enterFullscreen();
 });
 
-// ---------- 상호작용 (조준·탭) ----------
+// ---------- 상호작용 판정 ----------
 const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
+const camPos = new THREE.Vector3();
 
-/** 화면 좌표(ndc: −1~1)에서 광선을 쏴서 맞은 상호작용 물체를 찾는다 (벽에 가려지면 없음) */
-function pick(x: number, y: number): Interactable | null {
+/** 화면 좌표(ndc)에서 광선을 쏴서 처음 맞는 것 (손이 닿는 거리 안) */
+function raycast(x: number, y: number): THREE.Intersection | null {
   ndc.set(x, y);
   raycaster.setFromCamera(ndc, camera);
   raycaster.far = INTERACT_RANGE;
-  const hit = raycaster.intersectObjects(scene.children, true).find((h) => !isNoPick(h.object));
-  if (!hit) return null;
-  // 맞은 부분(예: 문 손잡이)에서 부모를 따라 올라가며 주인을 찾는다
-  for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
-    const found = interactables.find((it) => it.object === o);
-    if (found) return found;
+  return raycaster.intersectObjects(scene.children, true).find((h) => isPickable(h.object)) ?? null;
+}
+
+/** 맞은 부분에서 부모를 따라 올라가며 가장 가까운 주인(기구·문)을 찾는다 */
+function ownerOf(o: THREE.Object3D | null): Interactable | null {
+  for (; o; o = o.parent) {
+    if (o.userData.item) return o.userData.item as Item;
+    if (o.userData.interactable) return o.userData.interactable as Interactable;
   }
   return null;
 }
 
-/** 손에 물체를 들고 있으면 다른 물체는 집을 수 없다 (문은 열 수 있음) */
-function usable(target: Interactable | null): Interactable | null {
-  return hand.held && target instanceof Item ? null : target;
+/**
+ * 들고 있는 물체를 끼울 소켓 찾기: 맞은 부분에서 위로 올라가며
+ *  - 소켓 판정 영역을 직접 맞혔으면 그 소켓
+ *  - 기구를 맞혔으면 그 기구의 소켓 중 받을 수 있는, 맞은 점에서 가장 가까운 것
+ */
+function findAttach(held: Item, hit: THREE.Intersection): { socket: Socket; plug: Plug } | null {
+  for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
+    const direct = o.userData.socket as Socket | undefined;
+    if (direct) {
+      const plug = direct.accept(held);
+      if (plug) return { socket: direct, plug };
+    }
+    const item = o.userData.item as Item | undefined;
+    if (!item) continue;
+    let best: { socket: Socket; plug: Plug } | null = null;
+    let bestD = Infinity;
+    for (const s of item.sockets) {
+      const plug = s.accept(held);
+      if (!plug) continue;
+      const d = s.opts.slide ? 0 : s.worldPosition().distanceTo(hit.point);
+      if (d < bestD) {
+        bestD = d;
+        best = { socket: s, plug };
+      }
+    }
+    if (best) return best;
+  }
+  return null;
 }
 
-let focused: Interactable | null = null;
+/** 이 화면 위치를 탭하면 할 수 있는 동작들 */
+function actionsAt(x: number, y: number): Action[] {
+  const hit = raycast(x, y);
+  const held = hand.held;
+  if (held) {
+    const att = hit && findAttach(held, hit);
+    if (att) {
+      const point = hit!.point.clone();
+      return [{
+        label: `연결 · ${held.name} → ${att.socket.label}`,
+        run: () => {
+          const item = hand.handOver();
+          if (item) att.socket.attach(item, att.plug, point, camera.getWorldPosition(camPos));
+        },
+      }];
+    }
+    const owner = hit && ownerOf(hit.object);
+    if (owner && !(owner instanceof Item)) return owner.actions(); // 들고 있어도 문은 열 수 있다
+    const place = hand.findTarget(x, y);
+    return place?.valid ? [{ label: '놓기', run: () => hand.place(place) }] : [];
+  }
+  const owner = hit && ownerOf(hit.object);
+  return owner ? owner.actions() : [];
+}
+
+// ---------- 동작 선택 메뉴 (동작이 여러 개일 때 탭한 자리에) ----------
+function showMenu(actions: Action[], x: number, y: number): void {
+  menuEl.innerHTML = '';
+  for (const a of actions) {
+    const b = document.createElement('button');
+    b.textContent = a.label;
+    b.addEventListener('click', () => {
+      hideMenu();
+      a.run();
+    });
+    menuEl.appendChild(b);
+  }
+  menuEl.hidden = false;
+  // 무대 밖으로 나가지 않게
+  const w = menuEl.offsetWidth;
+  const h = menuEl.offsetHeight;
+  menuEl.style.left = `${Math.min(Math.max(8, x + 12), stage.clientWidth - w - 8)}px`;
+  menuEl.style.top = `${Math.min(Math.max(8, y - h / 2), stage.clientHeight - h - 8)}px`;
+}
+function hideMenu(): void {
+  menuEl.hidden = true;
+}
+canvas.addEventListener('pointerdown', hideMenu); // 다른 곳을 만지면 닫힘
+
+function runActions(actions: Action[], x: number, y: number): void {
+  if (actions.length === 1) actions[0].run();
+  else if (actions.length > 1) showMenu(actions, x, y);
+}
 
 // ---------- 메인 루프 ----------
 let last = performance.now();
@@ -153,36 +240,33 @@ renderer.setAnimationLoop(() => {
   const input = controls.state;
 
   player.update(dt, input, settings);
-  door.update(dt);
-  pendulum.update(dt, pendulumPanel.speed);
+  for (const d of doors) d.update(dt);
+  for (const s of stock.strings) {
+    s.update(dt, pendulumPanel.speed, pendulumPanel.target === s);
+  }
   updateLights(now / 1000);
   camera.updateMatrixWorld();
   hand.update(aimX);
 
-  // 조준점 아래 안내 문구: 조준한 물체 → "[탭] 집기 · 비커", 들고 있으면 → 놓기 가능 여부
-  focused = usable(pick(aimX, 0));
+  // 조준점 아래 안내 문구: 지금 탭하면 일어날 일 (동작이 더 있으면 "…")
+  const aimed = actionsAt(aimX, 0);
   let prompt = '';
-  if (focused) prompt = `[탭] ${focused.label()}`;
-  else if (hand.held && hand.aim) prompt = hand.aim.valid ? '[탭] 놓기' : '여기에는 놓을 수 없음';
+  if (aimed.length) prompt = `[탭] ${aimed[0].label}${aimed.length > 1 ? ' …' : ''}`;
+  else if (hand.held && hand.aim) prompt = '여기에는 놓을 수 없음';
   if (promptEl.textContent !== prompt) promptEl.textContent = prompt;
   promptEl.hidden = !prompt;
 
   if (hand.held) heldEl.textContent = `들고 있음: ${hand.held.name}`;
   heldEl.hidden = !hand.held;
 
-  // PC: E 키 → 조준한 물체와 상호작용, 없으면 들고 있는 물체 내려놓기
-  if (input.interactKey) {
-    if (focused) focused.interact();
-    else hand.place(hand.aim);
-  }
+  // PC: E 키 → 조준점의 첫 번째 동작
+  if (input.interactKey) aimed[0]?.run();
 
-  // 화면 탭: 그 위치의 물체와 상호작용, 들고 있을 때는 탭한 면에 내려놓기
+  // 화면 탭
   for (const t of input.taps) {
     const x = (t.x / stage.clientWidth) * 2 - 1;
     const y = -(t.y / stage.clientHeight) * 2 + 1;
-    const target = usable(pick(x, y));
-    if (target) target.interact();
-    else if (hand.held) hand.place(hand.findTarget(x, y));
+    runActions(actionsAt(x, y), t.x, t.y);
   }
 
   retro.render();

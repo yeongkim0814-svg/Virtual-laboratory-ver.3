@@ -6,14 +6,17 @@
  *   2. 그 면의 법선 벡터 n이 거의 위쪽(n·ŷ > 0.7, 즉 기울기 약 45° 이하)이면 "놓을 수 있는 면"이다.
  *      → 벽이나 가구 옆면(n이 수평)에는 놓을 수 없다.
  *   3. 다른 물체와 같은 높이에서 겹치면(중심 거리 < 두 반지름의 합) 놓을 수 없다.
- * 아직 중력·낙하는 없다. 물체는 고른 면 위에 바로 올라앉는다 (물리는 1단계부터).
+ * 아직 중력·낙하는 없다. 물체는 고른 면 위에 바로 올라앉는다.
+ *
+ * 들고 있는 물체는 "레이어 1"로 옮겨 따로 그린다 (retro.ts가 깊이 버퍼를 지운 뒤 맨 앞에 그림).
+ * → 벽에 가까이 가도 파묻혀 보이지 않고, 광선 판정(레이어 0만 봄)에서도 자동으로 빠진다.
  */
 import * as THREE from 'three';
 import type { Item } from '../world/items';
 import { INTERACT_RANGE } from '../world/interactable';
 
 const MIN_UP = 0.7; // 법선의 y성분이 이보다 커야 놓을 수 있다
-const HOLD_OFFSET = new THREE.Vector3(0.2, -0.2, -0.45); // 카메라 기준: 오른쪽 아래 앞
+export const HELD_LAYER = 1;
 
 export interface PlaceTarget {
   point: THREE.Vector3;
@@ -49,12 +52,13 @@ export class Hand {
   pickUp(item: Item): void {
     if (this.held) return;
     this.held = item;
-    item.object.removeFromParent(); // 책상 위(장면)든 진자 스탠드든 원래 붙어 있던 곳에서 떼어 낸다
+    item.detachFromParent(); // 책상 위든 다른 기구의 소켓이든 붙어 있던 곳에서 떼어 낸다 (자식은 함께 딸려 옴)
     this.camera.add(item.object);
-    item.object.position.copy(HOLD_OFFSET);
+    // 카메라 기준 오른쪽 아래 앞. 큰 물체(스탠드 등)일수록 더 멀리·아래에 들어 화면을 덜 가린다
+    const h = new THREE.Box3().setFromObject(item.object).getSize(new THREE.Vector3()).y;
+    item.object.position.set(0.22 + 0.2 * h, -0.2 - 0.5 * h, -0.45 - 0.35 * h);
     item.object.rotation.set(0, 0, 0);
-    // 들고 있는 동안에는 항상 맨 앞에 그린다 (벽에 가까이 가도 물체가 벽에 파묻혀 보이지 않게)
-    setOnTop(item.object, true);
+    setLayer(item.object, HELD_LAYER);
   }
 
   /** 지정한 자리에 내려놓는다. 성공하면 true */
@@ -62,7 +66,7 @@ export class Hand {
     const item = this.held;
     if (!item || !target?.valid) return false;
     this.camera.remove(item.object);
-    setOnTop(item.object, false);
+    setLayer(item.object, 0);
     item.object.position.copy(target.point);
     item.object.rotation.set(0, 0, 0);
     this.scene.add(item.object);
@@ -76,7 +80,7 @@ export class Hand {
     const item = this.held;
     if (!item) return null;
     this.camera.remove(item.object);
-    setOnTop(item.object, false);
+    setLayer(item.object, 0);
     item.object.rotation.set(0, 0, 0);
     this.held = null;
     this.marker.visible = false;
@@ -93,7 +97,7 @@ export class Hand {
     // 광선이 물체를 지나 아래 책상에 맞고, 아래의 겹침 검사에서 불가로 판정된다)
     const hit = this.raycaster
       .intersectObjects(this.scene.children, true)
-      .find((h) => !isNoPick(h.object) && !itemOf(h.object));
+      .find((h) => isPickable(h.object) && !itemOf(h.object));
     if (!hit || !hit.face) return null;
 
     // 면의 법선을 월드 좌표로 바꾼다 (물체가 회전해 있어도 올바른 방향을 얻기 위해)
@@ -123,10 +127,13 @@ export class Hand {
   }
 }
 
-/** 이 물체(또는 부모)가 광선 판정에서 빠져야 하는가 — 들고 있는 물체, 표시 고리 등 */
-export function isNoPick(o: THREE.Object3D | null): boolean {
-  for (; o; o = o.parent) if (o.userData.noPick) return true;
-  return false;
+/**
+ * 광선에 맞아도 되는 물체인가.
+ * 제외: 표시 고리 등 noPick 표시가 붙은 것, 숨겨진 것 (three.js 광선은 visible=false도 맞히므로 직접 거른다)
+ */
+export function isPickable(o: THREE.Object3D | null): boolean {
+  for (; o; o = o.parent) if (o.userData.noPick || !o.visible) return false;
+  return true;
 }
 
 /** 광선에 맞은 부분이 속한 물체(Item)를 찾는다 (없으면 null) */
@@ -135,11 +142,6 @@ export function itemOf(o: THREE.Object3D | null): Item | null {
   return null;
 }
 
-function setOnTop(obj: THREE.Object3D, onTop: boolean): void {
-  obj.traverse((o) => {
-    if (o instanceof THREE.Mesh) {
-      o.renderOrder = onTop ? 999 : 0;
-      (o.material as THREE.Material).depthTest = !onTop;
-    }
-  });
+function setLayer(obj: THREE.Object3D, layer: number): void {
+  obj.traverse((o) => o.layers.set(layer));
 }

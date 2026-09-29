@@ -1,7 +1,8 @@
 /**
  * 단진자 실험 패널: 조건 조절 · 실시간 측정값 · θ(t) 그래프 · 측정 기록 표
+ * 직접 조립한 진자(클램프 → 실 → 추)의 추나 실을 탭하고 "진자 실험"을 고르면 그 진자에 연결된다.
  */
-import type { PendulumStation } from '../experiments/pendulumStation';
+import type { PendulumString } from '../equipment/pendulumString';
 import { exactPeriod, smallAnglePeriod } from '../sim/pendulum';
 import type { Method } from '../sim/integrators';
 
@@ -24,43 +25,39 @@ interface LogRow {
 export class PendulumPanel {
   readonly el = byId('pend-panel');
   speed = 1;
+  /** 지금 패널이 다루는 진자 (실) */
+  target: PendulumString | null = null;
   private log: LogRow[] = loadLog();
   private graph = byId<HTMLCanvasElement>('pp-graph');
   private lastText = 0;
+  private lenInput = byId<HTMLInputElement>('pp-l');
+  private thInput = byId<HTMLInputElement>('pp-th');
+  private dragInput = byId<HTMLInputElement>('pp-drag');
 
-  constructor(private station: PendulumStation, private onToggle: (open: boolean) => void) {
-    const sim = station.sim;
-    const L = byId<HTMLInputElement>('pp-L');
-    const th = byId<HTMLInputElement>('pp-th');
-    const drag = byId<HTMLInputElement>('pp-drag');
-
+  constructor(private onToggle: (open: boolean) => void) {
     // 조건을 바꾸면 추를 처음 각도로 되돌린다 (진행 중인 측정은 무효)
     const conditionChanged = () => {
-      sim.length = Number(L.value);
-      sim.theta0 = Number(th.value) * DEG;
-      sim.airDrag = drag.checked;
-      sim.reset();
-      station.layout();
+      const t = this.target;
+      if (!t) return;
+      t.length = Number(this.lenInput.value);
+      t.sim.theta0 = Number(this.thInput.value) * DEG;
+      t.sim.airDrag = this.dragInput.checked;
+      t.resetSim();
       this.refreshControls();
     };
-    L.addEventListener('input', conditionChanged);
-    th.addEventListener('input', conditionChanged);
-    drag.addEventListener('change', conditionChanged);
+    this.lenInput.addEventListener('input', conditionChanged);
+    this.thInput.addEventListener('input', conditionChanged);
+    this.dragInput.addEventListener('change', conditionChanged);
 
-    segmented('pp-method', (v) => { sim.method = v as Method; conditionChanged(); });
-    segmented('pp-dt', (v) => { sim.dt = Number(v); conditionChanged(); });
+    segmented('pp-method', (v) => { if (this.target) this.target.sim.method = v as Method; conditionChanged(); });
+    segmented('pp-dt', (v) => { if (this.target) this.target.sim.dt = Number(v); conditionChanged(); });
     segmented('pp-speed', (v) => { this.speed = Number(v); this.refreshControls(); });
 
-    byId('pp-release').addEventListener('click', () => { if (station.bob) sim.release(); });
-    byId('pp-reset').addEventListener('click', () => { sim.reset(); });
+    byId('pp-release').addEventListener('click', () => { if (this.target?.isPendulum) this.target.sim.release(); });
+    byId('pp-reset').addEventListener('click', () => { this.target?.sim.reset(); });
     byId('pp-close').addEventListener('click', () => this.close());
     byId('pp-record').addEventListener('click', () => this.record());
     byId('pp-clear').addEventListener('click', () => { this.log = []; saveLog(this.log); this.renderLog(); });
-
-    L.value = String(sim.length);
-    th.value = String(Math.round(sim.theta0 / DEG));
-    drag.checked = sim.airDrag;
-    this.refreshControls();
     this.renderLog();
   }
 
@@ -68,19 +65,28 @@ export class PendulumPanel {
     return !this.el.hidden;
   }
 
-  open(): void {
+  open(target: PendulumString): void {
+    this.target = target;
+    const sim = target.sim;
+    this.lenInput.value = String(target.length);
+    this.thInput.value = String(Math.round(sim.theta0 / DEG));
+    this.dragInput.checked = sim.airDrag;
+    this.refreshControls();
     this.el.hidden = false;
     this.onToggle(true);
   }
 
   close(): void {
     this.el.hidden = true;
+    this.target = null;
     this.onToggle(false);
   }
 
   private refreshControls(): void {
-    const sim = this.station.sim;
-    byId('pp-L-val').textContent = `${sim.length.toFixed(2)} m`;
+    const t = this.target;
+    if (!t) return;
+    const sim = t.sim;
+    byId('pp-l-val').textContent = `${t.length.toFixed(2)} m`;
     byId('pp-th-val').textContent = `${Math.round(sim.theta0 / DEG)}°`;
     pressed('pp-method', sim.method);
     pressed('pp-dt', String(sim.dt));
@@ -89,7 +95,7 @@ export class PendulumPanel {
 
   /** 매 프레임 호출 (열려 있을 때만) */
   update(): void {
-    if (!this.isOpen) return;
+    if (!this.isOpen || !this.target) return;
     const now = performance.now();
     if (now - this.lastText > 100) {
       this.lastText = now;
@@ -99,12 +105,21 @@ export class PendulumPanel {
   }
 
   private updateText(): void {
-    const st = this.station;
+    const st = this.target!;
     const sim = st.sim;
-    byId('pp-bob').textContent = st.bob
-      ? `추: ${st.bob.name} (${(st.bob.mass * 1000).toFixed(0)} g)`
-      : '추가 없습니다 — 테이블 위의 추를 들고 스탠드를 탭하세요';
-    byId<HTMLButtonElement>('pp-release').disabled = !st.bob;
+    const bob = st.bob;
+    let status: string;
+    if (!st.isHung) status = '실이 클램프에서 빠졌습니다';
+    else if (!bob) status = '추가 없습니다 — 추를 들고 실 끝을 탭하세요';
+    else if (!st.isPendulum) status = '진자를 들고 있습니다 — 책상 위에 놓으세요';
+    else status = `추: ${bob.name} (${(bob.mass * 1000).toFixed(0)} g)`;
+    if (st.isPendulum && st.length > st.maxLength) {
+      status += ` · 추가 닿아 실을 ${st.maxLength.toFixed(2)} m로 줄임 (클램프를 올리세요)`;
+    }
+    byId('pp-bob').textContent = status;
+    byId<HTMLButtonElement>('pp-release').disabled = !st.isPendulum;
+    const d = st.effectiveLength() - st.usedLength();
+    byId('pp-Lr').textContent = `${st.effectiveLength().toFixed(3)} m  (ℓ ${st.usedLength().toFixed(2)} + ${(d * 100).toFixed(1)} cm)`;
 
     const T0 = smallAnglePeriod(sim.length);
     const Te = exactPeriod(sim.length, sim.theta0);
@@ -120,7 +135,8 @@ export class PendulumPanel {
   }
 
   private record(): void {
-    const sim = this.station.sim;
+    const sim = this.target?.sim;
+    if (!sim) return;
     const T = sim.measuredPeriod();
     if (!T || !sim.bob) return;
     this.log.unshift({
@@ -165,7 +181,7 @@ export class PendulumPanel {
       c.height = h;
     }
     const g = c.getContext('2d')!;
-    const sim = this.station.sim;
+    const sim = this.target!.sim;
     const css = getComputedStyle(this.el);
     const amber = css.getPropertyValue('--amber').trim() || '#ff9a2e';
     g.clearRect(0, 0, w, h);
