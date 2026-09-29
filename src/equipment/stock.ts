@@ -24,6 +24,7 @@ import { PendulumString } from './pendulumString';
 import { Spring } from './spring';
 import { Laser, OpticScreen, SlitPlate } from './optics';
 import { DCPowerSupply, Microammeter, Phototube } from './electrical';
+import { Ammeter, Bulb, KnifeSwitch, Resistor, Voltmeter, type CircuitPart } from './circuitParts';
 import { Cart, Pulley, Rail, massBar } from './track';
 import { Laptop, MotionSensor, PHSensor } from './sensors';
 import { Container, DropperBottle, PHPaper, REAGENTS, beaker, burette, cylinder, flask, reagentBottle } from './glassware';
@@ -37,6 +38,8 @@ export interface Stock {
   supplies: DCPowerSupply[];
   ammeters: Microammeter[];
   tubes: Phototube[];
+  /** 직류 회로 부품 (저항·전구·스위치·전압계·전류계) */
+  circuitParts: CircuitPart[];
   rails: Rail[];
   carts: Cart[];
   laptops: Laptop[];
@@ -66,10 +69,17 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     new Spring({ k: 25, L0: 0.08, ms: 0.02, limit: 0.3 }, 0xc9a456, '용수철 k 25 N/m'),
   ];
   const lasers = [new Laser()];
-  const supplies = [new DCPowerSupply()];
+  const supplies = [new DCPowerSupply(), new DCPowerSupply()];
   const ammeters = [new Microammeter()];
   // 일함수: 세슘 2.14 eV (문턱 파장 579 nm), 나트륨 2.28 eV (544 nm) → 빨강 650 nm로는 둘 다 전자가 안 나옴
   const tubes = [new Phototube('Cs', 2.14), new Phototube('Na', 2.28)];
+  // 직류 회로: 저항 4종, 꼬마전구 2개, 스위치, 전압계·전류계 2개씩 (키르히호프 법칙 확인에 여러 곳을 동시에 재도록)
+  const resistors = [10, 22, 47, 100].map((R) => new Resistor(R));
+  const bulbs = [new Bulb('꼬마전구 1 (3.8 V 0.3 A)'), new Bulb('꼬마전구 2 (3.8 V 0.3 A)')];
+  const knife = new KnifeSwitch();
+  const voltmeters = [new Voltmeter('전압계 1'), new Voltmeter('전압계 2')];
+  const dcAmmeters = [new Ammeter('전류계 1'), new Ammeter('전류계 2')];
+  const circuitParts: CircuitPart[] = [...resistors, ...bulbs, knife, ...voltmeters, ...dcAmmeters];
   const rails = [new Rail()];
   const carts = [new Cart('수레 A', 0x2f6fb0), new Cart('수레 B', 0xd07a2a)];
   // 교탁(높이 0.76 m): 화면이 실험실 쪽(+x)을 보게 90° 돌려 놓는다. 스탠딩 테이블(1.05 m): 교사 쪽(−x)을 보게
@@ -117,6 +127,16 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(motionSensors[0], low.slot(2, 0, 0.25)),
     at(motionSensors[1], low.slot(2, 0, 0.75)),
     at(new Pulley(), low.slot(3, 0, 0.5)),
+    // 직류 회로: 칸 4 = 전원 장치(바닥)·전압계·전류계(선반), 칸 5 = 저항(바닥)·전구·스위치(선반), 칸 6 = 두 번째 전압계·전류계
+    at(supplies[1], low.slot(4, 0, 0.5)),
+    at(voltmeters[0], low.slot(4, 1, 0.2)),
+    at(dcAmmeters[0], low.slot(4, 1, 0.8)),
+    ...resistors.map((r, i) => at(r, low.slot(5, 0, i / 3))),
+    at(bulbs[0], low.slot(5, 1, 0.0)),
+    at(bulbs[1], low.slot(5, 1, 0.45)),
+    at(knife, low.slot(5, 1, 0.95)),
+    at(voltmeters[1], low.slot(6, 1, 0.2)),
+    at(dcAmmeters[1], low.slot(6, 1, 0.8)),
     at(new Stand(), cab.slot(0, 0, 0.2)),
     at(new Stand(), cab.slot(0, 0, 0.8)),
     at(new Stand(), cab.slot(1, 0, 0.2)),
@@ -152,5 +172,5 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(tubes[0], cab.slot(7, 1, 0.55)),
     at(tubes[1], cab.slot(7, 1, 0.85)),
   ];
-  return { items, strings, springs, lasers, supplies, ammeters, tubes, rails, carts, laptops, motionSensors, phSensors, containers };
+  return { items, strings, springs, lasers, supplies, ammeters, tubes, circuitParts, rails, carts, laptops, motionSensors, phSensors, containers };
 }

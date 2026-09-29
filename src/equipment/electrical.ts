@@ -28,7 +28,7 @@ function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: numb
 }
 
 /** 작은 액정 표시창 (캔버스 텍스처, 바뀔 때만 다시 그림) */
-class Lcd {
+export class Lcd {
   readonly mesh: THREE.Mesh;
   private ctx: CanvasRenderingContext2D;
   private tex: THREE.CanvasTexture;
@@ -82,6 +82,13 @@ export class DCPowerSupply extends Item implements Powered {
   onOpenControls: (d: DCPowerSupply) => void = () => {};
   /** 광전관과 한 고리로 이어져 있는가 (main이 매 프레임 채움) */
   hasTube = false;
+  /** 전류 제한(정전류, CC) 모드로 동작 중 — 단자 전압이 설정값보다 낮아진다 (직류 회로 해석이 채움) */
+  cc = false;
+  /** 저항·전구 등 직류 회로 부품과 이어져 있는가 (직류 회로 해석이 채움) */
+  hasDC = false;
+  onOpenDC: (d: DCPowerSupply) => void = () => {};
+  /** 실제 단자 전압 (V, 직류 회로 해석이 채움) */
+  terminalV: number | null = null;
   private lcd = new Lcd(0.1, 0.028);
 
   constructor() {
@@ -110,12 +117,15 @@ export class DCPowerSupply extends Item implements Powered {
   }
 
   experimentActions(): Action[] {
-    return this.hasTube ? [{ label: '광전 효과 실험', run: () => this.onOpenPanel(this) }] : [];
+    const out: Action[] = [];
+    if (this.hasTube) out.push({ label: '광전 효과 실험', run: () => this.onOpenPanel(this) });
+    if (this.hasDC) out.push({ label: '직류 회로 실험', run: () => this.onOpenDC(this) });
+    return out;
   }
 
   update(): void {
     if (!this.port) this.on = false;
-    this.lcd.show(this.on ? `${this.output.toFixed(2)} V` : '');
+    this.lcd.show(!this.on ? '' : this.cc && this.terminalV !== null ? `CC ${this.terminalV.toFixed(2)}V` : `${this.output.toFixed(2)} V`);
   }
 }
 

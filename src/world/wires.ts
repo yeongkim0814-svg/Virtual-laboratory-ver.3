@@ -16,6 +16,7 @@ import { Cable, endToEndPath, settle } from './cable';
 const WIRE_MAX = 1.5; // m
 const KNOB_RED = new THREE.MeshLambertMaterial({ color: 0xc0302a });
 const KNOB_BLACK = new THREE.MeshLambertMaterial({ color: 0x1a1a18 });
+const KNOB_BRASS = new THREE.MeshLambertMaterial({ color: 0xc8a040 });
 
 export class Terminal {
   readonly wires: Wire[] = [];
@@ -23,13 +24,13 @@ export class Terminal {
 
   /**
    * @param owner 단자가 달린 기구, name 안내용 이름 (예: "양극(+)")
-   * @param polarity '+'(빨강) 또는 '−'(검정)
+   * @param polarity '+'(빨강) 또는 '−'(검정), 'n'(놋쇠: 극성 없는 저항·전구·스위치)
    * @param local 기구 좌표에서의 위치, facing 단자가 튀어나온 방향 (기구 좌표)
    */
-  constructor(readonly owner: Item, readonly name: string, readonly polarity: '+' | '-', local: THREE.Vector3, facing: THREE.Vector3) {
+  constructor(readonly owner: Item, readonly name: string, readonly polarity: '+' | '-' | 'n', local: THREE.Vector3, facing: THREE.Vector3) {
     this.anchor.position.copy(local);
     this.anchor.lookAt(local.clone().add(facing));
-    const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.014, 6).rotateX(Math.PI / 2), polarity === '+' ? KNOB_RED : KNOB_BLACK);
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.014, 6).rotateX(Math.PI / 2), polarity === '+' ? KNOB_RED : polarity === '-' ? KNOB_BLACK : KNOB_BRASS);
     knob.position.z = 0.007;
     knob.userData.cableIgnore = true; // 도선이 넘어가야 할 장애물로 보지 않음
     const pad = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 4), HITBOX_MAT); // 이웃 단자와 겹치지 않을 크기
@@ -135,7 +136,9 @@ export class WireSystem {
     this.pending = null;
     if (a.wires.some((w) => w.a === b || w.b === b)) return; // 이미 이어져 있음
     // 빨강 선(+ 쪽이 끼면)·파랑 선. (검정 선은 검은 실험대 위에서 보이지 않아 교육용 키트처럼 파랑을 쓴다)
-    const w = new Wire(a, b, a.polarity === '+' || b.polarity === '+' ? 0xe0463c : 0x3f7fd8);
+    // 극성 없는 단자끼리(저항·전구 사이)는 노랑 선
+    const color = a.polarity === '+' || b.polarity === '+' ? 0xe0463c : a.polarity === '-' || b.polarity === '-' ? 0x3f7fd8 : 0xe0b030;
+    const w = new Wire(a, b, color);
     a.wires.push(w);
     b.wires.push(w);
     this.wires.push(w);

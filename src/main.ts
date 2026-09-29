@@ -39,6 +39,8 @@ import { PowerSystem } from './world/power';
 import { WireSystem, type Terminal } from './world/wires';
 import { solveCircuits, type PhotoCircuitState } from './equipment/electrical';
 import { PhotoPanel } from './ui/photoPanel';
+import { CircuitPanel } from './ui/circuitPanel';
+import { solveDCCircuits, type DCCircuitState } from './equipment/circuitParts';
 import { RotateBar } from './ui/rotateBar';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -122,9 +124,12 @@ const wires = new WireSystem(scene);
 let circuits: PhotoCircuitState[] = [];
 const photoPanel = new PhotoPanel((open) => panelToggled(photoPanel, open), (s) => circuits.find((c) => c.supply === s) ?? null);
 const supplyPanel = new SupplyPanel((open) => panelToggled(supplyPanel, open));
+// 직류 회로 (저항·전구·스위치·계기): 매 프레임 마디 전압법으로 푼 결과
+let dcStates: DCCircuitState[] = [];
+const circuitPanel = new CircuitPanel((open) => panelToggled(circuitPanel, open), (s) => dcStates.find((c) => c.supply === s) ?? null);
 const trackPanel = new TrackPanel((open) => panelToggled(trackPanel, open));
 const loggerPanel = new LoggerPanel((open) => panelToggled(loggerPanel, open));
-const panels = [pendulumPanel, springPanel, slitPanel, photoPanel, supplyPanel, trackPanel, loggerPanel];
+const panels = [pendulumPanel, springPanel, slitPanel, photoPanel, supplyPanel, circuitPanel, trackPanel, loggerPanel];
 // 센서 ↔ 노트북 (USB)
 const sensorNet = new SensorNetwork(scene, stock.laptops, [...stock.motionSensors, ...stock.phSensors]);
 for (const l of stock.laptops) l.onOpenPanel = (lap) => loggerPanel.open(lap);
@@ -238,6 +243,13 @@ for (const s of stock.supplies) {
   s.powerActions = (d) => power.deviceActions(d);
   s.onOpenPanel = (d) => photoPanel.open(d);
   s.onOpenControls = (d) => supplyPanel.open(d);
+  s.onOpenDC = (d) => circuitPanel.open(d);
+}
+for (const p of stock.circuitParts) {
+  p.onOpenPanel = (part) => {
+    const st = dcStates.find((c) => c.parts.includes(part));
+    if (st) circuitPanel.open(st.supply);
+  };
 }
 
 // 레이저 광선 추적
@@ -594,10 +606,16 @@ renderer.setAnimationLoop(() => {
   power.update();
   wires.update();
   circuits = solveCircuits(wires, stock.supplies, stock.ammeters, stock.tubes);
+  dcStates = solveDCCircuits(wires, stock.supplies, stock.circuitParts, stock.ammeters, stock.tubes, dt);
   for (const s of stock.supplies) {
+    const dc = dcStates.find((c) => c.supply === s);
+    s.hasDC = !!dc;
+    s.cc = !!dc?.limited;
+    s.terminalV = dc ? dc.terminalV : null;
     s.update();
     s.hasTube = circuits.some((c) => c.supply === s && c.tube);
   }
+  for (const p of stock.circuitParts) p.update(dt);
   for (const a of stock.ammeters) a.update();
   beams.update();
   rotateBar.update();
@@ -636,6 +654,7 @@ renderer.setAnimationLoop(() => {
   springPanel.update();
   slitPanel.update();
   photoPanel.update();
+  circuitPanel.update();
   supplyPanel.update();
   trackPanel.update();
   loggerPanel.update();
