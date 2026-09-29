@@ -31,6 +31,7 @@ const CAB_MATS = { body: M.cabinet, door: M.door, glass: M.glass, handle: M.hand
 /** 만들어진 보관장들 (이름 → 보관장) — 기구를 넣을 자리를 찾을 때 쓴다 */
 const cabinets = new Map<string, StorageCabinet>();
 const outlets: Outlet[] = [];
+const wasteCans: THREE.Object3D[] = [];
 
 export interface FurnitureResult {
   cabinets: Map<string, StorageCabinet>;
@@ -38,18 +39,21 @@ export interface FurnitureResult {
   doors: CabinetDoor[];
   /** 실험 테이블 옆면의 콘센트 (장면에는 PowerSystem이 넣는다) */
   outlets: Outlet[];
+  /** 폐시약 보관함 위의 폐액통 (main이 폐액통 동작을 붙인다) */
+  wasteCans: THREE.Object3D[];
 }
 
 export function buildFurniture(scene: THREE.Scene): FurnitureResult {
   cabinets.clear();
   outlets.length = 0;
+  wasteCans.length = 0;
   for (const f of FURNITURE) {
     const g = new THREE.Group();
     g.name = f.name;
     BUILDERS[f.kind](g, f);
     scene.add(g);
   }
-  return { cabinets, doors: [...cabinets.values()].flatMap((c) => c.doors), outlets: [...outlets] };
+  return { cabinets, doors: [...cabinets.values()].flatMap((c) => c.doors), outlets: [...outlets], wasteCans: [...wasteCans] };
 }
 
 type Builder = (g: THREE.Group, f: Furniture) => void;
@@ -149,11 +153,16 @@ const BUILDERS: Record<Furniture['kind'], Builder> = {
     const n = 2;
     for (let i = 0; i < n; i++) {
       const t = (i + 0.5) / n;
+      // 폐액통 한 개 = 통 + 뚜껑 (한 묶음으로 탭한다)
+      const unit = new THREE.Group();
+      unit.position.set(r.x1 + t * (r.x2 - r.x1), f.height, (r.z1 + r.z2) / 2);
       const can = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.32, 8), M.white);
-      can.position.set(r.x1 + t * (r.x2 - r.x1), f.height + 0.16, (r.z1 + r.z2) / 2);
+      can.position.y = 0.16;
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.04, 6), M.hazard);
-      cap.position.set(can.position.x, f.height + 0.34, can.position.z);
-      g.add(can, cap);
+      cap.position.y = 0.34;
+      unit.add(can, cap);
+      g.add(unit);
+      wasteCans.push(unit);
     }
   },
 

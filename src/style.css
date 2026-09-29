@@ -364,3 +364,24 @@ canvas.plot.tall { height: 130px; }
 .exp-panel .plot-title { margin: 10px 0 3px; font-size: 13px; color: var(--amber); display: flex; justify-content: space-between; }
 .exp-panel .plot-title span { color: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; }
 #log-panel { padding-bottom: 40px; }
+
+/* ---------- 따르기 막대 · 알림 ---------- */
+#pour-bar {
+  position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;
+  padding: 10px 12px;
+  background: var(--panel); border: 2px solid var(--amber);
+  pointer-events: auto;
+  max-width: calc(100% - 32px);
+}
+#pour-bar button { padding: 8px 10px; font-size: 14px; }
+#pour-bar input { width: min(240px, 24vw); accent-color: var(--amber); height: 28px; }
+#pb-name { color: var(--text); font-size: 13px; max-width: 18em; }
+#pb-val { min-width: 5.5em; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+#toast {
+  position: absolute; left: 50%; top: 72px; transform: translateX(-50%);
+  max-width: min(640px, calc(100% - 32px));
+  padding: 8px 14px; font-size: 14px; color: var(--text);
+  background: rgba(10, 8, 4, 0.88); border: 1px solid var(--amber);
+  pointer-events: none;
+}

@@ -13,7 +13,9 @@
  *
  * 뒤쪽 벽 낮은 수납장(여닫는 칸): 칸 0 역학 레일 1.2 m, 칸 1 수레 2대 + 질량 막대 250 g × 4, 칸 2 운동 센서 2개
  * 칠판 앞 교탁: 노트북 1·2, 스탠딩 테이블: 노트북 3 (측정 프로그램)
- * 준비실은 화학 실험용 (시약장 추가 예정) — 물리 기구는 넣지 않는다
+ * 준비실 (화학 실험용):
+ *   시약장 유리문 칸: 0.1 M HCl · NaOH · CH₃COOH · NH₃, 증류수 2병, 지시약 3종(페놀프탈레인·메틸 오렌지·BTB), 만능 pH 시험지
+ *   유리 기구 보관장: 뷰렛 2 · 스탠드·클램프(긴 칸), 비커 6, 삼각 플라스크 2, 눈금실린더 2
  */
 import type { StorageCabinet } from '../world/cabinet';
 import { at, type Item } from '../world/items';
@@ -24,6 +26,7 @@ import { Laser, OpticScreen, SlitPlate } from './optics';
 import { DCPowerSupply, Microammeter, Phototube } from './electrical';
 import { Cart, Rail, massBar } from './track';
 import { Laptop, MotionSensor } from './sensors';
+import { Container, DropperBottle, PHPaper, REAGENTS, beaker, burette, cylinder, flask, reagentBottle } from './glassware';
 import * as THREE from 'three';
 
 export interface Stock {
@@ -38,11 +41,22 @@ export interface Stock {
   carts: Cart[];
   laptops: Laptop[];
   motionSensors: MotionSensor[];
+  /** 용액을 담는 그릇 전부 (시약병 포함) */
+  containers: Container[];
 }
 
 export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
   const cab = cabs.get('실험 기구 보관장')!;
   const low = cabs.get('실험 기구 수납장')!; // 뒤쪽 벽 낮은 수납장
+  const chem = cabs.get('시약장')!;
+  const glass = cabs.get('유리 기구 보관장')!;
+  const bottles = REAGENTS.map((r) => reagentBottle(r));
+  const water2 = reagentBottle(REAGENTS.find((r) => r.id === 'H2O')!);
+  const beakers = [1, 2, 3, 4, 5, 6].map((n) => beaker(n));
+  const flasks = [1, 2].map((n) => flask(n));
+  const cylinders = [1, 2].map((n) => cylinder(n));
+  const burettes = [1, 2].map((n) => burette(n));
+  const containers: Container[] = [...bottles, water2, ...beakers, ...flasks, ...cylinders, ...burettes];
   const strings = [new PendulumString(), new PendulumString()];
   // 용수철: k, 자연 길이, 자기 질량, 탄성 한계 늘어남
   const springs = [
@@ -74,6 +88,28 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(carts[0], low.slot(1, 0, 0.25)),
     at(carts[1], low.slot(1, 0, 0.75)),
     ...[0.15, 0.38, 0.62, 0.85].map((t) => at(massBar(), low.slot(1, 1, t))),
+    // 시약장 (유리문 칸, 선반 2): 칸 2 = HCl·NaOH·증류수, 칸 3 = CH₃COOH·NH₃·증류수, 칸 4 = 지시약·시험지
+    at(bottles[0], chem.slot(2, 2, 0.1)),
+    at(bottles[1], chem.slot(2, 2, 0.5)),
+    at(bottles[4], chem.slot(2, 2, 0.9)),
+    at(bottles[2], chem.slot(3, 2, 0.1)),
+    at(bottles[3], chem.slot(3, 2, 0.5)),
+    at(water2, chem.slot(3, 2, 0.9)),
+    at(new DropperBottle('php', 0xe8e8e8), chem.slot(4, 2, 0.1)),
+    at(new DropperBottle('mo', 0xd8602a), chem.slot(4, 2, 0.37)),
+    at(new DropperBottle('btb', 0x3a6fd0), chem.slot(4, 2, 0.63)),
+    at(new PHPaper(), chem.slot(4, 2, 0.9)),
+    // 유리 기구 보관장: 긴 칸 0 = 뷰렛, 긴 칸 1 = 스탠드·클램프, 유리문 칸 = 비커·플라스크·눈금실린더
+    at(burettes[0], glass.slot(0, 0, 0.3)),
+    at(burettes[1], glass.slot(0, 0, 0.7)),
+    at(new Stand(), glass.slot(1, 0, 0.5)),
+    at(new Clamp(), glass.slot(4, 1, 0.5)),
+    ...beakers.slice(0, 4).map((b, i) => at(b, glass.slot(2, 2, 0.1 + i * 0.27))),
+    ...beakers.slice(4).map((b, i) => at(b, glass.slot(2, 1, 0.2 + i * 0.6))),
+    at(flasks[0], glass.slot(3, 2, 0.2)),
+    at(flasks[1], glass.slot(3, 2, 0.8)),
+    at(cylinders[0], glass.slot(4, 2, 0.25)),
+    at(cylinders[1], glass.slot(4, 2, 0.75)),
     at(motionSensors[0], low.slot(2, 0, 0.25)),
     at(motionSensors[1], low.slot(2, 0, 0.75)),
     at(new Stand(), cab.slot(0, 0, 0.2)),
@@ -111,5 +147,5 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(tubes[0], cab.slot(7, 1, 0.55)),
     at(tubes[1], cab.slot(7, 1, 0.85)),
   ];
-  return { items, strings, springs, lasers, supplies, ammeters, tubes, rails, carts, laptops, motionSensors };
+  return { items, strings, springs, lasers, supplies, ammeters, tubes, rails, carts, laptops, motionSensors, containers };
 }

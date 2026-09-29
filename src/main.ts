@@ -30,6 +30,8 @@ import { TrackPanel } from './ui/trackPanel';
 import { LoggerPanel } from './ui/loggerPanel';
 import { SensorNetwork } from './equipment/sensors';
 import { Rail } from './equipment/track';
+import { Container, WasteCan, chemHooks } from './equipment/glassware';
+import { PourBar } from './ui/pourBar';
 import { SlitPanel } from './ui/slitPanel';
 import { stockEquipment } from './equipment/stock';
 import { BeamSystem } from './equipment/beams';
@@ -126,6 +128,56 @@ const panels = [pendulumPanel, springPanel, slitPanel, photoPanel, supplyPanel, 
 // 센서 ↔ 노트북 (USB)
 const sensorNet = new SensorNetwork(scene, stock.laptops, stock.motionSensors);
 for (const l of stock.laptops) l.onOpenPanel = (lap) => loggerPanel.open(lap);
+
+// ---------- 화학: 따르기 · 알림 · 폐액통 ----------
+const pourBar = new PourBar();
+const toastEl = $('toast');
+let toastTimer = 0;
+function toast(html: string): void {
+  toastEl.innerHTML = html;
+  toastEl.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => { toastEl.hidden = true; }, 4500);
+}
+/** src에서 mL만큼 떠서 dst에 붓는다 (몰수는 같은 비율로 따라간다) */
+function transfer(src: Container, dst: Container, mL: number): void {
+  dst.solution.add(src.solution.take(mL / 1000));
+  src.refresh();
+  dst.refresh();
+  const digits = Math.min(src.precision, dst.precision) < 0.1 ? 2 : 1;
+  toast(`${src.name} → ${dst.name}: ${mL.toFixed(digits)} mL · ${dst.name} ${dst.solution.colorName(dst.pathCm)}`);
+}
+/** 뷰렛 끝 바로 아래(가로 거리 < 그릇 반지름, 40 cm 이내)에 입구가 있는 그릇 */
+function containerBelow(b: Container): Container | null {
+  b.object.updateWorldMatrix(true, false);
+  const tip = b.object.localToWorld(new THREE.Vector3(0, 0, 0));
+  let best: Container | null = null;
+  let bestDy = 0.4;
+  for (const c of stock.containers) {
+    if (c === b || c.kind === 'bottle' || c.root().object.parent !== scene) continue;
+    c.object.updateWorldMatrix(true, false);
+    const base = c.object.getWorldPosition(new THREE.Vector3());
+    const dy = tip.y - (base.y + c.height);
+    if (dy < -0.02 || dy > bestDy) continue;
+    if (Math.hypot(tip.x - base.x, tip.z - base.z) > c.radius) continue;
+    best = c;
+    bestDy = dy;
+  }
+  return best;
+}
+chemHooks.toast = toast;
+chemHooks.pour = (src, dst) => {
+  if (dst.free <= 0) return toast(`${dst.name}이(가) 가득 참`);
+  if (src.volume <= 0) return toast(`${src.name}이(가) 비어 있음`);
+  pourBar.open(src, dst, `${src.name} → ${dst.name}`, (mL) => transfer(src, dst, mL));
+};
+chemHooks.dispense = (b) => {
+  const t = containerBelow(b);
+  if (!t) return toast(`${b.name} 끝 바로 아래에 그릇이 없음 — 클램프 높이·그릇 위치를 맞추세요`);
+  pourBar.open(b, t, `${b.name} → ${t.name} (적하)`, (mL) => transfer(b, t, mL));
+};
+const wasteCans = furniture.wasteCans.map((o, i) => new WasteCan(o, `폐액통 ${i + 1}`));
+for (const w of wasteCans) w.getHeld = () => hand.held;
 for (const s of stock.motionSensors) {
   // 레일 끝에 끼워져 있으면 레일의 재생 속도(느리게 보기)만큼 시간도 느리게 흐른다 → 측정값은 실제 물리량
   s.timeScale = () => (s.attachedTo?.owner instanceof Rail ? s.attachedTo.owner.speed : 1);
@@ -324,12 +376,15 @@ function doubleActionsAt(x: number, y: number): Action[] {
   if (!hit) return [];
   const held = hand.held;
   if (held) {
+    // 들고 있는 것으로 탭한 기구에 할 수 있는 일 (따르기·지시약 떨어뜨리기 등) + 끼우기
+    const target = ownerOf(hit.object);
+    const use = target instanceof Item ? held.useOn(target) : [];
     const att = findAttach(held, hit);
-    if (!att) return [];
+    if (!att) return use;
     const point = hit.point.clone();
     // 막대에 끼울 때는 집게가 올 높이(책상 면 기준)를 미리 보여 준다 (레이저·슬릿 높이 맞추기용)
     const where = att.socket.opts.slide ? ` (높이 ${Math.round(att.socket.slideValue(hit.point) * 100)} cm)` : '';
-    return [{
+    return [...use, {
       label: `연결 · ${held.name} → ${att.socket.label}${where}`,
       run: () => {
         const item = hand.handOver();
@@ -506,7 +561,7 @@ renderer.setAnimationLoop(() => {
   const aimHitObj = raycast(aimX, 0)?.object ?? null;
   const aimTerm = terminalOf(aimHitObj);
   const aimOwner = ownerOf(aimHitObj);
-  const prompt = aimTerm ? aimTerm.label : aimOwner instanceof Item ? aimOwner.name : '';
+  const prompt = aimTerm ? aimTerm.label : aimOwner instanceof Item ? aimOwner.name : ((aimOwner as { name?: string } | null)?.name ?? '');
   if (promptEl.textContent !== prompt) promptEl.textContent = prompt;
   promptEl.hidden = !prompt;
 

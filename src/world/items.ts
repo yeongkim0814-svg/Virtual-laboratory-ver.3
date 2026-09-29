@@ -146,6 +146,11 @@ export class Item implements Interactable {
     return [{ label: `회전 · ${this.name}`, secondary: true, run: () => this.onRotate(this) }];
   }
 
+  /** 이 물체를 들고 다른 기구(target)를 두 번 탭했을 때 할 수 있는 동작 (예: 따르기, 지시약 떨어뜨리기) */
+  useOn(_target: Item): Action[] {
+    return [];
+  }
+
   /** 하위 클래스가 덧붙이는 동작 (예: 레이저 켜기) */
   extraActions(): Action[] {
     return [];
@@ -320,38 +325,7 @@ function isDescendant(a: Item, b: Item): boolean {
   return false;
 }
 
-// ====================== 장식용 물체 (연결 없음 / 플라스크는 집게로 잡을 수 있음) ======================
-
-const glass = () =>
-  new THREE.MeshLambertMaterial({ color: 0xcfe6e0, transparent: true, opacity: 0.4, depthWrite: false });
-const liquid = (color: number) => new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.8 });
-
-function beaker(liquidColor: number): THREE.Group {
-  const g = new THREE.Group();
-  const r = 0.04;
-  const h = 0.1;
-  const wall = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 8, 1, true), glass());
-  wall.position.y = h / 2;
-  const bottom = new THREE.Mesh(new THREE.CircleGeometry(r, 8), glass());
-  bottom.rotation.x = -Math.PI / 2;
-  bottom.position.y = 0.002;
-  const water = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.94, r * 0.94, h * 0.55, 8), liquid(liquidColor));
-  water.position.y = (h * 0.55) / 2 + 0.003;
-  g.add(water, wall, bottom);
-  return g;
-}
-
-function flask(liquidColor: number): THREE.Group {
-  const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.055, 0.1, 8, 1, true), glass());
-  body.position.y = 0.05;
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.06, 6, 1, true), glass());
-  neck.position.y = 0.13;
-  const water = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.052, 0.035, 8), liquid(liquidColor));
-  water.position.y = 0.0185;
-  g.add(water, body, neck);
-  return g;
-}
+// ====================== 장식용 물체 ======================
 
 function woodBlock(): THREE.Group {
   const g = new THREE.Group();
@@ -370,13 +344,6 @@ export function at<T extends Item>(item: T, p: THREE.Vector3): T {
 export function createBenchItems(): Item[] {
   const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
   return [
-    at(new Item(beaker(0x4a9fd8), { name: '비커 (물)', radius: 0.045, mass: 0.38 }), v(5.0, 0.85, 2.4)),
-    // 삼각 플라스크는 목 부분을 클램프로 잡을 수 있다
-    at(new Item(flask(0xd86a8a), {
-      name: '삼각 플라스크', radius: 0.058, mass: 0.17,
-      plugs: [{ type: 'grip', point: new THREE.Vector3(0, 0.13, 0) }],
-    }), v(5.7, 0.85, 2.7)),
     at(new Item(woodBlock(), { name: '나무 도막', radius: 0.065, mass: 0.21 }), v(9.0, 0.85, 2.9)),
-    at(new Item(beaker(0xe0c040), { name: '비커 (용액)', radius: 0.045, mass: 0.38 }), v(14.6, 0.85, 0.55)),
   ];
 }
