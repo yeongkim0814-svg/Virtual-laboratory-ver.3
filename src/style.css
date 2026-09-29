@@ -390,3 +390,55 @@ canvas.plot.tall { height: 130px; }
 #alert { z-index: 20; border-color: var(--bad, #e05a3c); pointer-events: auto; }
 #alert h2 { color: var(--bad, #e05a3c); }
 #alert p { color: var(--text); line-height: 1.5; font-size: 15px; }
+
+/* ---------- 교재 읽기: 종이 느낌 (HUD와 구분되는 밝은 면, 긴 글을 읽기 쉽게) ---------- */
+#book {
+  position: absolute; inset: 12px;
+  display: grid;
+  grid-template-columns: minmax(170px, 26%) 1fr;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas: 'head head' 'toc body' 'foot foot';
+  background: #efe6cf;
+  color: #2a241a;
+  border: 3px solid #6a4a22;
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.6);
+  z-index: 30;
+  font-size: 15px;
+}
+#book[data-book='physics'] { --ink: #1f4f8a; }
+#book[data-book='chem'] { --ink: #2f6a36; }
+#book button {
+  font: inherit; color: #f5ecd6; background: var(--ink); border: 0; padding: 8px 12px; min-height: 40px;
+}
+#book button:disabled { opacity: 0.35; }
+.book-head { grid-area: head; display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 2px solid var(--ink); }
+.book-titles { flex: 1; min-width: 0; }
+.book-titles h2 { margin: 0; font-size: 18px; color: var(--ink); letter-spacing: 1px; }
+#book-sub { font-size: 12px; color: #6a5a40; }
+#book-toc-toggle { display: none; }
+#book-toc { grid-area: toc; overflow-y: auto; padding: 8px; border-right: 1px solid rgba(0, 0, 0, 0.15); display: flex; flex-direction: column; gap: 4px; }
+#book #book-toc button { text-align: left; background: transparent; color: #3a3020; padding: 6px 8px; min-height: 36px; }
+#book #book-toc button[aria-current='true'] { background: var(--ink); color: #f5ecd6; }
+#book-body { grid-area: body; overflow-y: auto; overscroll-behavior: contain; padding: 10px 22px 24px; line-height: 1.65; }
+#book-body h2 { color: var(--ink); font-size: 20px; margin: 8px 0 10px; }
+#book-body h3 { color: var(--ink); font-size: 16px; margin: 18px 0 6px; border-left: 4px solid var(--ink); padding-left: 8px; }
+#book-body p, #book-body li { margin: 4px 0; }
+#book-body ul, #book-body ol { padding-left: 22px; margin: 4px 0; }
+#book-body b { color: #7a2a10; }
+#book-body .eq { margin: 8px 0; padding: 8px 12px; background: rgba(255, 255, 255, 0.55); border: 1px dashed rgba(0, 0, 0, 0.3); font-variant-numeric: tabular-nums; }
+#book-body .note { padding: 8px 12px; background: rgba(255, 200, 80, 0.25); border-left: 4px solid #c08a20; }
+#book-body svg.circuit { display: block; width: min(100%, 460px); margin: 8px 0; color: var(--ink); }
+#book-body svg.circuit text { stroke: none; font-family: var(--font); }
+#book-body svg.circuit text.s { font-size: 11px; }
+#book-body pre.circuit { margin: 8px 0; padding: 8px 12px; background: #20242a; color: #ffd27a; font: 13px/1.4 var(--font); overflow-x: auto; }
+#book-body table.book-table { border-collapse: collapse; margin: 8px 0; }
+#book-body .book-table th, #book-body .book-table td { border: 1px solid rgba(0, 0, 0, 0.3); padding: 4px 10px; }
+.book-foot { grid-area: foot; display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-top: 2px solid var(--ink); }
+#book-page { color: #6a5a40; }
+/* 좁은 화면: 차례는 버튼으로 여닫는 서랍 */
+@media (max-width: 720px) {
+  #book { grid-template-columns: 1fr; grid-template-areas: 'head' 'body' 'foot'; }
+  #book-toc-toggle { display: block; }
+  #book-toc { display: none; }
+  #book.toc-open #book-toc { display: flex; position: absolute; top: 58px; left: 0; bottom: 58px; width: 75%; background: #e6dcc0; z-index: 2; box-shadow: 4px 0 8px rgba(0, 0, 0, 0.3); }
+}

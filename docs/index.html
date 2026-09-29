@@ -7,8 +7,8 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#0a0b08" />
     <title>가상 실험실</title>
-    <script type="module" crossorigin src="./assets/index-p0szczXT.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CxQmV1LW.css">
+    <script type="module" crossorigin src="./assets/index-CNVvYrJO.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-ChPBY-r_.css">
   </head>
   <body>
     <!-- 16:9 무대: 화면비가 다르면 위아래(또는 좌우)에 검은 띠가 생긴다 -->
@@ -492,12 +492,30 @@
         </div>
       </section>
 
+      <!-- 교재 읽기 (교탁 위 교재를 두 번 탭 → 교재 펼치기) -->
+      <div id="book" hidden>
+        <header class="book-head">
+          <button id="book-toc-toggle" aria-label="차례">☰ 차례</button>
+          <div class="book-titles"><h2 id="book-title"></h2><span id="book-sub"></span></div>
+          <button id="book-close">닫기</button>
+        </header>
+        <nav id="book-toc"></nav>
+        <article id="book-body"></article>
+        <footer class="book-foot">
+          <button id="book-prev">◀ 이전</button>
+          <span id="book-page"></span>
+          <button id="book-next">다음 ▶</button>
+        </footer>
+      </div>
+
       <!-- 조작 방법 도움말 (? 버튼) -->
       <div id="help" class="panel help" hidden>
         <header class="help-head">
           <h2>조작 방법</h2>
           <button id="help-close">닫기</button>
         </header>
+        <h3>실험 교재</h3>
+        <p>교탁 위 <b>물리 · 화학 실험 교재</b>를 두 번 탭 → <b>교재 펼치기</b>: 실험마다 목표 · 원리 · 방법 · 분석 · 시험 포인트 · 한계. 한 번 탭하면 들고 다닐 수 있다.</p>
         <h3>움직이기</h3>
         <ul>
           <li><b>이동</b> 화면 왼쪽 40%를 누른 채 밀기 (PC: WASD)</li>
@@ -533,6 +551,7 @@
           <li>도선으로 한 고리를 만든다: 전류계는 재려는 부품과 <b>직렬</b>, 전압계는 <b>병렬</b>. 스위치는 두 번 탭 → 닫기·열기</li>
           <li>전원 장치(또는 부품)를 두 번 탭 → <b>직류 회로 실험</b>: 전압 조절, 계기 값, 측정값 기록·자동 측정(0 → 5 V), I–V 그래프와 R·n 맞춤, CSV</li>
           <li>전원 장치는 1 A를 넘으면 전류 제한(CC)으로 바뀐다 — 화면에 CC가 뜨면 단락을 의심</li>
+          <li>LED 3색(칸 6): 빨강 단자(+)를 전원 + 쪽으로. 직렬 저항 없이 문턱을 크게 넘기면 과열로 탄다 → 두 번 탭해 새 LED로 교체</li>
         </ul>
         <h3>센서 · 노트북</h3>
         <ul>
@@ -551,7 +570,7 @@
         <h3>전원</h3>
         <p>전원이 필요한 기기(레이저, 직류 전원 장치)는 실험 테이블 짧은 옆면의 콘센트에 꽂아야 작동한다. 전원선은 2 m, 도선은 1.5 m — 더 멀어지면 빠진다.</p>
         <h3>기구 위치</h3>
-        <p>주 실험실 오른쪽 벽 보관장: 스탠드·클램프·실·용수철·추·레이저·슬릿·스크린, 아래 칸(불투명 문)에 전원 장치·전류계·광전관. 뒤쪽 벽 낮은 수납장(문을 열어 꺼냄): 레일(오른쪽 끝 넓은 칸), 수레·질량 막대, 운동 센서, 도르래, 직류 회로 부품(전원 장치 2·저항·전구·스위치·전압계·전류계). 노트북: 교탁 위 2대, 스탠딩 테이블 위 1대. 실험대 아래 수납장도 모두 여닫을 수 있다. 준비실: 시약장(시약·지시약·pH 시험지), 유리 기구 보관장(뷰렛·비커·플라스크·눈금실린더·스탠드·pH 센서). 레일은 뒤쪽 수납장 오른쪽 끝의 가로로 긴 칸(문을 아래로 젖혀 엶).</p>
+        <p>주 실험실 오른쪽 벽 보관장: 스탠드·클램프·실·용수철·추·레이저·슬릿·스크린, 아래 칸(불투명 문)에 전원 장치·전류계·광전관. 뒤쪽 벽 낮은 수납장(문을 열어 꺼냄): 레일(오른쪽 끝 넓은 칸), 수레·질량 막대, 운동 센서, 도르래, 직류 회로 부품(전원 장치 2·저항·전구·스위치·전압계·전류계). 노트북: 교탁 위 2대, 스탠딩 테이블 위 1대. 실험 교재: 교탁 위. 실험대 아래 수납장도 모두 여닫을 수 있다. 준비실: 시약장(시약·지시약·pH 시험지), 유리 기구 보관장(뷰렛·비커·플라스크·눈금실린더·스탠드·pH 센서). 레일은 뒤쪽 수납장 오른쪽 끝의 가로로 긴 칸(문을 아래로 젖혀 엶).</p>
         <h3>실험 패널</h3>
         <p>기구가 실험할 수 있게 조립되면 화면 왼쪽 위에 <b>▸ 실험 이름</b> 버튼이 뜬다. 패널은 한 번에 하나, 화면 오른쪽에 열린다.</p>
       </div>

@@ -24,6 +24,8 @@ import { PendulumString } from './pendulumString';
 import { Spring } from './spring';
 import { Laser, OpticScreen, SlitPlate } from './optics';
 import { DCPowerSupply, Microammeter, Phototube } from './electrical';
+import { Textbook } from './textbook';
+import { CHEM_BOOK, PHYSICS_BOOK } from '../content/books';
 import { Ammeter, Bulb, KnifeSwitch, Led, Resistor, Voltmeter, type CircuitPart } from './circuitParts';
 import { Cart, Pulley, Rail, massBar } from './track';
 import { Laptop, MotionSensor, PHSensor } from './sensors';
@@ -40,6 +42,8 @@ export interface Stock {
   tubes: Phototube[];
   /** 직류 회로 부품 (저항·전구·스위치·전압계·전류계) */
   circuitParts: CircuitPart[];
+  /** 교탁 위 실험 교재 (물리 · 화학) */
+  textbooks: Textbook[];
   rails: Rail[];
   carts: Cart[];
   laptops: Laptop[];
@@ -93,8 +97,12 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     it.yaw = yaw;
     return it;
   };
+  const textbooks = [new Textbook(PHYSICS_BOOK, 0x2a5a9a), new Textbook(CHEM_BOOK, 0x2f7a3a)];
   const items: Item[] = [
     desk(laptops[0], 2.2, 2.2, Math.PI / 2),
+    // 교재: 교탁 위 노트북 사이·옆에, 표지가 실험실 쪽(+x)에서 바로 읽히게
+    desk(textbooks[0], 2.25, 2.75, Math.PI / 2),
+    desk(textbooks[1], 2.25, 3.85, Math.PI / 2),
     desk(laptops[1], 2.2, 3.3, Math.PI / 2),
     desk(laptops[2], 2.15, 4.92, -Math.PI / 2, 1.05),
     // 뒤쪽 벽 수납장: 칸 0(가로로 긴 칸, 젖히는 문) 레일, 칸 1 수레(바닥)·질량 막대(선반), 칸 2 운동 센서
@@ -175,5 +183,5 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(tubes[0], cab.slot(7, 1, 0.55)),
     at(tubes[1], cab.slot(7, 1, 0.85)),
   ];
-  return { items, strings, springs, lasers, supplies, ammeters, tubes, circuitParts, rails, carts, laptops, motionSensors, phSensors, containers };
+  return { items, strings, springs, lasers, supplies, ammeters, tubes, circuitParts, textbooks, rails, carts, laptops, motionSensors, phSensors, containers };
 }

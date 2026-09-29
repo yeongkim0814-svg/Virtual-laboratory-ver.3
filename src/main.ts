@@ -40,6 +40,7 @@ import { WireSystem, type Terminal } from './world/wires';
 import { solveCircuits, type PhotoCircuitState } from './equipment/electrical';
 import { PhotoPanel } from './ui/photoPanel';
 import { CircuitPanel } from './ui/circuitPanel';
+import { BookReader } from './ui/bookReader';
 import { Led, solveDCCircuits, type DCCircuitState } from './equipment/circuitParts';
 import { RotateBar } from './ui/rotateBar';
 
@@ -245,6 +246,9 @@ for (const s of stock.supplies) {
   s.onOpenControls = (d) => supplyPanel.open(d);
   s.onOpenDC = (d) => circuitPanel.open(d);
 }
+// 교재: 두 번 탭 → 펼치기 (읽는 동안 다른 패널은 닫고 이동·조작은 화면이 가려 멈춘다)
+const bookReader = new BookReader((open) => { if (open) for (const p of panels) if (p.isOpen) p.close(); });
+for (const b of stock.textbooks) b.onOpen = (t) => bookReader.open(t.book);
 for (const p of stock.circuitParts) {
   p.onOpenPanel = (part) => {
     const st = dcStates.find((c) => c.parts.includes(part));
