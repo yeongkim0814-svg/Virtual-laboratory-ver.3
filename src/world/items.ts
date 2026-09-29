@@ -25,6 +25,8 @@ export interface Plug {
   type: PlugType;
   /** 물체 좌표계에서 연결되는 점 — 연결되면 이 점이 소켓 위치에 온다 */
   point: THREE.Vector3;
+  /** 끼울 때 물체를 세로축 둘레로 돌리는 각도 (rad) — 예: 슬릿판 면이 클램프 팔 방향을 보게 */
+  rotY?: number;
 }
 
 export const HITBOX_MAT = new THREE.MeshBasicMaterial({ visible: false });
@@ -253,8 +255,9 @@ export class Socket {
       const cam = this.owner.object.worldToLocal(cameraWorld.clone());
       parent.rotation.y = Math.atan2(cam.x - parent.position.x, cam.z - parent.position.z);
     }
-    item.object.position.copy(plug.point).multiplyScalar(-1);
-    item.object.rotation.set(0, 0, 0);
+    // 물체를 plug.rotY만큼 돌린 뒤, 돌아간 플러그 점이 소켓 점(원점)에 오도록 옮긴다
+    item.object.rotation.set(0, plug.rotY ?? 0, 0);
+    item.object.position.copy(plug.point).applyEuler(item.object.rotation).multiplyScalar(-1);
     parent.add(item.object);
     item.attachedTo = this;
     item.attachedPlug = plug;

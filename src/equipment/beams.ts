@@ -18,6 +18,7 @@ import { HITBOX_MAT, type Item } from '../world/items';
 import { isPickable, itemOf } from '../player/hand';
 import { Laser, OpticScreen, SlitPlate, type LightPattern } from './optics';
 import { intensity } from '../sim/optics';
+import { Phototube } from './electrical';
 
 const MAX_DIST = 12;
 const DECAL_W = 512; // 데칼 텍스처 가로 텍셀
@@ -172,6 +173,7 @@ export class BeamSystem {
   }
 
   update(): void {
+    for (const item of this.items) if (item instanceof Phototube) item.light = null;
     for (const item of this.items) {
       if (!(item instanceof Laser)) continue;
       let vis = this.visuals.get(item);
@@ -241,6 +243,11 @@ export class BeamSystem {
     light.L = hit.point.distanceTo(light.source);
     light.surface = target instanceof OpticScreen ? '스크린' : target ? target.name : '벽·가구 면';
     laser.pattern = light;
+    // 광전관에 닿으면 음극에 빛이 들어간다 (슬릿을 지난 빛은 대부분 막혀 약 5 %만)
+    if (target instanceof Phototube) {
+      const powerW = laser.powerMw * 1e-3 * (light.ap ? 0.05 : 1);
+      target.light = { lambda: laser.lambda, powerW: (target.light?.powerW ?? 0) + powerW };
+    }
     vis.decal.show(light, hit.point, n);
   }
 }

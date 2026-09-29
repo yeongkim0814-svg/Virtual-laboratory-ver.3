@@ -164,6 +164,63 @@
         </div>
       </section>
 
+      <!-- 광전 효과 실험 패널 (화면 오른쪽) -->
+      <section id="pe-panel" class="exp-panel" hidden>
+        <header>
+          <h2>광전 효과 실험</h2>
+          <button id="pe-close">닫기</button>
+        </header>
+        <p id="pe-status" class="status"></p>
+        <dl class="readout">
+          <dt>빛 (광전관에 닿는)</dt><dd id="pe-light"></dd>
+          <dt>광자 에너지 hf = hc/λ</dt><dd id="pe-hf"></dd>
+          <dt>음극 (일함수 W)</dt><dd id="pe-W"></dd>
+          <dt>이론 정지 전압 (hf − W)/e</dt><dd id="pe-theory"></dd>
+        </dl>
+        <label class="row"><input id="pe-theory-toggle" type="checkbox" /> 이론값 보기</label>
+
+        <div class="field">전원 장치
+          <div class="segmented"><button id="pe-power"></button></div>
+        </div>
+        <div class="field">극성
+          <div id="pe-pol" class="segmented">
+            <button data-v="fwd">정방향</button>
+            <button data-v="rev">역방향 (극성 스위치)</button>
+          </div>
+        </div>
+        <label>전압 크기 <span id="pe-v-val"></span>
+          <input id="pe-v" type="range" min="0" max="5" step="0.01" />
+        </label>
+        <div class="segmented fine">
+          <button data-dv="-0.1">−0.1</button><button data-dv="-0.01">−0.01</button>
+          <button data-dv="0.01">+0.01</button><button data-dv="0.1">+0.1</button>
+        </div>
+
+        <dl class="readout">
+          <dt>V_AK (양극 − 음극 전위)</dt><dd id="pe-vak"></dd>
+          <dt>전류계</dt><dd id="pe-i"></dd>
+        </dl>
+
+        <canvas id="pe-iv" class="plot"></canvas>
+        <p class="legend">I–V 곡선: 가로 −1.5 ~ 5 V (세로선 = 0 V) · <span id="pe-iv-max"></span> · 점 색 = 빛의 색</p>
+
+        <div class="log-head">
+          <h3>정지 전압</h3>
+          <button id="pe-record">정지 전압 기록</button>
+          <button id="pe-clear-iv">곡선 지우기</button>
+          <button id="pe-clear">기록 지우기</button>
+        </div>
+        <div class="table-wrap">
+          <table id="pe-log" class="log">
+            <thead><tr><th>λ (nm)</th><th>f (10¹⁴ Hz)</th><th>음극</th><th>V_s (V)</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <canvas id="pe-vf" class="plot"></canvas>
+        <p class="legend">V_s–f 그래프: 가로 4 ~ 8 ×10¹⁴ Hz, 세로 0 ~ 1.5 V · <span class="ca">■</span> Na <span style="color:#ffd27a">■</span> Cs</p>
+        <p id="pe-fit" class="fit"></p>
+      </section>
+
       <!-- 설정 패널 -->
       <div id="settings" class="panel" hidden>
         <h2>설정</h2>
@@ -199,7 +256,8 @@
             <li><b>둘러보기</b> 화면 오른쪽 드래그 (PC: 마우스 드래그)</li>
             <li><b>집기</b> 물체를 탭 (PC: 클릭 / E)</li>
             <li><b>놓기·연결</b> 들고 있을 때 책상이나 다른 기구를 탭</li>
-            <li><b>기구</b> 오른쪽 벽 보관장의 문을 열어 꺼내기 (광학대는 뒤쪽 수납장 위)</li>
+            <li><b>기구</b> 오른쪽 벽 보관장의 문을 열어 꺼내기</li>
+            <li><b>도선</b> 단자(빨강 +, 검정 −)를 탭한 뒤 다른 단자를 탭</li>
           </ul>
           <button id="btn-enter" class="primary big">실험실 입장</button>
           <p class="note">태블릿을 가로로 들고 사용하세요.</p>

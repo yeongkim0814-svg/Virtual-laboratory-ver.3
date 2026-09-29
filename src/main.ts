@@ -27,6 +27,9 @@ import { SlitPanel } from './ui/slitPanel';
 import { stockEquipment } from './equipment/stock';
 import { BeamSystem } from './equipment/beams';
 import { PowerSystem } from './world/power';
+import { WireSystem, type Terminal } from './world/wires';
+import { solveCircuits, type PhotoCircuitState } from './equipment/electrical';
+import { PhotoPanel } from './ui/photoPanel';
 import { RotateBar } from './ui/rotateBar';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -104,13 +107,21 @@ function panelToggled(panel: { el: HTMLElement }, open: boolean): void {
 }
 const pendulumPanel = new PendulumPanel((open) => panelToggled(pendulumPanel, open));
 const slitPanel = new SlitPanel((open) => panelToggled(slitPanel, open));
-const panels = [pendulumPanel, slitPanel];
+// 광전 효과: 도선으로 이은 회로를 매 프레임 해석한 결과
+const wires = new WireSystem(scene);
+let circuits: PhotoCircuitState[] = [];
+const photoPanel = new PhotoPanel((open) => panelToggled(photoPanel, open), (s) => circuits.find((c) => c.supply === s) ?? null);
+const panels = [pendulumPanel, slitPanel, photoPanel];
 for (const s of stock.strings) s.onOpenPanel = (str) => pendulumPanel.open(str);
 for (const l of stock.lasers) l.onOpenPanel = (laser) => slitPanel.open(laser);
 
 // 전원: 실험 테이블 옆면의 콘센트 ↔ 전원이 필요한 기기(레이저)
-const power = new PowerSystem(scene, furniture.outlets, stock.lasers);
+const power = new PowerSystem(scene, furniture.outlets, [...stock.lasers, ...stock.supplies]);
 for (const l of stock.lasers) l.powerActions = (laser) => power.deviceActions(laser);
+for (const s of stock.supplies) {
+  s.powerActions = (d) => power.deviceActions(d);
+  s.onOpenPanel = (d) => photoPanel.open(d);
+}
 
 // 레이저 광선 추적
 const beams = new BeamSystem(scene, items);
@@ -140,6 +151,7 @@ function updateDock(): void {
   const actions = items.flatMap((it) => it.experimentActions());
   // 정렬 안내: 레이저 빛이 슬릿판에 닿았지만 슬릿을 지나지 못할 때
   const hints = stock.lasers.map((l) => l.alignHint).filter((h): h is string => !!h);
+  if (wires.pending) hints.unshift(`도선 연결 중: ${wires.pending.label} → 이을 단자를 탭하세요`);
   const key = actions.map((a) => a.label).join('|') + '#' + hints.join('|');
   if (key === dockKey) return;
   dockKey = key;
@@ -230,9 +242,19 @@ function findAttach(held: Item, hit: THREE.Intersection): { socket: Socket; plug
 }
 
 /** 이 화면 위치를 탭하면 할 수 있는 동작들 */
+/** 맞은 부분에서 위로 올라가며 단자(도선 꼭지)를 찾는다 */
+function terminalOf(o: THREE.Object3D | null): Terminal | null {
+  for (; o; o = o.parent) if (o.userData.terminal) return o.userData.terminal as Terminal;
+  return null;
+}
+
 function actionsAt(x: number, y: number): Action[] {
   const hit = raycast(x, y);
   const held = hand.held;
+  // 빈손으로 단자를 탭하면 도선 동작, 도선 연결 중에 다른 곳을 탭하면 취소
+  const term = !held && hit ? terminalOf(hit.object) : null;
+  if (term) return wires.actionsFor(term);
+  if (wires.pending) return [{ label: '도선 연결 취소', run: () => { wires.pending = null; } }];
   if (held) {
     const att = hit && findAttach(held, hit);
     if (att) {
@@ -296,6 +318,11 @@ let fpsFrames = 0;
 let fpsTime = 0;
 let fps = 0;
 
+// 테스트용: 주소 끝이 #debug일 때만 내부 객체를 노출 (자동 테스트가 조립을 빠르게 재현하는 데 씀)
+if (location.hash === '#debug') {
+  (window as unknown as Record<string, unknown>).lab = { THREE, scene, camera, player, hand, items, stock, power, wires };
+}
+
 renderer.setAnimationLoop(() => {
   const now = performance.now();
   // 탭 전환 등으로 오래 멈췄다 돌아오면 dt가 커져 벽을 뚫을 수 있으므로 0.1초로 제한
@@ -313,6 +340,13 @@ renderer.setAnimationLoop(() => {
   updateLights(now / 1000);
   camera.updateMatrixWorld();
   power.update();
+  wires.update();
+  circuits = solveCircuits(wires, stock.supplies, stock.ammeters, stock.tubes);
+  for (const s of stock.supplies) {
+    s.update();
+    s.hasTube = circuits.some((c) => c.supply === s && c.tube);
+  }
+  for (const a of stock.ammeters) a.update();
   beams.update();
   rotateBar.update();
   hand.update(aimX);
@@ -349,6 +383,7 @@ renderer.setAnimationLoop(() => {
   minimap.draw();
   pendulumPanel.update();
   slitPanel.update();
+  photoPanel.update();
   updateDock();
   roomLabel.textContent = roomNameAt(player.pos.x, player.pos.z);
 

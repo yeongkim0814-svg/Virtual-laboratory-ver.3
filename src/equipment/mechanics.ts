@@ -52,8 +52,9 @@ export class Clamp extends Item {
     knob.rotation.z = Math.PI / 2;
     g.add(knob);
     g.add(mesh(new THREE.BoxGeometry(0.012, 0.012, A), METAL, 0, 0.02, 0.02 + A / 2)); // 팔
-    g.add(mesh(new THREE.BoxGeometry(0.03, 0.008, 0.03), DARK, 0, 0.03, 0.02 + A)); // 집게 위
-    g.add(mesh(new THREE.BoxGeometry(0.03, 0.008, 0.03), DARK, 0, 0.01, 0.02 + A)); // 집게 아래
+    // 집게: 좌우로 닫히는 두 날 — 세워진 판의 가장자리나 막대 모양 물체를 옆에서 문다
+    g.add(mesh(new THREE.BoxGeometry(0.008, 0.03, 0.03), DARK, -0.009, 0.02, 0.02 + A));
+    g.add(mesh(new THREE.BoxGeometry(0.008, 0.03, 0.03), DARK, 0.009, 0.02, 0.02 + A));
     super(g, {
       name: '클램프', radius: 0.12, mass: 0.25, touchPad: false,
       plugs: [{ type: 'rodMount', point: v(0, 0.02, 0) }],

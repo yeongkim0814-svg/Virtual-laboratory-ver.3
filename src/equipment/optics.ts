@@ -56,6 +56,8 @@ export interface LightPattern {
 export class Laser extends Item implements Powered {
   on = false;
   nm: number = LASER_LINES[0].nm;
+  /** 출력 (mW) — 광전 효과에서 빛의 세기(광자 수)를 바꾼다 */
+  powerMw = 1;
   readonly color = new THREE.Color();
   /** 빛이 나오는 구멍 (물체 좌표) */
   readonly aperture = v(0.08, 0.035, 0);
@@ -117,6 +119,9 @@ export class Laser extends Item implements Powered {
       // 보조 동작: 메뉴가 열릴 때(콘센트에 꽂혀 켜기·집기가 함께 있을 때, 또는 길게 누를 때) 나온다
       if (l.nm !== this.nm) out.push({ label: `파장 → ${l.nm} nm (${l.name})`, secondary: true, run: () => this.setWavelength(l.nm) });
     }
+    for (const p of [1, 3, 5]) {
+      if (p !== this.powerMw) out.push({ label: `세기 → ${p} mW`, secondary: true, run: () => { this.powerMw = p; } });
+    }
     return out;
   }
 
@@ -142,7 +147,9 @@ export class SlitPlate extends Item {
     g.add(mesh(new THREE.BoxGeometry(0.04, 0.01, 0.1), DARK, 0, 0.005, 0)); // 받침
     super(g, {
       name: label, radius: 0.05, mass: 0.08, touchPad: false,
-      plugs: [{ type: 'grip', point: v(0, cy, 0) }],
+      // 집게는 판의 옆 가장자리를 문다: 판 면(법선 +x)이 클램프 팔 방향(집게 좌표 +z)을 보도록 −90° 돌리고,
+      // 슬릿 중심은 팔 선에서 4.5 cm 옆으로 비켜난다 → 빛이 팔·막대에 막히지 않음
+      plugs: [{ type: 'grip', point: v(0, cy, -0.045), rotY: -Math.PI / 2 }],
     });
   }
 
@@ -181,7 +188,8 @@ export class OpticScreen extends Item {
     g.add(mesh(new THREE.BoxGeometry(0.06, 0.01, 0.2), DARK, -0.006, 0.005, 0)); // 받침
     super(g, {
       name: '스크린', radius: 0.08, mass: 0.3, touchPad: false,
-      plugs: [{ type: 'grip', point: v(0, cy, 0) }],
+      // 슬릿판과 같은 방식: 옆 가장자리를 물고, 흰 면이 클램프 팔 방향을 본다
+      plugs: [{ type: 'grip', point: v(0, cy, -W / 2), rotY: -Math.PI / 2 }],
     });
   }
 }

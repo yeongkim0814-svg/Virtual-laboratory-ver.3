@@ -8,22 +8,31 @@
  *   칸 5                    : 쇠공, 추 100 g
  *   칸 6                    : 레이저 (650 · 532 · 405 nm 선택), 스크린
  *   칸 7                    : 이중 슬릿 d = 0.10 · 0.20 mm, 단일 슬릿 a = 0.10 mm
+ *   칸 6, 7 아래 선반 (불투명 문 안) : 직류 전원 장치, 마이크로전류계, 광전관 2개 (Cs · Na 음극)
  */
 import type { StorageCabinet } from '../world/cabinet';
 import { at, type Item } from '../world/items';
 import { Clamp, Stand, hangingMass, protractor, steelBall } from './mechanics';
 import { PendulumString } from './pendulumString';
 import { Laser, OpticScreen, SlitPlate } from './optics';
+import { DCPowerSupply, Microammeter, Phototube } from './electrical';
 
 export interface Stock {
   items: Item[];
   strings: PendulumString[];
   lasers: Laser[];
+  supplies: DCPowerSupply[];
+  ammeters: Microammeter[];
+  tubes: Phototube[];
 }
 
 export function stockEquipment(cab: StorageCabinet): Stock {
   const strings = [new PendulumString(), new PendulumString()];
   const lasers = [new Laser()];
+  const supplies = [new DCPowerSupply()];
+  const ammeters = [new Microammeter()];
+  // 일함수: 세슘 2.14 eV (문턱 파장 579 nm), 나트륨 2.28 eV (544 nm) → 빨강 650 nm로는 둘 다 전자가 안 나옴
+  const tubes = [new Phototube('Cs', 2.14), new Phototube('Na', 2.28)];
   const items: Item[] = [
     at(new Stand(), cab.slot(0, 0, 0.2)),
     at(new Stand(), cab.slot(0, 0, 0.8)),
@@ -50,6 +59,11 @@ export function stockEquipment(cab: StorageCabinet): Stock {
     at(new SlitPlate({ kind: 'double', d: 0.10e-3, a: 0.02e-3 }, '이중 슬릿 d 0.10 mm'), cab.slot(7, 2, 0.15)),
     at(new SlitPlate({ kind: 'double', d: 0.20e-3, a: 0.04e-3 }, '이중 슬릿 d 0.20 mm'), cab.slot(7, 2, 0.5)),
     at(new SlitPlate({ kind: 'single', d: 0, a: 0.10e-3 }, '단일 슬릿 a 0.10 mm'), cab.slot(7, 2, 0.85)),
+    // ---- 광전 효과 (아래 선반, 높이 0.52 m) ----
+    at(supplies[0], cab.slot(6, 1, 0.5)),
+    at(ammeters[0], cab.slot(7, 1, 0.15)),
+    at(tubes[0], cab.slot(7, 1, 0.55)),
+    at(tubes[1], cab.slot(7, 1, 0.85)),
   ];
-  return { items, strings, lasers };
+  return { items, strings, lasers, supplies, ammeters, tubes };
 }
