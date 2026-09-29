@@ -11,7 +11,7 @@
  *   뷰렛은 클램프에 물려 두고 두 번 탭 → "적하": 바로 아래 그릇으로 떨어뜨린다.
  */
 import * as THREE from 'three';
-import { Item } from '../world/items';
+import { Item, Socket } from '../world/items';
 import type { Action, Interactable } from '../world/interactable';
 import { INDICATORS, REAGENTS, Solution, reagentSolution, universalColor, type Reagent } from '../sim/chem';
 
@@ -38,8 +38,19 @@ export const chemHooks = {
   toast: (_html: string) => {},
 };
 
+/** 뷰렛 콕 열림 정도 (mL/s) — 한 방울 ≈ 0.05 mL */
+export const FLOW_RATES: [string, number][] = [['한 방울씩', 0.05], ['천천히', 0.2], ['빠르게', 1.0]];
+
 export class Container extends Item {
   readonly solution = new Solution();
+  /** 뷰렛에서 받은 부피 누계 (mL) — 적정 곡선의 가로축 (측정 프로그램이 기록 시작 때 0으로 맞춤) */
+  titrantAdded = 0;
+  /** 뷰렛 콕: 흐르는 속도 (mL/s, 0 = 잠김) */
+  flowRate = 0;
+  /** pH 전극을 꽂는 자리 (그릇 입구 위, 전극 끝이 바닥 바로 위(물체 좌표 y = 4 mm)에 오게) */
+  probeSlot: Socket | null = null;
+  private drip: THREE.Mesh | null = null;
+  private dripT = 0;
   private liquid: THREE.Mesh;
   private liquidMat = new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.72, depthWrite: false });
   private shownKey = '';
@@ -58,6 +69,49 @@ export class Container extends Item {
     this.liquid.userData.noPick = true;
     this.liquid.raycast = () => {};
     group.add(this.liquid);
+    if (kind !== 'bottle' && kind !== 'burette') {
+      // 가운데는 뷰렛 끝 자리이므로 전극은 입구 안쪽 옆으로 비켜 꽂는다
+      const off = Math.min(profile.r * 0.55, 0.014);
+      this.probeSlot = new Socket(this, `${name} (전극 꽂기)`, ['probe'], v(0, 0.144, off), { hitRadius: 0.02 });
+    }
+  }
+
+  /** 액면 높이 (그릇 바닥 기준, m) */
+  liquidHeight(): number {
+    return this.solution.V > 0 ? Math.min(this.heightOf(this.solution.V / 1000), this.profile.H) : 0;
+  }
+
+  /** 액면의 높이 (물체 좌표 y) */
+  get surfaceY(): number {
+    return this.profile.y0 + this.liquidHeight();
+  }
+
+  /**
+   * 뷰렛 끝에서 떨어지는 방울·줄기 (보기용)
+   * @param fall 뷰렛 끝에서 받는 그릇 액면까지 거리 (m)
+   */
+  animateDrip(dt: number, fall: number): void {
+    if (!this.drip) {
+      this.drip = new THREE.Mesh(new THREE.CylinderGeometry(0.0022, 0.0022, 1, 6), this.liquidMat);
+      this.drip.userData.noPick = true;
+      this.drip.raycast = () => {};
+      this.object.add(this.drip);
+    }
+    const d = this.drip;
+    d.visible = this.flowRate > 0 && this.volume > 0;
+    if (!d.visible) return;
+    if (this.flowRate >= 1) {
+      // 빠르게: 가는 줄기
+      d.scale.set(0.6, Math.max(0.001, fall), 0.6);
+      d.position.y = -fall / 2;
+      return;
+    }
+    // 방울: 한 방울(0.05 mL)마다 끝에서 떨어져 액면까지 (자유 낙하 대신 보기 좋은 일정한 속도)
+    const period = 0.05 / this.flowRate;
+    this.dripT = (this.dripT + dt) % period;
+    const k = Math.min(1, this.dripT / Math.min(period, 0.35));
+    d.scale.set(1, 0.005, 1); // 방울 하나 ≈ 5 mm
+    d.position.y = -k * fall;
   }
 
   /** 들어 있는 부피 (mL) */
@@ -127,8 +181,14 @@ export class Container extends Item {
       label: '눈금 읽기',
       run: () => chemHooks.toast(`${this.name}: ${this.volume > 0 ? `${this.reading()} · ${this.solution.colorName(this.pathCm)}` : '비어 있음'}`),
     }];
-    if (this.kind === 'burette' && this.attachedTo && this.volume > 0) {
-      out.unshift({ label: '적하 (아래 그릇으로 떨어뜨리기)', run: () => chemHooks.dispense(this) });
+    if (this.kind === 'burette' && this.attachedTo) {
+      if (this.flowRate > 0) out.unshift({ label: '콕 잠그기', run: () => { this.flowRate = 0; } });
+      else if (this.volume > 0) {
+        out.unshift(
+          ...FLOW_RATES.map(([n, r]) => ({ label: `콕 열기 · ${n} (${r} mL/s)`, run: () => { this.flowRate = r; } })),
+          { label: '정량 적하 (부피를 정해서)', run: () => chemHooks.dispense(this) },
+        );
+      }
     }
     return out;
   }

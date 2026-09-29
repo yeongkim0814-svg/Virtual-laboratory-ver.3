@@ -126,7 +126,7 @@ const trackPanel = new TrackPanel((open) => panelToggled(trackPanel, open));
 const loggerPanel = new LoggerPanel((open) => panelToggled(loggerPanel, open));
 const panels = [pendulumPanel, springPanel, slitPanel, photoPanel, supplyPanel, trackPanel, loggerPanel];
 // 센서 ↔ 노트북 (USB)
-const sensorNet = new SensorNetwork(scene, stock.laptops, stock.motionSensors);
+const sensorNet = new SensorNetwork(scene, stock.laptops, [...stock.motionSensors, ...stock.phSensors]);
 for (const l of stock.laptops) l.onOpenPanel = (lap) => loggerPanel.open(lap);
 
 // ---------- 화학: 따르기 · 알림 · 폐액통 ----------
@@ -142,6 +142,7 @@ function toast(html: string): void {
 /** src에서 mL만큼 떠서 dst에 붓는다 (몰수는 같은 비율로 따라간다) */
 function transfer(src: Container, dst: Container, mL: number): void {
   dst.solution.add(src.solution.take(mL / 1000));
+  if (src.kind === 'burette') dst.titrantAdded += mL; // 적정 곡선의 가로축
   src.refresh();
   dst.refresh();
   const digits = Math.min(src.precision, dst.precision) < 0.1 ? 2 : 1;
@@ -176,6 +177,40 @@ chemHooks.dispense = (b) => {
   if (!t) return toast(`${b.name} 끝 바로 아래에 그릇이 없음 — 클램프 높이·그릇 위치를 맞추세요`);
   pourBar.open(b, t, `${b.name} → ${t.name} (적하)`, (mL) => transfer(b, t, mL));
 };
+/**
+ * 뷰렛 콕이 열려 있으면 매 프레임 흘려보낸다 (속도 × 시간). 아래에 그릇이 없으면 책상에 흘러 버린다.
+ */
+let spillWarned = false;
+function updateBurettes(dt: number): void {
+  for (const b of stock.containers) {
+    if (b.kind !== 'burette') continue;
+    let fall = 0.1;
+    if (b.flowRate > 0) {
+      if (!b.attachedTo || b.volume <= 0) {
+        if (b.volume <= 0) toast(`${b.name}이(가) 비어 콕을 잠갔습니다`);
+        b.flowRate = 0;
+      } else {
+        const t = containerBelow(b);
+        const mL = Math.min(b.flowRate * Math.min(dt, 0.1), b.volume);
+        const part = b.solution.take(mL / 1000);
+        if (t && t.free > mL) {
+          t.solution.add(part);
+          t.titrantAdded += mL;
+          t.refresh();
+          const tip = b.object.localToWorld(new THREE.Vector3(0, 0, 0));
+          fall = Math.max(0.01, tip.y - t.object.localToWorld(new THREE.Vector3(0, t.surfaceY, 0)).y);
+          spillWarned = false;
+        } else if (!spillWarned) {
+          spillWarned = true;
+          toast(`${b.name} 아래에 받을 그릇이 없어(또는 가득 차) 흘러 버리고 있습니다 — 콕을 잠그세요`);
+        }
+        b.refresh();
+      }
+    }
+    b.animateDrip(dt, fall);
+  }
+}
+
 const wasteCans = furniture.wasteCans.map((o, i) => new WasteCan(o, `폐액통 ${i + 1}`));
 for (const w of wasteCans) w.getHeld = () => hand.held;
 for (const s of stock.motionSensors) {
@@ -540,6 +575,7 @@ renderer.setAnimationLoop(() => {
   }
   for (const s of stock.springs) s.update(dt, springPanel.speed, springPanel.target === s);
   for (const r of stock.rails) r.update(dt);
+  updateBurettes(dt);
   sensorNet.update();
   for (const l of stock.laptops) l.update(dt, scene);
   updateLights(now / 1000);

@@ -14,6 +14,7 @@ import { HITBOX_MAT, Item } from '../world/items';
 import type { Action } from '../world/interactable';
 import { Cable, endToEndPath, settle } from '../world/cable';
 import type { Sample } from '../sim/logger';
+import { Container } from './glassware';
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
@@ -33,18 +34,48 @@ export const USB_LENGTH = 2.0;
 export const MOTION_MIN = 0.15;
 export const MOTION_MAX = 3.0;
 
-export class MotionSensor extends Item {
+/**
+ * 노트북에 USB로 연결하는 센서의 공통 부분
+ *  - 노트북이 매 프레임 update()로 값을 읽고, 기록 중이면 record(t)로 저장한다
+ *  - display()는 노트북 화면·패널에 보일 지금 값, screenPoints()는 노트북 화면의 작은 그래프
+ */
+export abstract class DataSensor extends Item {
   laptop: Laptop | null = null;
+  /** 센서가 끼워진 레일의 재생 속도 (1 = 실제 시간) — 노트북이 시간 흐름에 쓴다 */
+  timeScale: () => number = () => 1;
+  linkActions: (s: DataSensor) => Action[] = () => [];
+  /** USB 선이 나오는 점과 방향 (물체 좌표) */
+  abstract readonly cordExit: THREE.Vector3;
+  abstract readonly cordDir: THREE.Vector3;
+  protected led: THREE.Mesh | null = null;
+
+  extraActions(): Action[] {
+    return this.linkActions(this);
+  }
+
+  setLed(on: boolean): void {
+    if (this.led) this.led.material = on ? LED_ON : LED_OFF;
+  }
+
+  /** 매 프레임 값 읽기 */
+  abstract update(scene: THREE.Scene, dt: number): void;
+  /** 기록 시작: 이전 기록 지우기 */
+  abstract begin(): void;
+  /** 기록 한 점 */
+  abstract record(t: number): void;
+  abstract display(): string;
+  /** 노트북 화면 그래프용 점들 [가로, 세로] */
+  abstract screenPoints(): [number, number][];
+}
+
+export class MotionSensor extends DataSensor {
   /** 기록 (노트북이 채움) */
   samples: Sample[] = [];
   /** 지금 잰 거리 (m, 범위 밖이면 null) */
   reading: number | null = null;
-  /** 센서가 끼워진 레일의 재생 속도 (1 = 실제 시간) — 노트북이 시간 흐름에 쓴다 */
-  timeScale: () => number = () => 1;
-  linkActions: (s: MotionSensor) => Action[] = () => [];
   readonly face = v(0, 0.03, 0.026); // 진동판 중심 (물체 좌표)
   readonly cordExit = v(0, 0.03, -0.026);
-  private led: THREE.Mesh;
+  readonly cordDir = v(0, 0, -1);
   private ray = new THREE.Raycaster();
 
   constructor(name: string) {
@@ -62,8 +93,24 @@ export class MotionSensor extends Item {
     this.led = led;
   }
 
-  extraActions(): Action[] {
-    return this.linkActions(this);
+  update(scene: THREE.Scene): void {
+    this.reading = this.measure(scene);
+  }
+
+  begin(): void {
+    this.samples = [];
+  }
+
+  record(t: number): void {
+    this.samples.push({ t, x: this.reading });
+  }
+
+  display(): string {
+    return this.reading === null ? '범위 밖' : `${this.reading.toFixed(3)} m`;
+  }
+
+  screenPoints(): [number, number][] {
+    return this.samples.filter((p) => p.x !== null).map((p) => [p.t, p.x as number]);
   }
 
   /** 레일 끝 받침에 끼워져 있으면 돌리지 않는다 (레일 방향을 정확히 바라봄) */
@@ -98,14 +145,87 @@ export class MotionSensor extends Item {
     return Math.round(hit.distance * 1000) / 1000;
   }
 
-  setLed(on: boolean): void {
-    this.led.material = on ? LED_ON : LED_OFF;
+}
+
+/**
+ * pH 전극 (유리 전극): 그릇의 전극 꽂는 자리에 꽂으면 끝(유리 구)이 그릇 바닥 바로 위(물체 좌표 y = 4 mm)에 온다.
+ * 액면이 그보다 2 mm 이상 높아야 잰다 — 모자라면 증류수를 더 넣는다 (묽혀도 몰수는 같아 당량점 부피는 그대로).
+ * 전극은 바로 반응하지 않는다: 1차 지연  pH_읽음 += (pH_실제 − pH_읽음)·(1 − e^(−Δt/τ)),  τ ≈ 1 s
+ *   → 뷰렛을 빠르게 열면 곡선이 실제보다 늦게(오른쪽으로 밀려) 그려진다 — 당량점 근처에서 한 방울씩 하는 이유
+ * 기록: (t, pH, V) — V = 기록을 시작한 뒤 그 그릇이 뷰렛에서 받은 부피 (적정 곡선 가로축)
+ */
+export interface PHSample {
+  t: number;
+  pH: number | null;
+  V: number;
+}
+
+const PROBE_TAU = 1.0; // s
+
+export class PHSensor extends DataSensor {
+  samples: PHSample[] = [];
+  reading: number | null = null;
+  readonly cordExit = v(0, 0.185, 0);
+  readonly cordDir = v(0, 1, 0);
+  private v0 = 0;
+
+  constructor(name: string) {
+    const g = new THREE.Group();
+    g.add(mesh(new THREE.CylinderGeometry(0.0055, 0.0055, 0.16, 8), BLACK, 0, 0.09, 0)); // 몸통
+    g.add(mesh(new THREE.SphereGeometry(0.0062, 8, 6), new THREE.MeshLambertMaterial({ color: 0xcfe6ea, transparent: true, opacity: 0.6 }), 0, 0.008, 0)); // 유리 구
+    g.add(mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.02, 8), HOUSING, 0, 0.175, 0)); // 머리
+    const led = mesh(new THREE.BoxGeometry(0.004, 0.004, 0.004), LED_OFF, 0, 0.187, 0.006);
+    g.add(led);
+    super(g, { name, radius: 0.02, mass: 0.05, plugs: [{ type: 'probe', point: v(0, 0.14, 0) }] });
+    this.led = led;
+  }
+
+  /** 꽂혀 있는 그릇 */
+  get vessel(): Container | null {
+    const o = this.attachedTo?.owner;
+    return o instanceof Container ? o : null;
+  }
+
+  update(_scene: THREE.Scene, dt: number): void {
+    const c = this.vessel;
+    // 전극 끝(y = 4 mm)이 잠길 만큼 용액이 있어야 잰다
+    const target = c && c.surfaceY > 0.006 ? c.solution.pH() : null;
+    if (target === null) {
+      this.reading = null;
+      return;
+    }
+    this.reading = this.reading === null ? target : this.reading + (target - this.reading) * (1 - Math.exp(-dt / PROBE_TAU));
+  }
+
+  begin(): void {
+    this.samples = [];
+    this.v0 = this.vessel?.titrantAdded ?? 0;
+  }
+
+  /** 기록 시작 뒤 뷰렛에서 들어간 부피 (mL) */
+  get added(): number {
+    return (this.vessel?.titrantAdded ?? 0) - this.v0;
+  }
+
+  record(t: number): void {
+    this.samples.push({ t, pH: this.reading === null ? null : Math.round(this.reading * 100) / 100, V: this.added });
+  }
+
+  display(): string {
+    if (!this.vessel) return '그릇에 꽂혀 있지 않음';
+    return this.reading === null ? '전극 끝이 잠기지 않음 — 증류수를 더 넣으세요' : `pH ${this.reading.toFixed(2)} · V ${this.added.toFixed(2)} mL`;
+  }
+
+  screenPoints(): [number, number][] {
+    const pts = this.samples.filter((p) => p.pH !== null);
+    const useV = pts.some((p) => p.V > 0.01);
+    return pts.map((p) => [useV ? p.V : p.t, p.pH as number]);
   }
 }
 
 /** 노트북 한 대의 측정 프로그램 상태 */
 export class Laptop extends Item {
-  readonly sensors: MotionSensor[] = [];
+  readonly sensors: DataSensor[] = [];
   readonly maxSensors = 2;
   recording = false;
   /** 기록 시각 (s) — 레일을 느리게 돌리면 그만큼 느리게 흐른다 (실험 속 시간) */
@@ -113,6 +233,8 @@ export class Laptop extends Item {
   rate = 20; // Hz
   duration = 10; // s (0 = 무제한)
   onOpenPanel: (l: Laptop) => void = () => {};
+  /** 가까운 센서를 이 노트북에 연결하는 동작 (SensorNetwork가 채움) */
+  linkActions: (l: Laptop) => Action[] = () => [];
   readonly portLocal = v(0.155, 0.009, 0.03);
   private acc = 0;
   private screenCanvas = document.createElement('canvas');
@@ -147,6 +269,7 @@ export class Laptop extends Item {
   extraActions(): Action[] {
     return [
       { label: '측정 프로그램 열기', run: () => this.onOpenPanel(this) },
+      ...this.linkActions(this),
       ...(this.sensors.length ? [{ label: this.recording ? '기록 멈추기' : '기록 시작', run: () => (this.recording ? this.stop() : this.start()) }] : []),
     ];
   }
@@ -162,7 +285,7 @@ export class Laptop extends Item {
   }
 
   start(): void {
-    for (const s of this.sensors) s.samples = [];
+    for (const s of this.sensors) s.begin();
     this.clock = 0;
     this.acc = 1 / this.rate; // 시작하자마자 첫 점
     this.recording = true;
@@ -176,7 +299,7 @@ export class Laptop extends Item {
   update(dt: number, scene: THREE.Scene): void {
     // 이번 프레임에 움직인 물체(수레 등)의 월드 좌표를 먼저 갱신 — 안 하면 한 프레임 전 위치를 재게 된다
     if (this.sensors.length) scene.updateMatrixWorld();
-    for (const s of this.sensors) s.reading = s.measure(scene);
+    for (const s of this.sensors) s.update(scene, dt);
     if (this.recording) {
       const scale = this.sensors[0]?.timeScale() ?? 1;
       const d = Math.min(dt, 0.1) * scale;
@@ -185,7 +308,7 @@ export class Laptop extends Item {
       const step = 1 / this.rate;
       if (this.acc >= step) {
         this.acc = Math.min(this.acc - step, step); // 프레임이 늦으면 한 번에 한 점만
-        for (const s of this.sensors) s.samples.push({ t: this.clock, x: s.reading });
+        for (const s of this.sensors) s.record(this.clock);
       }
       if (this.duration > 0 && this.clock >= this.duration) this.recording = false;
     }
@@ -211,9 +334,9 @@ export class Laptop extends Item {
       g.fillText('센서 없음 — USB 연결 대기', 10, 50);
     } else {
       this.sensors.forEach((s, i) => {
-        g.fillText(`${s.name}: ${s.reading === null ? '범위 밖' : `${s.reading.toFixed(3)} m`}`, 8, 32 + i * 14);
+        g.fillText(`${s.name}: ${s.display()}`, 8, 32 + i * 14);
       });
-      const pts = this.sensors[0].samples.filter((p) => p.x !== null) as { t: number; x: number }[];
+      const pts = this.sensors[0].screenPoints().map(([t, x]) => ({ t, x }));
       const top = 34 + this.sensors.length * 14;
       g.strokeStyle = '#2f5a44';
       g.strokeRect(6, top, W - 12, H - top - 6);
@@ -240,13 +363,24 @@ export class Laptop extends Item {
 
 /** 센서 ↔ 노트북 USB 연결과 선 그리기 */
 export class SensorNetwork {
-  private cables = new Map<MotionSensor, { cable: Cable; pts: THREE.Vector3[] }>();
+  private cables = new Map<DataSensor, { cable: Cable; pts: THREE.Vector3[] }>();
 
-  constructor(private scene: THREE.Scene, readonly laptops: Laptop[], readonly sensors: MotionSensor[]) {
+  constructor(private scene: THREE.Scene, readonly laptops: Laptop[], readonly sensors: DataSensor[]) {
     for (const s of sensors) s.linkActions = (x) => this.actionsFor(x);
+    // 노트북에서도: USB가 닿는 곳의 연결 안 된 센서를 바로 연결
+    for (const l of laptops) {
+      l.linkActions = (lap) => {
+        if (lap.sensors.length >= lap.maxSensors || lap.object.parent?.type !== 'Scene') return [];
+        const p = lap.portPose().p;
+        return this.sensors
+          .filter((x) => !x.laptop && x.root().object.parent?.type === 'Scene'
+            && x.object.localToWorld(x.cordExit.clone()).distanceTo(p) <= USB_LENGTH)
+          .map((x) => ({ label: `센서 연결 · ${x.name}`, run: () => this.connect(x, lap) }));
+      };
+    }
   }
 
-  private nearestLaptop(s: MotionSensor): Laptop | null {
+  private nearestLaptop(s: DataSensor): Laptop | null {
     const p = s.object.localToWorld(s.cordExit.clone());
     let best: Laptop | null = null;
     let bestD = USB_LENGTH;
@@ -258,7 +392,7 @@ export class SensorNetwork {
     return best;
   }
 
-  actionsFor(s: MotionSensor): Action[] {
+  actionsFor(s: DataSensor): Action[] {
     if (s.laptop) return [{ label: `노트북 연결 끊기 (${s.laptop.name})`, secondary: true, run: () => this.disconnect(s) }];
     const l = this.nearestLaptop(s);
     return l
@@ -266,7 +400,7 @@ export class SensorNetwork {
       : [{ label: `노트북이 너무 멂 (USB ${USB_LENGTH} m)`, secondary: true, run: () => {} }];
   }
 
-  connect(s: MotionSensor, l: Laptop): void {
+  connect(s: DataSensor, l: Laptop): void {
     this.disconnect(s);
     s.laptop = l;
     l.sensors.push(s);
@@ -276,7 +410,7 @@ export class SensorNetwork {
     this.cables.set(s, c);
   }
 
-  disconnect(s: MotionSensor): void {
+  disconnect(s: DataSensor): void {
     const l = s.laptop;
     if (l) l.sensors.splice(l.sensors.indexOf(s), 1);
     s.laptop = null;
@@ -292,7 +426,7 @@ export class SensorNetwork {
       const l = s.laptop!;
       s.object.updateWorldMatrix(true, false);
       const a = s.object.localToWorld(s.cordExit.clone());
-      const fa = new THREE.Vector3(0, 0, -1).transformDirection(s.object.matrixWorld);
+      const fa = s.cordDir.clone().transformDirection(s.object.matrixWorld);
       const { p, dir } = l.portPose();
       if (a.distanceTo(p) > USB_LENGTH) {
         this.disconnect(s);

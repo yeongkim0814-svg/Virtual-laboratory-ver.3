@@ -122,15 +122,15 @@ const BUILDERS: Record<Furniture['kind'], Builder> = {
   },
 
   lowCabinet(g, f) {
-    // 낮은 수납장: 여닫는 칸 + 선반 1단. 앞쪽 두 칸은 레일(1.2 m)이 들어가는 넓은 칸
+    // 낮은 수납장: 여닫는 칸 + 선반 1단. 첫 칸은 레일(1.2 m)용 긴 칸 — 선반 없이, 가로로 긴 문을 아래로 젖혀 연다
     const r = f.rect;
     const front = frontOf(r);
     const body = inset(r, 0.02);
     const W = front.axis === 'x' ? body.z2 - body.z1 : body.x2 - body.x1;
-    const rest = W - 2 * 1.4;
+    const rest = W - 1.4;
     const n = Math.max(1, Math.round(rest / 0.6));
     const cab = new StorageCabinet(body, front, f.height - 0.04, 0, CAB_MATS, {
-      sections: [1.4, 1.4, ...new Array(n).fill(rest / n)], shelves: [0.06, 0.45], solidDoors: true, top: false,
+      sections: [1.4, ...new Array(n).fill(rest / n)], shelves: [0.06, 0.45], solidDoors: true, top: false, longSections: [0],
     });
     g.add(cab.group);
     cabinets.set(f.name, cab);

@@ -375,8 +375,22 @@
           <button id="lg-csv">CSV</button>
         </div>
         <dl class="readout">
-          <dt>지금 거리</dt><dd id="lg-now"></dd>
+          <dt>지금 값</dt><dd id="lg-now"></dd>
         </dl>
+        <!-- pH 센서: 적정 곡선 -->
+        <div id="lg-ph" hidden>
+          <div id="lg-ph-mode" class="segmented">
+            <button data-v="V">pH – V (적정 곡선)</button>
+            <button data-v="t">pH – 시간</button>
+          </div>
+          <p class="plot-title">pH <span id="lg-ph-leg"></span></p>
+          <canvas id="lg-ph-plot" class="plot tall"></canvas>
+          <p class="plot-title">ΔpH/ΔV (기울기 — 뾰족한 곳이 당량점) <span id="lg-dph-leg"></span></p>
+          <canvas id="lg-dph" class="plot"></canvas>
+          <dl class="readout" id="lg-ph-stats"></dl>
+          <p class="legend">V = 기록 시작 뒤 전극이 꽂힌 그릇이 뷰렛에서 받은 부피. 전극은 약 1초 늦게 따라오므로 당량점 근처에서는 한 방울씩.</p>
+        </div>
+        <div id="lg-motion">
         <p class="plot-title">x 위치 (m) <span id="lg-x-leg"></span></p>
         <canvas id="lg-x" class="plot tall"></canvas>
         <p class="plot-title">v 속도 (m/s) <span id="lg-v-leg"></span></p>
@@ -391,6 +405,7 @@
           <input id="lg-tb" type="range" min="0" max="1000" step="1" value="800" />
         </label>
         <dl class="readout" id="lg-stats"></dl>
+        </div>
         <h3>설정</h3>
         <div class="field">표본 속도
           <div id="lg-rate" class="segmented">
@@ -399,15 +414,17 @@
         </div>
         <div class="field">기록 시간
           <div id="lg-dur" class="segmented">
-            <button data-v="5">5 s</button><button data-v="10">10 s</button><button data-v="20">20 s</button><button data-v="0">계속</button>
+            <button data-v="5">5 s</button><button data-v="10">10 s</button><button data-v="20">20 s</button><button data-v="300">5 분</button><button data-v="0">계속</button>
           </div>
         </div>
+        <div id="lg-motion-set">
         <div class="field">매끄럽게 (속도·가속도 계산 창)
           <div id="lg-win" class="segmented">
             <button data-v="3">3점</button><button data-v="5">5점</button><button data-v="7">7점</button><button data-v="11">11점</button>
           </div>
         </div>
         <label class="row"><input id="lg-flip" type="checkbox" /> 방향 반대 (센서 쪽으로 오는 것을 +)</label>
+        </div>
       </section>
 
       <!-- 조작 방법 도움말 (? 버튼) -->
@@ -449,13 +466,14 @@
         <ul>
           <li>그릇을 들고 시약병을 두 번 탭 → <b>받기</b>, 다른 그릇을 두 번 탭 → <b>따르기</b>: 슬라이더로 부피 선택 (한 칸 = 눈금실린더 0.5 mL, 뷰렛 0.05 mL, 비커 5 mL)</li>
           <li>시약병에는 다시 붓지 않는다. 지시약병·pH 시험지를 들고 그릇을 두 번 탭 → 방울 떨어뜨리기·pH 확인</li>
-          <li>뷰렛은 스탠드·클램프에 물린 뒤 그릇을 끝 바로 아래에 두고 뷰렛을 두 번 탭 → <b>적하</b></li>
+          <li>뷰렛은 스탠드·클램프에 물린 뒤 그릇을 끝 바로 아래에 두고 뷰렛을 두 번 탭 → <b>콕 열기</b>(한 방울씩 0.05 · 천천히 0.2 · 빠르게 1 mL/s) / <b>콕 잠그기</b> / 정량 적하</li>
+          <li><b>적정 곡선</b>: pH 센서를 들고 그릇을 두 번 탭(전극 꽂기) → 센서나 노트북을 두 번 탭해 연결 → 측정 프로그램 "기록 시작" → 콕 열기. pH–V 그래프와 당량점·반당량점이 자동으로</li>
           <li>그릇 두 번 탭 → <b>눈금 읽기</b>. 다 쓴 용액은 그릇을 들고 폐시약 보관함 위 <b>폐액통</b>을 탭</li>
         </ul>
         <h3>전원</h3>
         <p>전원이 필요한 기기(레이저, 직류 전원 장치)는 실험 테이블 짧은 옆면의 콘센트에 꽂아야 작동한다. 전원선은 2 m, 도선은 1.5 m — 더 멀어지면 빠진다.</p>
         <h3>기구 위치</h3>
-        <p>주 실험실 오른쪽 벽 보관장: 스탠드·클램프·실·용수철·추·레이저·슬릿·스크린, 아래 칸(불투명 문)에 전원 장치·전류계·광전관. 뒤쪽 벽 낮은 수납장(문을 열어 꺼냄): 레일(오른쪽 끝 넓은 칸), 수레·질량 막대, 운동 센서. 노트북: 교탁 위 2대, 스탠딩 테이블 위 1대. 실험대 아래 수납장도 모두 여닫을 수 있다. 준비실: 시약장(시약·지시약·pH 시험지), 유리 기구 보관장(뷰렛·비커·플라스크·눈금실린더·스탠드).</p>
+        <p>주 실험실 오른쪽 벽 보관장: 스탠드·클램프·실·용수철·추·레이저·슬릿·스크린, 아래 칸(불투명 문)에 전원 장치·전류계·광전관. 뒤쪽 벽 낮은 수납장(문을 열어 꺼냄): 레일(오른쪽 끝 넓은 칸), 수레·질량 막대, 운동 센서. 노트북: 교탁 위 2대, 스탠딩 테이블 위 1대. 실험대 아래 수납장도 모두 여닫을 수 있다. 준비실: 시약장(시약·지시약·pH 시험지), 유리 기구 보관장(뷰렛·비커·플라스크·눈금실린더·스탠드·pH 센서). 레일은 뒤쪽 수납장 오른쪽 끝의 가로로 긴 칸(문을 아래로 젖혀 엶).</p>
         <h3>실험 패널</h3>
         <p>기구가 실험할 수 있게 조립되면 화면 왼쪽 위에 <b>▸ 실험 이름</b> 버튼이 뜬다. 패널은 한 번에 하나, 화면 오른쪽에 열린다.</p>
       </div>

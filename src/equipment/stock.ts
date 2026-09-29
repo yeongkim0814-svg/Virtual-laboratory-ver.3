@@ -11,11 +11,11 @@
  *   칸 7                    : 이중 슬릿 d = 0.10 · 0.20 mm, 단일 슬릿 a = 0.10 mm
  *   칸 6, 7 아래 선반 (불투명 문 안) : 직류 전원 장치, 마이크로전류계, 광전관 2개 (Cs · Na 음극)
  *
- * 뒤쪽 벽 낮은 수납장(여닫는 칸): 칸 0 역학 레일 1.2 m, 칸 1 수레 2대 + 질량 막대 250 g × 4, 칸 2 운동 센서 2개
+ * 뒤쪽 벽 낮은 수납장: 칸 0(가로로 긴 칸, 문을 아래로 젖혀 엶) 역학 레일 1.2 m, 칸 1 수레 2대 + 선반에 질량 막대 250 g × 4, 칸 2 운동 센서 2개
  * 칠판 앞 교탁: 노트북 1·2, 스탠딩 테이블: 노트북 3 (측정 프로그램)
  * 준비실 (화학 실험용):
  *   시약장 유리문 칸: 0.1 M HCl · NaOH · CH₃COOH · NH₃, 증류수 2병, 지시약 3종(페놀프탈레인·메틸 오렌지·BTB), 만능 pH 시험지
- *   유리 기구 보관장: 뷰렛 2 · 스탠드·클램프(긴 칸), 비커 6, 삼각 플라스크 2, 눈금실린더 2
+ *   유리 기구 보관장: 뷰렛 2 · 스탠드·클램프(긴 칸), 비커 6, 삼각 플라스크 2, 눈금실린더 2, pH 센서 2
  */
 import type { StorageCabinet } from '../world/cabinet';
 import { at, type Item } from '../world/items';
@@ -25,7 +25,7 @@ import { Spring } from './spring';
 import { Laser, OpticScreen, SlitPlate } from './optics';
 import { DCPowerSupply, Microammeter, Phototube } from './electrical';
 import { Cart, Rail, massBar } from './track';
-import { Laptop, MotionSensor } from './sensors';
+import { Laptop, MotionSensor, PHSensor } from './sensors';
 import { Container, DropperBottle, PHPaper, REAGENTS, beaker, burette, cylinder, flask, reagentBottle } from './glassware';
 import * as THREE from 'three';
 
@@ -41,6 +41,7 @@ export interface Stock {
   carts: Cart[];
   laptops: Laptop[];
   motionSensors: MotionSensor[];
+  phSensors: PHSensor[];
   /** 용액을 담는 그릇 전부 (시약병 포함) */
   containers: Container[];
 }
@@ -56,6 +57,7 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
   const flasks = [1, 2].map((n) => flask(n));
   const cylinders = [1, 2].map((n) => cylinder(n));
   const burettes = [1, 2].map((n) => burette(n));
+  const phSensors = [new PHSensor('pH 센서 1'), new PHSensor('pH 센서 2')];
   const containers: Container[] = [...bottles, water2, ...beakers, ...flasks, ...cylinders, ...burettes];
   const strings = [new PendulumString(), new PendulumString()];
   // 용수철: k, 자연 길이, 자기 질량, 탄성 한계 늘어남
@@ -83,7 +85,7 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     desk(laptops[0], 2.2, 2.2, Math.PI / 2),
     desk(laptops[1], 2.2, 3.3, Math.PI / 2),
     desk(laptops[2], 2.15, 4.92, -Math.PI / 2, 1.05),
-    // 뒤쪽 벽 수납장: 칸 0(넓은 칸) 레일, 칸 1(넓은 칸) 수레·질량 막대, 칸 2 운동 센서
+    // 뒤쪽 벽 수납장: 칸 0(가로로 긴 칸, 젖히는 문) 레일, 칸 1 수레(바닥)·질량 막대(선반), 칸 2 운동 센서
     at(rails[0], low.slot(0, 0, 0.5)),
     at(carts[0], low.slot(1, 0, 0.25)),
     at(carts[1], low.slot(1, 0, 0.75)),
@@ -110,6 +112,8 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(flasks[1], glass.slot(3, 2, 0.8)),
     at(cylinders[0], glass.slot(4, 2, 0.25)),
     at(cylinders[1], glass.slot(4, 2, 0.75)),
+    at(phSensors[0], glass.slot(5, 2, 0.3)),
+    at(phSensors[1], glass.slot(5, 2, 0.7)),
     at(motionSensors[0], low.slot(2, 0, 0.25)),
     at(motionSensors[1], low.slot(2, 0, 0.75)),
     at(new Stand(), cab.slot(0, 0, 0.2)),
@@ -147,5 +151,5 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(tubes[0], cab.slot(7, 1, 0.55)),
     at(tubes[1], cab.slot(7, 1, 0.85)),
   ];
-  return { items, strings, springs, lasers, supplies, ammeters, tubes, rails, carts, laptops, motionSensors, containers };
+  return { items, strings, springs, lasers, supplies, ammeters, tubes, rails, carts, laptops, motionSensors, phSensors, containers };
 }

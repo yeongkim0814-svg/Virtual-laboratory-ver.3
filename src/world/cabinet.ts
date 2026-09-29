@@ -23,19 +23,34 @@ const SHELVES = [0.05, 0.52, 0.99, 1.52]; // 일반 칸 선반 윗면 높이
 const TALL_SHELVES = [0.05, 1.52]; // 긴 칸
 const OPEN = Math.PI / 2; // 문이 열리는 각도 (90° — 더 열면 옆 칸 앞을 가린다)
 
-/** 경첩으로 돌아가는 보관장 문 한 짝 */
+/**
+ * 경첩으로 돌아가는 보관장 문 한 짝
+ * dropDown: 긴 기구(레일 등)용 칸의 가로로 긴 문 — 아래쪽 경첩으로 앞으로 젖혀 연다
+ */
 export class CabinetDoor implements Interactable {
-  readonly object = new THREE.Group(); // 경첩 축
+  readonly object = new THREE.Group();
+  private pivot = new THREE.Group(); // 경첩 축
   private angle = 0;
   private target = 0;
 
-  constructor(width: number, y1: number, y2: number, private hingeLeft: boolean, glass: boolean, m: CabinetMaterials) {
-    const leaf = new THREE.Mesh(new THREE.BoxGeometry(width - 0.006, y2 - y1, 0.018), glass ? m.glass : m.door);
+  constructor(width: number, y1: number, y2: number, private hingeLeft: boolean, glass: boolean, m: CabinetMaterials, private dropDown = false) {
+    // 젖히는 문은 양옆을 3 cm씩 줄인다 — 열어 눕혔을 때 옆 칸 문(칸막이 자리에 경첩)과 닿지 않게
+    const leaf = new THREE.Mesh(new THREE.BoxGeometry(width - (dropDown ? 0.06 : 0.006), y2 - y1, 0.018), glass ? m.glass : m.door);
+    this.object.add(this.pivot);
+    if (dropDown) {
+      // 경첩 = 아래 모서리. 손잡이는 위쪽 가운데에 가로로
+      this.pivot.position.y = y1;
+      leaf.position.set(width / 2, (y2 - y1) / 2, 0);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.015, 0.02), m.handle);
+      handle.position.set(width / 2, y2 - y1 - 0.06, 0.02);
+      this.pivot.add(leaf, handle);
+      return;
+    }
     const s = hingeLeft ? 1 : -1; // 문짝이 경첩에서 뻗는 방향
     leaf.position.set((s * width) / 2, (y1 + y2) / 2, 0);
     const handle = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.1, 0.02), m.handle);
     handle.position.set(s * (width - 0.05), glass ? y1 + 0.14 : y2 - 0.14, 0.02);
-    this.object.add(leaf, handle);
+    this.pivot.add(leaf, handle);
   }
 
   get isOpen(): boolean {
@@ -47,15 +62,17 @@ export class CabinetDoor implements Interactable {
   }
 
   toggle(): void {
-    // 왼쪽 경첩은 −y축 방향(시계)으로, 오른쪽 경첩은 반대로 돌아야 바깥(+z)으로 열린다
-    this.target = this.isOpen ? 0 : this.hingeLeft ? -OPEN : OPEN;
+    // 왼쪽 경첩은 −y축 방향(시계)으로, 오른쪽 경첩은 반대로 돌아야 바깥(+z)으로 열린다.
+    // 아래 경첩(젖히는 문)은 x축 둘레 +90° → 윗부분이 앞(+z)으로 내려온다
+    this.target = this.isOpen ? 0 : this.dropDown ? OPEN : this.hingeLeft ? -OPEN : OPEN;
   }
 
   update(dt: number): void {
     const d = this.target - this.angle;
     const step = 4 * dt;
     this.angle = Math.abs(d) <= step ? this.target : this.angle + Math.sign(d) * step;
-    this.object.rotation.y = this.angle;
+    if (this.dropDown) this.pivot.rotation.x = this.angle;
+    else this.pivot.rotation.y = this.angle;
   }
 }
 
@@ -71,12 +88,14 @@ export interface CabinetOptions {
   doorTop?: number;
   /** 윗판을 만들지 (위에 따로 상판을 얹는 가구는 false) */
   top?: boolean;
+  /** 긴 기구용 칸 번호: 가로로 긴 문 한 짝을 아래로 젖혀 연다 (레일처럼 긴 것) */
+  longSections?: number[];
 }
 
 export class StorageCabinet {
   readonly group = new THREE.Group();
   readonly doors: CabinetDoor[] = [];
-  private sections: { x0: number; x1: number; tall: boolean }[] = [];
+  private sections: { x0: number; x1: number; ys: number[] }[] = [];
   private shelves: number[];
 
   /**
@@ -119,9 +138,12 @@ export class StorageCabinet {
       const w = w0 * scale;
       const x1 = x0 + w;
       const tall = i < tallCount;
-      this.sections.push({ x0, x1, tall });
+      const long = o.longSections?.includes(i) ?? false;
+      // 긴 칸(키 큰 칸: 스탠드 / 가로로 긴 칸: 레일)은 선반을 줄이거나 없앤다
+      const ys = tall ? TALL_SHELVES : long ? [base] : this.shelves;
+      this.sections.push({ x0, x1, ys });
       if (i > 0) add(x0 - T / 2, x0 + T / 2, base, H - T, -hd + T, hd); // 칸막이
-      for (const y of (tall ? TALL_SHELVES : this.shelves).slice(1)) add(x0, x1, y - T, y, -hd + T, hd - 0.01); // 선반
+      for (const y of ys.slice(1)) add(x0, x1, y - T, y, -hd + T, hd - 0.01); // 선반
 
       // 문: 모든 문이 왼쪽 경첩. (양문처럼 번갈아 달면 두 칸이 한 칸막이에 경첩을 같이 써서
       // 둘 다 열었을 때 문짝이 같은 자리로 돌아와 겹친다. 같은 쪽에 달면 열린 문짝끼리 칸 폭만큼 떨어진다)
@@ -130,11 +152,11 @@ export class StorageCabinet {
       const spans: [number, number, boolean][] = tall || o.solidDoors
         ? [[base + 0.01, top, !o.solidDoors && tall]]
         : [[base + 0.01, 0.97, false], [1.0, top, true]];
-      const leaves = Math.max(1, Math.ceil(w / 0.7));
+      const leaves = long ? 1 : Math.max(1, Math.ceil(w / 0.7));
       const lw = w / leaves;
       for (let k = 0; k < leaves; k++) {
         for (const [y1, y2, glass] of spans) {
-          const door = new CabinetDoor(lw, y1, y2, true, glass, m);
+          const door = new CabinetDoor(lw, y1, y2, true, glass, m, long);
           door.object.position.set(x0 + k * lw, 0, hd + 0.011);
           this.group.add(door.object);
           this.doors.push(door);
@@ -152,7 +174,7 @@ export class StorageCabinet {
    */
   slot(section: number, shelf: number, t = 0.5): THREE.Vector3 {
     const s = this.sections[section];
-    const ys = s.tall ? TALL_SHELVES : this.shelves;
+    const ys = s.ys;
     const x = s.x0 + 0.06 + t * (s.x1 - s.x0 - 0.12);
     this.group.updateMatrixWorld(true);
     return this.group.localToWorld(new THREE.Vector3(x, ys[shelf], 0.02));

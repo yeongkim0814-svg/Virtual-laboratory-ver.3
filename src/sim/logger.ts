@@ -135,3 +135,60 @@ export function intervalStats(d: Derived[], t1: number, t2: number): {
     aMean: ap.length ? ap.reduce((s, p) => s + (p.a as number), 0) / ap.length : null,
   };
 }
+
+/**
+ * 적정 곡선 분석 (pH–V)
+ *  - 정돈: 같은 부피(0.01 mL 이내)에서 여러 번 잰 값은 마지막 값만 (전극이 따라잡은 값)
+ *  - 기울기 ΔpH/ΔV: 0.1 mL 이상 떨어진 점 사이 (pH 표시 0.01 단위의 들쭉날쭉함이 부풀지 않게)
+ *  - 당량점: 기울기가 가장 큰 곳 (pH가 가장 가파르게 뛰는 곳 = 변곡점). 3 pH/mL 이상일 때만
+ *    (약산 적정 처음의 완만한 오르막 ≈ 1 pH/mL을 당량점으로 착각하지 않게 — 실제 당량점은 10 pH/mL 이상)
+ *  - 반당량점: V_eq / 2에서의 pH — 약산을 강염기로 적정하면 [HA] = [A⁻] → pH = pKa (헨더슨-하셀바흐)
+ */
+export interface TitrationPoint {
+  V: number;
+  pH: number;
+}
+
+export function analyzeTitration(samples: { V: number; pH: number | null }[]): {
+  points: TitrationPoint[];
+  slope: TitrationPoint[]; // V와 그 자리의 ΔpH/ΔV
+  eqV: number | null;
+  eqPH: number | null;
+  halfPH: number | null;
+  startPH: number | null;
+} {
+  const points: TitrationPoint[] = [];
+  for (const s of samples) {
+    if (s.pH === null) continue;
+    const last = points[points.length - 1];
+    if (last && Math.abs(s.V - last.V) < 0.01) last.pH = s.pH;
+    else points.push({ V: s.V, pH: s.pH });
+  }
+  points.sort((a, b) => a.V - b.V);
+  const slope: TitrationPoint[] = [];
+  let prev: TitrationPoint | null = null;
+  for (const p of points) {
+    if (prev && p.V - prev.V >= 0.1) {
+      slope.push({ V: (p.V + prev.V) / 2, pH: (p.pH - prev.pH) / (p.V - prev.V) });
+      prev = p;
+    } else if (!prev) prev = p;
+  }
+  let best: TitrationPoint | null = null;
+  for (const s of slope) if (!best || Math.abs(s.pH) > Math.abs(best.pH)) best = s;
+  const interp = (V: number): number | null => {
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1];
+      const b = points[i];
+      if (V >= a.V && V <= b.V) return b.V === a.V ? b.pH : a.pH + ((b.pH - a.pH) * (V - a.V)) / (b.V - a.V);
+    }
+    return null;
+  };
+  const ok = best && Math.abs(best.pH) > 3 && points.length >= 5;
+  const eqV = ok ? best!.V : null;
+  return {
+    points, slope, eqV,
+    eqPH: eqV === null ? null : interp(eqV),
+    halfPH: eqV === null ? null : interp(eqV / 2),
+    startPH: points.length ? points[0].pH : null,
+  };
+}
