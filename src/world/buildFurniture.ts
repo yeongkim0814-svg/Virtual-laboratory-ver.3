@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { FURNITURE, ROOMS, type Furniture, type Rect } from './layout';
 import { grimeTexture, woodTexture, worldUV } from '../render/textures';
 import { StorageCabinet, type CabinetDoor } from './cabinet';
+import { Outlet } from './power';
 
 // ---- 재질 (여러 가구가 함께 쓴다) — 픽셀 텍스처 × 색 ----
 const grime = grimeTexture();
@@ -27,22 +28,26 @@ const M = {
 
 /** 만들어진 보관장들 (이름 → 보관장) — 기구를 넣을 자리를 찾을 때 쓴다 */
 const cabinets = new Map<string, StorageCabinet>();
+const outlets: Outlet[] = [];
 
 export interface FurnitureResult {
   cabinets: Map<string, StorageCabinet>;
   /** 여닫을 수 있는 보관장 문 전부 */
   doors: CabinetDoor[];
+  /** 실험 테이블 옆면의 콘센트 (장면에는 PowerSystem이 넣는다) */
+  outlets: Outlet[];
 }
 
 export function buildFurniture(scene: THREE.Scene): FurnitureResult {
   cabinets.clear();
+  outlets.length = 0;
   for (const f of FURNITURE) {
     const g = new THREE.Group();
     g.name = f.name;
     BUILDERS[f.kind](g, f);
     scene.add(g);
   }
-  return { cabinets, doors: [...cabinets.values()].flatMap((c) => c.doors) };
+  return { cabinets, doors: [...cabinets.values()].flatMap((c) => c.doors), outlets: [...outlets] };
 }
 
 type Builder = (g: THREE.Group, f: Furniture) => void;
@@ -102,6 +107,17 @@ const BUILDERS: Record<Furniture['kind'], Builder> = {
     const long: 'x' | 'z' = r.x2 - r.x1 > r.z2 - r.z1 ? 'z' : 'x';
     doors(g, inner, { axis: long, sign: 1 }, 0.12, f.height - 0.08, false);
     doors(g, inner, { axis: long, sign: -1 }, 0.12, f.height - 0.08, false);
+    // 문이 없는 짧은 두 옆면에 2구 콘센트 (전자 장비용)
+    const cx = (inner.x1 + inner.x2) / 2;
+    const cz = (inner.z1 + inner.z2) / 2;
+    const y = 0.62;
+    if (long === 'x') {
+      outlets.push(new Outlet(new THREE.Vector3(cx, y, inner.z2), new THREE.Vector3(0, 0, 1)));
+      outlets.push(new Outlet(new THREE.Vector3(cx, y, inner.z1), new THREE.Vector3(0, 0, -1)));
+    } else {
+      outlets.push(new Outlet(new THREE.Vector3(inner.x2, y, cz), new THREE.Vector3(1, 0, 0)));
+      outlets.push(new Outlet(new THREE.Vector3(inner.x1, y, cz), new THREE.Vector3(-1, 0, 0)));
+    }
   },
 
   tallCabinet(g, f) {

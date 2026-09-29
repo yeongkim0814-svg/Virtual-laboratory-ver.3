@@ -53,7 +53,8 @@ export class Player {
 
   update(dt: number, input: InputState, settings: PlayerSettings): void {
     // ---- 1. 시점 회전 ----
-    const k = ((LOOK_DEG_PER_PX * Math.PI) / 180) * settings.lookSensitivity;
+    // 확대 중에는 시야각에 비례해 천천히 돈다 (같은 드래그로 화면 위 같은 거리만큼 움직이도록)
+    const k = ((LOOK_DEG_PER_PX * Math.PI) / 180) * settings.lookSensitivity * (this.camera.fov / 70);
     this.yaw -= input.lookDX * k; // 오른쪽으로 드래그 → 오른쪽으로 돈다
     this.pitch = clamp(this.pitch - input.lookDY * k, -MAX_PITCH, MAX_PITCH);
 

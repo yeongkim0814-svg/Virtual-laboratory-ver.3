@@ -33,7 +33,7 @@ export class Stand extends Item {
     g.add(mesh(new THREE.CylinderGeometry(0.008, 0.008, Stand.ROD_H, 6), METAL, 0, 0.02 + Stand.ROD_H / 2, -0.09));
     super(g, { name: '스탠드', radius: 0.15, mass: 1.2, touchPad: false });
     this.rod = new Socket(this, '스탠드 막대', ['rodMount'], v(0, 0.5, -0.09), {
-      multi: true, slide: { min: 0.15, max: 0.88 }, hitRadius: 0.028, faceCamera: true,
+      multi: true, slide: { min: 0.04, max: 0.88 }, hitRadius: 0.028, faceCamera: true,
     });
   }
 }

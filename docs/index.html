@@ -7,8 +7,8 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#0a0b08" />
     <title>가상 실험실</title>
-    <script type="module" crossorigin src="./assets/index-BfMBrZPp.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-BG5ehgsS.css">
+    <script type="module" crossorigin src="./assets/index-B4ILphWN.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BXyAnRCU.css">
   </head>
   <body>
     <!-- 16:9 무대: 화면비가 다르면 위아래(또는 좌우)에 검은 띠가 생긴다 -->
@@ -27,10 +27,23 @@
         <div id="exp-dock"></div>
         <canvas id="minimap"></canvas>
         <button id="btn-settings" class="icon-btn" aria-label="설정">⚙</button>
+        <!-- 확대 보기: 시야각을 좁혀 멀리 있는 눈금·간섭무늬를 자세히 본다 -->
+        <button id="btn-zoom" class="icon-btn" aria-label="확대 보기" aria-pressed="false">🔍</button>
         <div id="prompt" hidden></div>
         <!-- 탭한 물체에 동작이 여러 개일 때 그 자리에 뜨는 선택 메뉴 -->
         <div id="action-menu" hidden></div>
         <div id="held" hidden></div>
+        <!-- 회전 막대: 길게 누르기 메뉴의 "회전"으로 열림 -->
+        <div id="rotate-bar" hidden>
+          <span id="rb-name"></span>
+          <button data-d="-15">−15°</button>
+          <button data-d="-1">−1°</button>
+          <input id="rb-slider" type="range" min="0" max="359" step="1" aria-label="방향" />
+          <button data-d="1">+1°</button>
+          <button data-d="15">+15°</button>
+          <span id="rb-val"></span>
+          <button id="rb-done" class="primary">완료</button>
+        </div>
         <div id="hint">왼쪽: 이동 · 드래그: 둘러보기 · 탭: 집기/놓기/열기</div>
       </div>
 
@@ -112,7 +125,7 @@
         <dl class="readout">
           <dt>레이저 파장 λ</dt><dd id="sp-lambda"></dd>
           <dt>슬릿</dt><dd id="sp-slit"></dd>
-          <dt>슬릿 ~ 스크린 거리 L</dt><dd id="sp-L"></dd>
+          <dt>슬릿 ~ 비친 면 거리 L</dt><dd id="sp-L"></dd>
           <dt>이론 무늬 간격 Δy</dt><dd id="sp-theory"></dd>
         </dl>
 

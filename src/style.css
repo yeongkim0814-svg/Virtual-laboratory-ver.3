@@ -282,12 +282,31 @@ table.log td.empty { text-align: left; color: var(--amber-dim); white-space: nor
 .stepper button { width: 34px; padding: 4px 0; font-size: 16px; }
 .stepper span { min-width: 1.6em; text-align: center; color: var(--text); font-variant-numeric: tabular-nums; }
 
+/* 회전 막대 (아래 가운데) */
+#rotate-bar {
+  position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  background: var(--panel); border: 2px solid var(--amber);
+  pointer-events: auto;
+  max-width: calc(100% - 32px);
+}
+#rotate-bar button { padding: 8px 10px; font-size: 14px; }
+#rotate-bar input { width: min(260px, 26vw); accent-color: var(--amber); height: 28px; }
+#rb-name { color: var(--text); font-size: 13px; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#rb-val { min-width: 3.2em; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+
 /* 조립된 실험 바로 열기 (왼쪽 위) */
 #exp-dock { position: absolute; left: 16px; top: 64px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 #exp-dock button { padding: 8px 12px; font-size: 14px; background: rgba(10, 8, 4, 0.8); }
+#exp-dock .dock-hint { margin: 0; padding: 6px 10px; font-size: 13px; color: var(--text); background: rgba(10, 8, 4, 0.8); border-left: 3px solid var(--bad); }
 
 /* 패널이 열리면 미니맵·설정 버튼은 가리고, 조준점은 남은 왼쪽 영역 가운데로 */
 #stage.panel-open #minimap, #stage.panel-open .icon-btn, #stage.panel-open #hint { display: none; }
+/* 확대 버튼: 설정 버튼 왼쪽. 패널이 열려 있어도 패널 왼쪽에 남아 있다 (측정하면서 무늬를 확대해 보도록) */
+#btn-zoom { right: calc(16px + min(280px, 24%) + 10px + 54px); }
+#stage.panel-open #btn-zoom { display: block; right: calc(var(--panel-w) + 24px); }
+#btn-zoom[aria-pressed='true'] { background: var(--amber); color: var(--bg); }
 
 /* ---------- 시작 화면 ---------- */
 #start {

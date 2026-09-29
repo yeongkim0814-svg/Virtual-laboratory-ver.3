@@ -58,9 +58,11 @@ export class Item implements Interactable {
   /** 지금 끼워져 있는 소켓 (없으면 자유 상태) */
   attachedTo: Socket | null = null;
   attachedPlug: Plug | null = null;
-  /** 책상 위에 놓일 때의 방향 (y축 회전, rad) — "방향 돌리기"로 바꾼다 */
+  /** 책상 위에 놓일 때의 방향 (y축 회전, rad) — "회전"으로 바꾼다 */
   yaw = 0;
   onPick: (item: Item) => void = () => {};
+  /** 회전 막대(UI)를 여는 함수 — main.ts가 넣어 준다 */
+  onRotate: (item: Item) => void = () => {};
 
   constructor(readonly object: THREE.Group, o: ItemOptions) {
     this.name = o.name;
@@ -92,20 +94,51 @@ export class Item implements Interactable {
       ...assemblyExperiments(this.root()),
       ...this.extraActions(),
       { label: `집기 · ${this.name}`, run: () => this.onPick(this) },
+      ...this.rotateAction(),
+      ...this.slideActions(),
     ];
   }
 
-  /** 책상 위에 따로 놓인 기구를 90° 돌리는 동작 (광학 기구처럼 방향이 중요한 것에 쓴다) */
+  /** 막대에 끼운 기구(클램프)의 높이를 1 cm씩 옮기는 보조 동작 — 레이저·슬릿 높이 맞추기용 */
+  slideActions(): Action[] {
+    const s = this.attachedTo;
+    if (!s?.opts.slide) return [];
+    const now = Math.round(s.slidePosition(this) * 100);
+    return [
+      { label: `높이 +1 cm (지금 ${now} cm)`, secondary: true, run: () => s.shift(this, 0.01) },
+      { label: `높이 −1 cm (지금 ${now} cm)`, secondary: true, run: () => s.shift(this, -0.01) },
+    ];
+  }
+
+  /**
+   * 돌릴 대상 (세로축 둘레로)
+   *  - 책상 위에 따로 놓임 → 물체 자신
+   *  - 소켓에 끼워짐 → 끼워진 기준점 (클램프는 막대 둘레로, 집게에 물린 물체는 집게 축 둘레로 돈다)
+   *  - 손에 들고 있음 → 돌릴 수 없음
+   */
+  private rotationTarget(): THREE.Object3D | null {
+    if (this.attachedTo) return this.object.parent;
+    return this.object.parent?.type === 'Scene' ? this.object : null;
+  }
+
+  /** 현재 방향 (도, 0 ~ 359) */
+  get yawDeg(): number {
+    const t = this.rotationTarget();
+    const rad = t ? t.rotation.y : this.yaw;
+    return ((Math.round(THREE.MathUtils.radToDeg(rad)) % 360) + 360) % 360;
+  }
+
+  setYawDeg(deg: number): void {
+    const t = this.rotationTarget();
+    if (!t) return;
+    t.rotation.y = THREE.MathUtils.degToRad(deg);
+    if (!this.attachedTo) this.yaw = t.rotation.y;
+  }
+
+  /** 보조 동작 "회전" (길게 누르면 나오는 메뉴에) → 1° 단위로 돌리는 막대가 열린다 */
   rotateAction(): Action[] {
-    if (this.attachedTo || this.object.parent?.type !== 'Scene') return [];
-    return [{
-      label: `방향 돌리기 · ${this.name}`,
-      secondary: true,
-      run: () => {
-        this.yaw = (this.yaw + Math.PI / 2) % (2 * Math.PI);
-        this.object.rotation.y = this.yaw;
-      },
-    }];
+    if (!this.rotationTarget()) return [];
+    return [{ label: `회전 · ${this.name}`, secondary: true, run: () => this.onRotate(this) }];
   }
 
   /** 하위 클래스가 덧붙이는 동작 (예: 레이저 켜기) */
@@ -153,8 +186,6 @@ export interface SocketOptions {
   hitRadius?: number;
   /** 끼운 물체를 카메라 쪽으로 돌려서 붙인다 (클램프 팔이 나를 향하게) */
   faceCamera?: boolean;
-  /** 레일의 가운데를 향하게 붙인다 (광학대: 양 끝의 레이저·스크린이 서로 마주 보게) */
-  faceCenter?: boolean;
   /** 지금 받을 수 있는 상태인가 (예: 실이 걸려 있을 때만 끝 고리 사용 가능) */
   enabled?: () => boolean;
 }
@@ -210,16 +241,13 @@ export class Socket {
     this.owner.object.updateWorldMatrix(true, false);
     if (this.opts.slide) {
       // 막대·레일의 탭한 자리에 개별 기준점을 만든다 (1 cm 단위)
-      const { min, max, axis = 'y' } = this.opts.slide;
-      const local = hitWorld ? this.owner.object.worldToLocal(hitWorld.clone()) : this.anchor.position.clone();
-      const v = THREE.MathUtils.clamp(Math.round(local[axis] * 100) / 100, min, max);
       const a = new THREE.Group();
       a.position.copy(this.anchor.position);
-      a.position[axis] = v;
+      a.position[this.opts.slide.axis ?? 'y'] = this.slideValue(hitWorld);
       this.owner.object.add(a);
       parent = a;
-      if (this.opts.faceCenter) parent.rotation.y = v <= (min + max) / 2 ? 0 : Math.PI;
     }
+    parent.rotation.y = 0; // 이전에 끼웠던 물체가 돌려 놓은 방향은 지운다
     if (this.opts.faceCamera && cameraWorld) {
       // 소켓 위치에서 카메라를 향하는 수평 방향으로 돌린다
       const cam = this.owner.object.worldToLocal(cameraWorld.clone());
@@ -233,6 +261,26 @@ export class Socket {
     this.children.push(item);
     this.owner.onChildAttached(item, this);
     item.onAttached(this);
+  }
+
+  /** 미끄럼 소켓에 끼운 물체의 현재 위치 (물체 좌표) */
+  slidePosition(item: Item): number {
+    return item.object.parent!.position[this.opts.slide?.axis ?? 'y'];
+  }
+
+  /** 미끄럼 소켓에 끼운 물체를 d만큼 옮긴다 (범위 안에서) */
+  shift(item: Item, d: number): void {
+    const { min, max, axis = 'y' } = this.opts.slide!;
+    const a = item.object.parent!;
+    a.position[axis] = THREE.MathUtils.clamp(Math.round((a.position[axis] + d) * 100) / 100, min, max);
+  }
+
+  /** 미끄럼 소켓에서 탭한 점이 해당하는 위치 (물체 좌표, 1 cm 단위로 반올림, 범위 안으로) */
+  slideValue(hitWorld?: THREE.Vector3): number {
+    const { min, max, axis = 'y' } = this.opts.slide!;
+    this.owner.object.updateWorldMatrix(true, false);
+    const local = hitWorld ? this.owner.object.worldToLocal(hitWorld.clone()) : this.anchor.position.clone();
+    return THREE.MathUtils.clamp(Math.round(local[axis] * 100) / 100, min, max);
   }
 
   detach(item: Item): void {

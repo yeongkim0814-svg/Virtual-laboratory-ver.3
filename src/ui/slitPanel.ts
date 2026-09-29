@@ -7,8 +7,14 @@
  *   3. λ = d·Δy / L 로 파장을 계산해 레이저의 실제 파장과 비교
  * 여러 칸을 한 번에 재면(n을 크게) 한 칸의 눈금 오차가 n으로 나뉘어 작아진다.
  */
-import type { OpticScreen, ScreenLight } from '../equipment/optics';
-import { fringeSpacing, intensityAt } from '../sim/optics';
+import type { Laser, LightPattern } from '../equipment/optics';
+import { fringeSpacing, intensity } from '../sim/optics';
+
+/** 비친 면 위 위치 y(중앙에서의 거리)의 세기 — 슬릿판이 기울었으면 들어온 빛의 가로 성분을 뺀다 */
+function intensityAt(l: LightPattern, y: number): number {
+  return intensity(l.ap!, l.lambda, y / Math.hypot(y, l.L) - l.inH);
+}
+
 
 const LOG_KEY = 'vlab-slit-log-v1';
 
@@ -24,7 +30,7 @@ interface Row {
 
 export class SlitPanel {
   readonly el = byId('slit-panel');
-  target: OpticScreen | null = null;
+  target: Laser | null = null;
   private view = byId<HTMLCanvasElement>('sp-view');
   private graph = byId<HTMLCanvasElement>('sp-graph');
   private range = 25;
@@ -49,7 +55,7 @@ export class SlitPanel {
     byId('sp-clear').addEventListener('click', () => { this.log = []; saveLog(this.log); this.renderLog(); });
     // 확대 화면 탭 → 커서 놓기 (A, B 번갈아)
     this.view.addEventListener('pointerdown', (e) => {
-      const light = this.target?.light;
+      const light = this.target?.pattern;
       if (!light?.ap) return;
       const r = this.view.getBoundingClientRect();
       let y = ((e.clientX - r.left) / r.width - 0.5) * 2 * this.range; // mm
@@ -65,7 +71,7 @@ export class SlitPanel {
     return !this.el.hidden;
   }
 
-  open(target: OpticScreen): void {
+  open(target: Laser): void {
     if (this.target !== target) this.cursors = [null, null];
     this.target = target;
     this.el.hidden = false;
@@ -82,7 +88,7 @@ export class SlitPanel {
   /** 매 프레임: 조건(파장·슬릿·거리)이 바뀌었을 때만 다시 그린다 */
   update(): void {
     if (!this.isOpen || !this.target) return;
-    const l = this.target.light;
+    const l = this.target.pattern;
     const key = l ? `${l.lambda}|${l.ap?.d}|${l.ap?.a}|${l.L.toFixed(3)}` : '';
     const now = performance.now();
     if (key !== this.lastKey || now - this.lastText > 500) {
@@ -94,13 +100,13 @@ export class SlitPanel {
   }
 
   /** 가장 가까운 밝은 무늬(세기의 극대)로 옮긴다 — 0.01 mm 간격으로 ±간격 절반 안을 찾음 */
-  private snapToPeak(l: ScreenLight, y: number): number {
+  private snapToPeak(l: LightPattern, y: number): number {
     const ap = l.ap!;
     const half = (fringeSpacing(l.lambda, l.L, ap.kind === 'double' ? ap.d : ap.a) * 1000) / 2;
     let best = y;
     let bestI = -1;
     for (let t = y - half; t <= y + half; t += 0.01) {
-      const I = intensityAt(ap, l.lambda, t / 1000, l.L);
+      const I = intensityAt(l, t / 1000);
       if (I > bestI) { bestI = I; best = t; }
     }
     return Math.round(best * 100) / 100;
@@ -108,7 +114,7 @@ export class SlitPanel {
 
   private redraw(): void {
     const t = this.target;
-    const l = t?.light ?? null;
+    const l = t?.pattern ?? null;
     for (const b of byId('sp-range').querySelectorAll<HTMLButtonElement>('button')) {
       b.setAttribute('aria-pressed', String(Number(b.dataset.v) === this.range));
     }
@@ -118,7 +124,7 @@ export class SlitPanel {
 
     const set = (id: string, text: string) => { byId(id).textContent = text; };
     if (!l?.ap) {
-      set('sp-status', '레이저 빛이 슬릿을 지나 이 스크린에 닿아야 무늬가 생깁니다');
+      set('sp-status', '레이저 빛이 슬릿을 지나 어떤 면에 닿아야 무늬가 생깁니다');
       for (const id of ['sp-lambda', 'sp-slit', 'sp-L', 'sp-theory', 'sp-dist', 'sp-dy', 'sp-est']) set(id, '—');
       byId<HTMLButtonElement>('sp-record').disabled = true;
       return;
@@ -127,7 +133,7 @@ export class SlitPanel {
     set('sp-status', ap.kind === 'double' ? '이중 슬릿 간섭무늬' : '단일 슬릿 회절무늬');
     set('sp-lambda', `${(l.lambda * 1e9).toFixed(0)} nm (레이저 표시값)`);
     set('sp-slit', ap.kind === 'double' ? `d = ${(ap.d * 1e3).toFixed(2)} mm, a = ${(ap.a * 1e3).toFixed(2)} mm` : `a = ${(ap.a * 1e3).toFixed(2)} mm`);
-    set('sp-L', `${(l.L * 100).toFixed(1)} cm`);
+    set('sp-L', `${(l.L * 100).toFixed(1)} cm (${l.surface})`);
     const spacing = ap.kind === 'double' ? fringeSpacing(l.lambda, l.L, ap.d) : fringeSpacing(l.lambda, l.L, ap.a);
     set('sp-theory', ap.kind === 'double'
       ? `λL/d = ${(spacing * 1000).toFixed(3)} mm`
@@ -151,7 +157,7 @@ export class SlitPanel {
   }
 
   /** 확대 화면: 스크린 가운데 ±range mm, 무늬 + mm 눈금 + 커서 */
-  private drawView(l: ScreenLight | null): void {
+  private drawView(l: LightPattern | null): void {
     const c = this.view;
     const w = Math.max(1, Math.round(c.clientWidth / 2));
     const h = Math.max(1, Math.round(c.clientHeight / 2));
@@ -167,7 +173,7 @@ export class SlitPanel {
       const sig = h * 0.12;
       for (let i = 0; i < w; i++) {
         const y = ((i + 0.5) / w - 0.5) * 2 * R;
-        const I = Math.min(1, intensityAt(l.ap, l.lambda, y / 1000, l.L) * 1.3);
+        const I = Math.min(1, intensityAt(l, y / 1000) * 1.3);
         for (let j = 0; j < h * 0.84; j++) {
           const e = I * Math.exp(-((j - cy) ** 2) / (2 * sig * sig));
           const k = (j * w + i) * 4;
@@ -199,7 +205,7 @@ export class SlitPanel {
   }
 
   /** 세기 그래프 I(y) */
-  private drawGraph(l: ScreenLight | null): void {
+  private drawGraph(l: LightPattern | null): void {
     const c = this.graph;
     const w = Math.max(1, Math.round(c.clientWidth / 2));
     const h = Math.max(1, Math.round(c.clientHeight / 2));
@@ -214,7 +220,7 @@ export class SlitPanel {
     g.beginPath();
     for (let i = 0; i < w; i++) {
       const y = ((i + 0.5) / w - 0.5) * 2 * this.range;
-      const I = intensityAt(l.ap, l.lambda, y / 1000, l.L);
+      const I = intensityAt(l, y / 1000);
       const py = h - 1 - I * (h - 3);
       if (i) g.lineTo(i + 0.5, py);
       else g.moveTo(i + 0.5, py);
@@ -223,7 +229,7 @@ export class SlitPanel {
   }
 
   private record(): void {
-    const l = this.target?.light;
+    const l = this.target?.pattern;
     const [A, B] = this.cursors;
     if (!l?.ap || A === null || B === null) return;
     const dy = Math.abs(B - A) / this.n;

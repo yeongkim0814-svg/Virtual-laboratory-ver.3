@@ -26,6 +26,8 @@ import { PendulumPanel } from './ui/pendulumPanel';
 import { SlitPanel } from './ui/slitPanel';
 import { stockEquipment } from './equipment/stock';
 import { BeamSystem } from './equipment/beams';
+import { PowerSystem } from './world/power';
+import { RotateBar } from './ui/rotateBar';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -86,7 +88,11 @@ for (const d of doors) d.object.userData.interactable = d;
 // ---------- 플레이어·손 ----------
 const player = new Player(camera, door, SPAWN);
 const hand = new Hand(scene, camera, items);
-for (const it of items) it.onPick = (item) => hand.pickUp(item);
+const rotateBar = new RotateBar();
+for (const it of items) {
+  it.onPick = (item) => hand.pickUp(item);
+  it.onRotate = (item) => rotateBar.open(item);
+}
 
 // ---------- 실험 패널 (한 번에 하나만 열림, 화면 오른쪽) ----------
 function panelToggled(panel: { el: HTMLElement }, open: boolean): void {
@@ -100,7 +106,11 @@ const pendulumPanel = new PendulumPanel((open) => panelToggled(pendulumPanel, op
 const slitPanel = new SlitPanel((open) => panelToggled(slitPanel, open));
 const panels = [pendulumPanel, slitPanel];
 for (const s of stock.strings) s.onOpenPanel = (str) => pendulumPanel.open(str);
-for (const s of stock.screens) s.onOpenPanel = (scr) => slitPanel.open(scr);
+for (const l of stock.lasers) l.onOpenPanel = (laser) => slitPanel.open(laser);
+
+// 전원: 실험 테이블 옆면의 콘센트 ↔ 전원이 필요한 기기(레이저)
+const power = new PowerSystem(scene, furniture.outlets, stock.lasers);
+for (const l of stock.lasers) l.powerActions = (laser) => power.deviceActions(laser);
 
 // 레이저 광선 추적
 const beams = new BeamSystem(scene, items);
@@ -128,10 +138,18 @@ let dockKey = '';
 /** 왼쪽 위 "실험 바로 열기" 버튼: 지금 조립되어 있는 실험마다 하나씩 */
 function updateDock(): void {
   const actions = items.flatMap((it) => it.experimentActions());
-  const key = actions.map((a) => a.label).join('|');
+  // 정렬 안내: 레이저 빛이 슬릿판에 닿았지만 슬릿을 지나지 못할 때
+  const hints = stock.lasers.map((l) => l.alignHint).filter((h): h is string => !!h);
+  const key = actions.map((a) => a.label).join('|') + '#' + hints.join('|');
   if (key === dockKey) return;
   dockKey = key;
   dockEl.innerHTML = '';
+  for (const h of hints) {
+    const p = document.createElement('p');
+    p.className = 'dock-hint';
+    p.textContent = `⚠ ${h}`;
+    dockEl.appendChild(p);
+  }
   for (const a of actions) {
     const b = document.createElement('button');
     b.textContent = `▸ ${a.label}`;
@@ -143,6 +161,15 @@ function updateDock(): void {
     dockEl.appendChild(b);
   }
 }
+
+// 확대 보기: 시야각 70° ↔ 18° (약 4배 확대) — 480×270 화면에서 mm 단위 무늬·눈금을 보려면 필요
+const zoomBtn = $('btn-zoom');
+zoomBtn.addEventListener('click', () => {
+  const on = zoomBtn.getAttribute('aria-pressed') !== 'true';
+  zoomBtn.setAttribute('aria-pressed', String(on));
+  camera.fov = on ? 18 : 70;
+  camera.updateProjectionMatrix();
+});
 
 $('btn-enter').addEventListener('click', () => {
   $('start').hidden = true;
@@ -210,8 +237,11 @@ function actionsAt(x: number, y: number): Action[] {
     const att = hit && findAttach(held, hit);
     if (att) {
       const point = hit!.point.clone();
+      // 막대에 끼울 때는 집게가 올 높이(책상 면 기준)를 미리 보여 준다.
+      // 집게에 물린 물체는 잡힌 점이 집게 높이에 오므로 = 레이저 빛 높이 / 슬릿 중심 높이 (레이저·슬릿 높이 맞추기용)
+      const where = att.socket.opts.slide ? ` (높이 ${Math.round(att.socket.slideValue(hit!.point) * 100)} cm)` : '';
       return [{
-        label: `연결 · ${held.name} → ${att.socket.label}`,
+        label: `연결 · ${held.name} → ${att.socket.label}${where}`,
         run: () => {
           const item = hand.handOver();
           if (item) att.socket.attach(item, att.plug, point, camera.getWorldPosition(camPos));
@@ -230,7 +260,9 @@ function actionsAt(x: number, y: number): Action[] {
 // ---------- 동작 선택 메뉴 (동작이 여러 개일 때 탭한 자리에) ----------
 function showMenu(actions: Action[], x: number, y: number): void {
   menuEl.innerHTML = '';
-  for (const a of actions) {
+  // 주 동작을 위에, 보조 동작(파장·회전·전원 뽑기 등)을 아래에
+  const ordered = [...actions.filter((a) => !a.secondary), ...actions.filter((a) => a.secondary)];
+  for (const a of ordered) {
     const b = document.createElement('button');
     b.textContent = a.label;
     b.addEventListener('click', () => {
@@ -280,7 +312,9 @@ renderer.setAnimationLoop(() => {
   }
   updateLights(now / 1000);
   camera.updateMatrixWorld();
+  power.update();
   beams.update();
+  rotateBar.update();
   hand.update(aimX);
 
   // 조준점 아래 안내 문구: 지금 탭하면 일어날 일 (동작이 더 있으면 "…")
