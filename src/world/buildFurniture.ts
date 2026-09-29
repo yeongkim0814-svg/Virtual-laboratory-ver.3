@@ -32,6 +32,7 @@ const CAB_MATS = { body: M.cabinet, door: M.door, glass: M.glass, handle: M.hand
 const cabinets = new Map<string, StorageCabinet>();
 const outlets: Outlet[] = [];
 const wasteCans: THREE.Object3D[] = [];
+const tickers: ((t: number) => void)[] = [];
 
 export interface FurnitureResult {
   cabinets: Map<string, StorageCabinet>;
@@ -41,19 +42,22 @@ export interface FurnitureResult {
   outlets: Outlet[];
   /** 폐시약 보관함 위의 폐액통 (main이 폐액통 동작을 붙인다) */
   wasteCans: THREE.Object3D[];
+  /** 매 프레임 불러 줄 것 (시약장 온도·습도 표시 등), t = 경과 시간 (s) */
+  tickers: ((t: number) => void)[];
 }
 
 export function buildFurniture(scene: THREE.Scene): FurnitureResult {
   cabinets.clear();
   outlets.length = 0;
   wasteCans.length = 0;
+  tickers.length = 0;
   for (const f of FURNITURE) {
     const g = new THREE.Group();
     g.name = f.name;
     BUILDERS[f.kind](g, f);
     scene.add(g);
   }
-  return { cabinets, doors: [...cabinets.values()].flatMap((c) => c.doors), outlets: [...outlets], wasteCans: [...wasteCans] };
+  return { cabinets, doors: [...cabinets.values()].flatMap((c) => c.doors), outlets: [...outlets], wasteCans: [...wasteCans], tickers: [...tickers] };
 }
 
 type Builder = (g: THREE.Group, f: Furniture) => void;
@@ -119,6 +123,58 @@ const BUILDERS: Record<Furniture['kind'], Builder> = {
     const cab = new StorageCabinet(f.rect, frontOf(f.rect), f.height, 2, CAB_MATS);
     g.add(cab.group);
     cabinets.set(f.name, cab);
+  },
+
+  reagentCabinet(g, f) {
+    // 시약 전용 보관장: 흰 철제 몸체 + 문 전체가 유리 (냉장고처럼 속이 보임), 아래 환기구,
+    // 위에 온도·습도 표시창. 칸마다 선반 3단
+    const H = 1.85;
+    const front = frontOf(f.rect);
+    const cab = new StorageCabinet(f.rect, front, H, 0, {
+      body: lambert(0xdfe2dc), door: M.glass, glass: new THREE.MeshLambertMaterial({ color: 0xb8dde6, transparent: true, opacity: 0.28, depthWrite: false }), handle: M.metal,
+    }, { shelves: [0.1, 0.5, 0.9, 1.3], glassDoors: true });
+    g.add(cab.group);
+    cabinets.set(f.name, cab);
+    const W = front.axis === 'x' ? f.rect.z2 - f.rect.z1 : f.rect.x2 - f.rect.x1;
+    const D = front.axis === 'x' ? f.rect.x2 - f.rect.x1 : f.rect.z2 - f.rect.z1;
+    const local = (m: THREE.Mesh, x: number, y: number, z: number) => { m.position.set(x, y, z); cab.group.add(m); };
+    // 머리 부분 (표시창 받침)과 아래 환기구 (어두운 가로줄)
+    local(new THREE.Mesh(new THREE.BoxGeometry(W, f.height - H, D), lambert(0xdfe2dc)), 0, (H + f.height) / 2, 0);
+    for (let k = 0; k < 3; k++) local(new THREE.Mesh(new THREE.BoxGeometry(W - 0.1, 0.008, 0.004), M.handle), 0, 0.025 + k * 0.022, D / 2 + 0.013);
+    // 칸 두 개마다 표시창 하나: 온도·습도 (시약이 변하지 않게 서늘하고 건조하게 유지)
+    const units = Math.max(1, Math.round(W / 1.25));
+    for (let u = 0; u < units; u++) {
+      const c = document.createElement('canvas');
+      c.width = 128;
+      c.height = 48;
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.magFilter = THREE.NearestFilter;
+      const x = -W / 2 + ((u + 0.5) * W) / units;
+      local(new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.075), new THREE.MeshBasicMaterial({ map: tex })), x, (H + f.height) / 2, D / 2 + 0.002);
+      const seed = u * 17.3;
+      const draw = (t: number) => {
+        const temp = 18 + 0.35 * Math.sin((t + seed) / 37) + 0.1 * Math.sin((t + seed) / 5.3);
+        const rh = 44 + 2 * Math.sin((t + seed) / 53);
+        const x2 = c.getContext('2d')!;
+        x2.fillStyle = '#0c1a12';
+        x2.fillRect(0, 0, 128, 48);
+        x2.fillStyle = '#7dffa0';
+        x2.font = 'bold 18px monospace';
+        x2.fillText(`${temp.toFixed(1)}°C`, 6, 21);
+        x2.fillText(`${rh.toFixed(0)}%RH`, 6, 42);
+        x2.fillStyle = '#ffb040';
+        x2.fillRect(114, 6, 8, 8); // 환기 팬 표시등
+        tex.needsUpdate = true;
+      };
+      draw(0);
+      let next = 0;
+      tickers.push((t) => {
+        if (t < next) return;
+        next = t + 2;
+        draw(t);
+      });
+    }
   },
 
   lowCabinet(g, f) {

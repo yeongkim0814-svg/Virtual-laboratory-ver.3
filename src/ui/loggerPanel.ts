@@ -46,7 +46,7 @@ export class LoggerPanel {
         return;
       }
       const d = this.data();
-      downloadCsv(`motion-${stamp()}.csv`, ['t (s)', 'x (m)', 'v (m/s)', 'a (m/s²)'],
+      downloadCsv(`motion-${stamp()}.csv`, ['t (s)', 'x (m)', 'v (m/s)', 'a (m/s^2)'],
         d.map((p) => [p.t.toFixed(3), p.x.toFixed(4), p.v?.toFixed(4) ?? '', p.a?.toFixed(3) ?? '']));
     });
   }

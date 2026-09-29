@@ -576,6 +576,7 @@ renderer.setAnimationLoop(() => {
   for (const s of stock.springs) s.update(dt, springPanel.speed, springPanel.target === s);
   for (const r of stock.rails) r.update(dt);
   updateBurettes(dt);
+  for (const tick of furniture.tickers) tick(now / 1000);
   sensorNet.update();
   for (const l of stock.laptops) l.update(dt, scene);
   updateLights(now / 1000);

@@ -55,7 +55,7 @@ export class SpringPanel {
     byId('sg-record').addEventListener('click', () => this.record());
     byId('sg-clear').addEventListener('click', () => { this.log = []; saveLog(this.log); this.renderLog(); });
     byId('sg-csv').addEventListener('click', () => downloadCsv(`spring-${stamp()}.csv`,
-      ['k (N/m)', 'm_s (kg)', 'm (kg)', 'A (m)', 'T 측정 (s)', 'T² (s²)', 'T 이상적 (s)', 'T 보정 (s)'],
+      ['k (N/m)', 'm_s (kg)', 'm (kg)', 'A (m)', 'T measured (s)', 'T^2 (s^2)', 'T ideal (s)', 'T corrected (s)'],
       this.log.map((r) => [r.k, r.ms, r.m, r.A, r.T.toFixed(5), (r.T * r.T).toFixed(5), r.Ti.toFixed(5), r.Tc.toFixed(5)])));
     this.renderLog();
   }

@@ -88,6 +88,8 @@ export interface CabinetOptions {
   doorTop?: number;
   /** 윗판을 만들지 (위에 따로 상판을 얹는 가구는 false) */
   top?: boolean;
+  /** 문 전체가 유리 한 장 (속이 보이는 냉장고형 시약장) */
+  glassDoors?: boolean;
   /** 긴 기구용 칸 번호: 가로로 긴 문 한 짝을 아래로 젖혀 연다 (레일처럼 긴 것) */
   longSections?: number[];
 }
@@ -149,7 +151,9 @@ export class StorageCabinet {
       // 둘 다 열었을 때 문짝이 같은 자리로 돌아와 겹친다. 같은 쪽에 달면 열린 문짝끼리 칸 폭만큼 떨어진다)
       // 넓은 칸은 폭 0.7 m 이하의 문 여러 짝으로 나눈다
       const top = o.doorTop ?? H - 0.04;
-      const spans: [number, number, boolean][] = tall || o.solidDoors
+      const spans: [number, number, boolean][] = o.glassDoors
+        ? [[base + 0.01, top, true]]
+        : tall || o.solidDoors
         ? [[base + 0.01, top, !o.solidDoors && tall]]
         : [[base + 0.01, 0.97, false], [1.0, top, true]];
       const leaves = long ? 1 : Math.max(1, Math.ceil(w / 0.7));

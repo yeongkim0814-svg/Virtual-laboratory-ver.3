@@ -62,8 +62,8 @@ export class PendulumPanel {
     byId('pp-record').addEventListener('click', () => this.record());
     byId('pp-clear').addEventListener('click', () => { this.log = []; saveLog(this.log); this.renderLog(); });
     byId('pp-csv').addEventListener('click', () => downloadCsv(`pendulum-${stamp()}.csv`,
-      ['L (m)', 'theta0 (deg)', 'm (kg)', '적분', 'dt (s)', '공기 저항', 'T 측정 (s)', 'T0 작은 각 (s)', 'T 정확 (s)'],
-      this.log.map((r) => [r.L.toFixed(4), r.th0, r.mass, METHOD_NAME[r.method], r.dt, r.drag ? 'O' : 'X', r.T.toFixed(5), r.T0.toFixed(5), r.Te.toFixed(5)])));
+      ['L (m)', 'theta0 (deg)', 'm (kg)', 'method', 'dt (s)', 'air drag', 'T measured (s)', 'T0 small angle (s)', 'T exact (s)'],
+      this.log.map((r) => [r.L.toFixed(4), r.th0, r.mass, ({ rk4: 'RK4', semi: 'semi-implicit Euler', euler: 'Euler' } as Record<string, string>)[r.method], r.dt, r.drag ? 'yes' : 'no', r.T.toFixed(5), r.T0.toFixed(5), r.Te.toFixed(5)])));
     segmented('pp-plotmode', (v) => { this.plotMode = v as 'L' | 'th'; pressed('pp-plotmode', v); this.drawLogPlot(); });
     pressed('pp-plotmode', this.plotMode);
     this.renderLog();

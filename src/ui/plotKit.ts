@@ -1,7 +1,9 @@
 /**
  * 패널 그래프·기록 내보내기 도우미
  *  - 산점도 + 맞춤 직선/이론 곡선 (절반 해상도 캔버스 → 도트 느낌)
- *  - CSV 파일 저장 (엑셀·구글 시트에서 열 수 있게 UTF-8 BOM을 붙임)
+ *  - CSV 파일 저장: 머리글·값을 모두 영문·숫자(ASCII)로 쓰고 BOM을 붙이지 않는다
+ *    (BOM(보이지 않는 표시 \uFEFF)을 붙이면 엑셀은 한글을 잘 읽지만, 구글 시트 등 일부 앱은 첫 칸 이름에 이상한 글자로 붙여 보여 준다.
+ *     ASCII만 쓰면 어떤 앱에서 열어도 깨지지 않는다)
  */
 
 export interface Series {
@@ -71,7 +73,7 @@ export function downloadCsv(name: string, header: string[], rows: (string | numb
     const s = String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const text = '﻿' + [header, ...rows].map((r) => r.map(esc).join(',')).join('\n');
+  const text = [header, ...rows].map((r) => r.map(esc).join(',')).join('\n');
   const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
   const a = document.createElement('a');
   a.href = url;
