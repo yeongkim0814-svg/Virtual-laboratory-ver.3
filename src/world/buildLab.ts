@@ -43,46 +43,39 @@ export function buildLab(scene: THREE.Scene): (time: number) => void {
   ambient.layers.enableAll();
   scene.add(ambient);
 
-  // 천장 형광등: 빛나는 패널 + 그 아래 점광원 (거리에 따라 어두워짐 → 빛 웅덩이)
-  const panelMat = new THREE.MeshBasicMaterial({ color: 0xfff2cf });
-  const lights: THREE.PointLight[] = [];
+  // 천장 형광등: 패널 하나마다 바로 아래에 점광원 하나 → 빛 웅덩이가 패널 위치와 정확히 일치
+  // 광원 하나마다 모든 픽셀에서 계산이 늘어나므로(태블릿 성능) 패널은 약 4 m 간격으로 듬성듬성
+  const fixtures: { panel: THREE.Mesh; light: THREE.PointLight }[] = [];
   for (const { rect } of ROOMS) {
-    const cols = Math.max(1, Math.round((rect.x2 - rect.x1) / 3));
-    const rows = Math.max(1, Math.round((rect.z2 - rect.z1) / 3));
+    const cols = Math.max(1, Math.round((rect.x2 - rect.x1) / 4));
+    const rows = Math.max(1, Math.round((rect.z2 - rect.z1) / 3.8));
     for (let i = 0; i < cols; i++) {
       for (let j = 0; j < rows; j++) {
         const x = rect.x1 + ((i + 0.5) * (rect.x2 - rect.x1)) / cols;
         const z = rect.z1 + ((j + 0.5) * (rect.z2 - rect.z1)) / rows;
-        const panel = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.04, 0.6), panelMat);
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.04, 0.6), new THREE.MeshBasicMaterial({ color: 0xfff2cf }));
         panel.position.set(x, WALL_HEIGHT - 0.02, z);
-        scene.add(panel);
+        const light = new THREE.PointLight(0xffe4b0, 10, 11, 1.6);
+        light.layers.enableAll(); // 손에 든 물체(레이어 1)도 비춘다
+        light.position.set(x, WALL_HEIGHT - 0.25, z);
+        scene.add(panel, light);
+        fixtures.push({ panel, light });
       }
-    }
-    // 점광원은 방마다 2개씩만 (태블릿 성능 — 광원 하나마다 모든 픽셀에서 계산이 늘어난다)
-    const n = 2;
-    for (let k = 0; k < n; k++) {
-      const long = rect.x2 - rect.x1 >= rect.z2 - rect.z1;
-      const t = (k + 0.5) / n;
-      const light = new THREE.PointLight(0xffe4b0, 16, 12, 1.6);
-      light.layers.enableAll();
-      light.position.set(
-        long ? rect.x1 + t * (rect.x2 - rect.x1) : (rect.x1 + rect.x2) / 2,
-        WALL_HEIGHT - 0.3,
-        long ? (rect.z1 + rect.z2) / 2 : rect.z1 + t * (rect.z2 - rect.z1),
-      );
-      scene.add(light);
-      lights.push(light);
     }
   }
 
-  // 준비실 안쪽 형광등 하나가 가끔 깜빡인다 (분위기용)
-  const flicker = lights[lights.length - 1];
-  const base = flicker.intensity;
+  // 준비실 안쪽 형광등 하나가 가끔 깜빡인다 (분위기용) — 패널 밝기와 광원이 함께 깜빡임
+  const flicker = fixtures[fixtures.length - 1];
+  const base = flicker.light.intensity;
+  const panelColor = (flicker.panel.material as THREE.MeshBasicMaterial).color;
+  const on = panelColor.clone();
+  const off = on.clone().multiplyScalar(0.25);
   return (time: number) => {
     // 느린 사인파로 "깜빡일 시기"를 정하고, 그때만 빠르게 켜졌다 꺼졌다
     const phase = Math.sin(time * 0.7) + Math.sin(time * 1.9);
-    const on = phase < 1.6 || Math.sin(time * 47) > 0;
-    flicker.intensity = on ? base : base * 0.15;
+    const lit = phase < 1.6 || Math.sin(time * 47) > 0;
+    flicker.light.intensity = lit ? base : base * 0.15;
+    panelColor.copy(lit ? on : off);
   };
 }
 

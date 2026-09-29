@@ -87,11 +87,7 @@ export class PendulumString extends Item {
     return this.isHung && !!this.bob && this.root().object.parent?.type === 'Scene';
   }
 
-  extraActions(): Action[] {
-    return this.isPendulum ? [{ label: '진자 실험', run: () => this.onOpenPanel(this) }] : [];
-  }
-
-  childActions(): Action[] {
+  experimentActions(): Action[] {
     return this.isPendulum ? [{ label: '진자 실험', run: () => this.onOpenPanel(this) }] : [];
   }
 

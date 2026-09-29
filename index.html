@@ -21,6 +21,8 @@
         <div id="crosshair"></div>
         <div id="room"></div>
         <div id="debug"></div>
+        <!-- 조립되어 있는 실험을 바로 여는 버튼들 (진자·간섭 등) -->
+        <div id="exp-dock"></div>
         <canvas id="minimap"></canvas>
         <button id="btn-settings" class="icon-btn" aria-label="설정">⚙</button>
         <div id="prompt" hidden></div>
@@ -91,8 +93,59 @@
           <button id="pp-clear">지우기</button>
         </div>
         <div class="table-wrap">
-          <table id="pp-log">
+          <table id="pp-log" class="log">
             <thead><tr><th>L (m)</th><th>θ₀</th><th>m (g)</th><th>방법</th><th>T 측정</th><th>T 정확</th><th>T₀ 대비</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 간섭무늬 관찰 패널 (화면 오른쪽) -->
+      <section id="slit-panel" class="exp-panel" hidden>
+        <header>
+          <h2>간섭무늬 관찰</h2>
+          <button id="sp-close">닫기</button>
+        </header>
+        <p id="sp-status" class="status"></p>
+        <dl class="readout">
+          <dt>레이저 파장 λ</dt><dd id="sp-lambda"></dd>
+          <dt>슬릿</dt><dd id="sp-slit"></dd>
+          <dt>슬릿 ~ 스크린 거리 L</dt><dd id="sp-L"></dd>
+          <dt>이론 무늬 간격 Δy</dt><dd id="sp-theory"></dd>
+        </dl>
+
+        <div class="field">확대 범위
+          <div id="sp-range" class="segmented">
+            <button data-v="10">±10 mm</button>
+            <button data-v="25">±25 mm</button>
+            <button data-v="50">±50 mm</button>
+          </div>
+        </div>
+        <canvas id="sp-view"></canvas>
+        <canvas id="sp-graph"></canvas>
+        <p class="legend">확대 화면을 탭해 커서 <span class="ca">A</span>, <span class="cb">B</span>를 밝은 무늬에 놓으세요 · 아래는 세기 I(y)</p>
+
+        <div class="measure">
+          <label class="row"><input id="sp-snap" type="checkbox" checked /> 무늬에 맞춤</label>
+          <div class="stepper">A~B 사이 간격 수 n
+            <button id="sp-n-minus" aria-label="줄이기">−</button><span id="sp-n"></span><button id="sp-n-plus" aria-label="늘리기">+</button>
+          </div>
+          <button id="sp-clear-cursors">커서 지우기</button>
+        </div>
+        <dl class="readout">
+          <dt>A ~ B 거리</dt><dd id="sp-dist"></dd>
+          <dt>측정 간격 Δy = 거리 ÷ n</dt><dd id="sp-dy"></dd>
+          <dt>구한 파장 λ = d·Δy / L</dt><dd id="sp-est"></dd>
+        </dl>
+
+        <div class="log-head">
+          <h3>측정 기록</h3>
+          <button id="sp-record">기록</button>
+          <button id="sp-clear">지우기</button>
+        </div>
+        <div class="table-wrap">
+          <table id="sp-log" class="log">
+            <thead><tr><th>λ (nm)</th><th>슬릿 (mm)</th><th>L (cm)</th><th>n</th><th>Δy (mm)</th><th>구한 λ</th><th>오차</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -133,7 +186,7 @@
             <li><b>둘러보기</b> 화면 오른쪽 드래그 (PC: 마우스 드래그)</li>
             <li><b>집기</b> 물체를 탭 (PC: 클릭 / E)</li>
             <li><b>놓기·연결</b> 들고 있을 때 책상이나 다른 기구를 탭</li>
-            <li><b>기구</b> 오른쪽 벽 보관장의 문을 열어 꺼내기</li>
+            <li><b>기구</b> 오른쪽 벽 보관장의 문을 열어 꺼내기 (광학대는 뒤쪽 수납장 위)</li>
           </ul>
           <button id="btn-enter" class="primary big">실험실 입장</button>
           <p class="note">태블릿을 가로로 들고 사용하세요.</p>

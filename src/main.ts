@@ -23,7 +23,9 @@ import { Minimap } from './ui/minimap';
 import { bindSettingsPanel, enterFullscreen, loadSettings } from './ui/settings';
 import { RetroPipeline, applyRetroMaterials } from './render/retro';
 import { PendulumPanel } from './ui/pendulumPanel';
-import { stockMechanics } from './equipment/stock';
+import { SlitPanel } from './ui/slitPanel';
+import { stockEquipment } from './equipment/stock';
+import { BeamSystem } from './equipment/beams';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -72,8 +74,8 @@ const furniture = buildFurniture(scene);
 const door = new Door();
 scene.add(door.object);
 
-// 기구: 테이블 위의 비커 등 + 보관장 속 역학 기구
-const stock = stockMechanics(furniture.cabinets.get('실험 기구 보관장')!);
+// 기구: 테이블 위의 비커 등 + 보관장 속 역학·광학 기구
+const stock = stockEquipment(furniture.cabinets.get('실험 기구 보관장')!);
 const items: Item[] = [...createBenchItems(), ...stock.items];
 for (const it of items) scene.add(it.object);
 
@@ -86,13 +88,22 @@ const player = new Player(camera, door, SPAWN);
 const hand = new Hand(scene, camera, items);
 for (const it of items) it.onPick = (item) => hand.pickUp(item);
 
-// ---------- 실험 패널: 단진자 ----------
-const pendulumPanel = new PendulumPanel((open) => {
-  stage.classList.toggle('panel-open', open);
-  aimShift = open ? (pendulumPanel.el.offsetWidth + 12) / 2 : 0;
+// ---------- 실험 패널 (한 번에 하나만 열림, 화면 오른쪽) ----------
+function panelToggled(panel: { el: HTMLElement }, open: boolean): void {
+  if (open) for (const p of panels) if (p !== panel && p.isOpen) p.close();
+  const shown = panels.find((p) => p.isOpen);
+  stage.classList.toggle('panel-open', !!shown);
+  aimShift = shown ? (shown.el.offsetWidth + 12) / 2 : 0;
   resize();
-});
+}
+const pendulumPanel = new PendulumPanel((open) => panelToggled(pendulumPanel, open));
+const slitPanel = new SlitPanel((open) => panelToggled(slitPanel, open));
+const panels = [pendulumPanel, slitPanel];
 for (const s of stock.strings) s.onOpenPanel = (str) => pendulumPanel.open(str);
+for (const s of stock.screens) s.onOpenPanel = (scr) => slitPanel.open(scr);
+
+// 레이저 광선 추적
+const beams = new BeamSystem(scene, items);
 
 // ---------- 입력·UI ----------
 const controls = new Controls(canvas);
@@ -111,6 +122,27 @@ const debugEl = $('debug');
 const heldEl = $('held');
 const promptEl = $('prompt');
 const menuEl = $('action-menu');
+const dockEl = $('exp-dock');
+let dockKey = '';
+
+/** 왼쪽 위 "실험 바로 열기" 버튼: 지금 조립되어 있는 실험마다 하나씩 */
+function updateDock(): void {
+  const actions = items.flatMap((it) => it.experimentActions());
+  const key = actions.map((a) => a.label).join('|');
+  if (key === dockKey) return;
+  dockKey = key;
+  dockEl.innerHTML = '';
+  for (const a of actions) {
+    const b = document.createElement('button');
+    b.textContent = `▸ ${a.label}`;
+    b.addEventListener('click', () => {
+      // 버튼을 누른 순간의 최신 동작으로 실행 (목록은 매 프레임 바뀔 수 있음)
+      const now = items.flatMap((it) => it.experimentActions());
+      now[actions.indexOf(a)]?.run();
+    });
+    dockEl.appendChild(b);
+  }
+}
 
 $('btn-enter').addEventListener('click', () => {
   $('start').hidden = true;
@@ -219,9 +251,11 @@ function hideMenu(): void {
 }
 canvas.addEventListener('pointerdown', hideMenu); // 다른 곳을 만지면 닫힘
 
+/** 짧은 탭: 주 동작이 하나면 바로, 여럿이면 메뉴 (보조 동작도 함께 보여 줌) */
 function runActions(actions: Action[], x: number, y: number): void {
-  if (actions.length === 1) actions[0].run();
-  else if (actions.length > 1) showMenu(actions, x, y);
+  const primary = actions.filter((a) => !a.secondary);
+  if (primary.length === 1) primary[0].run();
+  else if (primary.length > 1) showMenu(actions, x, y);
 }
 
 // ---------- 메인 루프 ----------
@@ -246,10 +280,11 @@ renderer.setAnimationLoop(() => {
   }
   updateLights(now / 1000);
   camera.updateMatrixWorld();
+  beams.update();
   hand.update(aimX);
 
   // 조준점 아래 안내 문구: 지금 탭하면 일어날 일 (동작이 더 있으면 "…")
-  const aimed = actionsAt(aimX, 0);
+  const aimed = actionsAt(aimX, 0).filter((a) => !a.secondary);
   let prompt = '';
   if (aimed.length) prompt = `[탭] ${aimed[0].label}${aimed.length > 1 ? ' …' : ''}`;
   else if (hand.held && hand.aim) prompt = '여기에는 놓을 수 없음';
@@ -268,10 +303,19 @@ renderer.setAnimationLoop(() => {
     const y = -(t.y / stage.clientHeight) * 2 + 1;
     runActions(actionsAt(x, y), t.x, t.y);
   }
+  // 길게 누르기: 보조 동작(방향 돌리기 등)까지 모두 담은 메뉴
+  for (const t of input.holds) {
+    const x = (t.x / stage.clientWidth) * 2 - 1;
+    const y = -(t.y / stage.clientHeight) * 2 + 1;
+    const all = actionsAt(x, y);
+    if (all.length) showMenu(all, t.x, t.y);
+  }
 
   retro.render();
   minimap.draw();
   pendulumPanel.update();
+  slitPanel.update();
+  updateDock();
   roomLabel.textContent = roomNameAt(player.pos.x, player.pos.z);
 
   fpsFrames++;

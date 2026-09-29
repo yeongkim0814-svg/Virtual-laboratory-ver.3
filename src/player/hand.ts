@@ -68,7 +68,7 @@ export class Hand {
     this.camera.remove(item.object);
     setLayer(item.object, 0);
     item.object.position.copy(target.point);
-    item.object.rotation.set(0, 0, 0);
+    item.object.rotation.set(0, item.yaw, 0); // 돌려 둔 방향 유지
     this.scene.add(item.object);
     this.held = null;
     this.marker.visible = false;

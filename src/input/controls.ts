@@ -18,6 +18,8 @@ export interface InputState {
   lookDY: number;
   /** 이번 프레임에 발생한 탭 위치들 (16:9 무대 기준 픽셀 좌표) */
   taps: { x: number; y: number }[];
+  /** 이번 프레임에 "길게 누르기"가 확정된 위치들 */
+  holds: { x: number; y: number }[];
   /** 이번 프레임에 E 키가 눌렸는가 */
   interactKey: boolean;
 }
@@ -26,6 +28,7 @@ const JOYSTICK_ZONE = 0.4; // 화면 왼쪽 40%
 const JOYSTICK_RADIUS = 60; // px
 const TAP_MAX_MOVE = 10; // px — 이보다 많이 움직이면 드래그로 본다
 const TAP_MAX_TIME = 300; // ms
+const HOLD_TIME = 500; // ms — 움직이지 않고 이만큼 누르고 있으면 "길게 누르기"
 
 interface Pointer {
   role: 'joystick' | 'look';
@@ -35,10 +38,11 @@ interface Pointer {
   lastY: number;
   startTime: number;
   moved: boolean;
+  held: boolean; // 길게 누르기로 이미 처리됨
 }
 
 export class Controls {
-  readonly state: InputState = { moveX: 0, moveY: 0, lookDX: 0, lookDY: 0, taps: [], interactKey: false };
+  readonly state: InputState = { moveX: 0, moveY: 0, lookDX: 0, lookDY: 0, taps: [], holds: [], interactKey: false };
 
   private pointers = new Map<number, Pointer>();
   private joyX = 0;
@@ -67,6 +71,15 @@ export class Controls {
 
   /** 매 프레임 시작 시 호출: 키보드·조이스틱을 합쳐 이동 입력을 계산 */
   poll(): void {
+    // 길게 누르기: 움직이지 않은 채 HOLD_TIME이 지난 손가락
+    const now = performance.now();
+    for (const p of this.pointers.values()) {
+      // (조이스틱에 엄지를 가만히 대고 있는 건 길게 누르기가 아님)
+      if (p.role === 'look' && !p.held && !p.moved && now - p.startTime >= HOLD_TIME) {
+        p.held = true;
+        this.state.holds.push({ x: p.startX, y: p.startY });
+      }
+    }
     const k = (code: string) => (this.keys.has(code) ? 1 : 0);
     const kx = k('KeyD') + k('ArrowRight') - k('KeyA') - k('ArrowLeft');
     const ky = k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown');
@@ -87,6 +100,7 @@ export class Controls {
     this.state.lookDX = 0;
     this.state.lookDY = 0;
     this.state.taps.length = 0;
+    this.state.holds.length = 0;
     this.state.interactKey = false;
   }
 
@@ -107,7 +121,7 @@ export class Controls {
     const role = inJoyZone && !joyTaken ? 'joystick' : 'look';
     this.pointers.set(e.pointerId, {
       role, startX: x, startY: y, lastX: x, lastY: y,
-      startTime: performance.now(), moved: false,
+      startTime: performance.now(), moved: false, held: false,
     });
     if (role === 'joystick') {
       this.joyBase.style.left = `${x}px`;
@@ -151,7 +165,7 @@ export class Controls {
       this.joyBase.classList.remove('active');
     }
     // 거의 움직이지 않고 짧게 뗐으면 탭 (조이스틱 영역에서도 — 화면 왼쪽의 물체도 탭할 수 있게)
-    if (e.type === 'pointerup' && !p.moved && performance.now() - p.startTime < TAP_MAX_TIME) {
+    if (e.type === 'pointerup' && !p.moved && !p.held && performance.now() - p.startTime < TAP_MAX_TIME) {
       this.state.taps.push(this.local(e));
     }
   }

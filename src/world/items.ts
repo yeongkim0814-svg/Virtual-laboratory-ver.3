@@ -18,7 +18,8 @@ export type PlugType =
   | 'rodMount' // 스탠드 막대에 끼우는 클램프 고정부
   | 'grip' // 클램프 집게로 잡을 수 있는 부분
   | 'hook' // 실 끝 고리에 걸 수 있는 고리
-  | 'accessory'; // 클램프에 붙이는 부속 (각도기)
+  | 'accessory' // 클램프에 붙이는 부속 (각도기)
+  | 'railMount'; // 광학대 레일에 끼우는 받침 (레이저·슬릿판·스크린)
 
 export interface Plug {
   type: PlugType;
@@ -57,6 +58,8 @@ export class Item implements Interactable {
   /** 지금 끼워져 있는 소켓 (없으면 자유 상태) */
   attachedTo: Socket | null = null;
   attachedPlug: Plug | null = null;
+  /** 책상 위에 놓일 때의 방향 (y축 회전, rad) — "방향 돌리기"로 바꾼다 */
+  yaw = 0;
   onPick: (item: Item) => void = () => {};
 
   constructor(readonly object: THREE.Group, o: ItemOptions) {
@@ -80,23 +83,45 @@ export class Item implements Interactable {
     object.userData.item = this;
   }
 
-  /** 가능한 동작들: 부모(소켓 주인)가 주는 동작 + 자기 동작 + 집기 */
+  /**
+   * 가능한 동작들: 조립체 안 어딘가에서 진행 중인 실험 열기 + 자기 동작 + 집기
+   * (진자라면 스탠드·클램프·실·추 중 어느 것을 탭해도 "진자 실험"이 나온다)
+   */
   actions(): Action[] {
     return [
-      ...(this.attachedTo?.owner.childActions(this) ?? []),
+      ...assemblyExperiments(this.root()),
       ...this.extraActions(),
       { label: `집기 · ${this.name}`, run: () => this.onPick(this) },
     ];
   }
 
-  /** 하위 클래스가 덧붙이는 동작 */
+  /** 책상 위에 따로 놓인 기구를 90° 돌리는 동작 (광학 기구처럼 방향이 중요한 것에 쓴다) */
+  rotateAction(): Action[] {
+    if (this.attachedTo || this.object.parent?.type !== 'Scene') return [];
+    return [{
+      label: `방향 돌리기 · ${this.name}`,
+      secondary: true,
+      run: () => {
+        this.yaw = (this.yaw + Math.PI / 2) % (2 * Math.PI);
+        this.object.rotation.y = this.yaw;
+      },
+    }];
+  }
+
+  /** 하위 클래스가 덧붙이는 동작 (예: 레이저 켜기) */
   extraActions(): Action[] {
     return [];
   }
 
-  /** 자식에게 달린 동작 (예: 실에 매달린 추 → "진자 실험") */
-  childActions(_child: Item): Action[] {
+  /** 이 기구가 지금 성립시키고 있는 실험의 "패널 열기" 동작 (예: 추가 걸린 실 → 진자 실험) */
+  experimentActions(): Action[] {
     return [];
+  }
+
+  /** 이 기구와 여기 붙은 모든 기구 (자기 포함) */
+  *assembly(): Generator<Item> {
+    yield this;
+    for (const s of this.sockets) for (const c of s.children) yield* c.assembly();
   }
 
   /** 소켓에서 빠지거나 장면에서 떼어 낸다 */
@@ -122,12 +147,14 @@ export class Item implements Interactable {
 export interface SocketOptions {
   /** 여러 개를 받을 수 있는가 (스탠드 막대에는 클램프 여러 개) */
   multi?: boolean;
-  /** 미끄러지는 소켓: 물체 좌표 y가 min~max인 막대 어디에나 (탭한 높이에) 끼운다 */
-  slide?: { min: number; max: number };
+  /** 미끄러지는 소켓: 물체 좌표에서 axis(기본 y) 값이 min~max인 막대·레일 어디에나 (탭한 자리에) 끼운다 */
+  slide?: { min: number; max: number; axis?: 'x' | 'y' };
   /** 터치 판정 크기 (m). 0이면 판정 없음 (주인 물체를 탭하면 됨) */
   hitRadius?: number;
   /** 끼운 물체를 카메라 쪽으로 돌려서 붙인다 (클램프 팔이 나를 향하게) */
   faceCamera?: boolean;
+  /** 레일의 가운데를 향하게 붙인다 (광학대: 양 끝의 레이저·스크린이 서로 마주 보게) */
+  faceCenter?: boolean;
   /** 지금 받을 수 있는 상태인가 (예: 실이 걸려 있을 때만 끝 고리 사용 가능) */
   enabled?: () => boolean;
 }
@@ -155,7 +182,11 @@ export class Socket {
         ? new THREE.CylinderGeometry(r, r, opts.slide.max - opts.slide.min, 6)
         : new THREE.SphereGeometry(r, 6, 4);
       const pad = new THREE.Mesh(geo, HITBOX_MAT);
-      if (opts.slide) pad.position.y = (opts.slide.min + opts.slide.max) / 2 - position.y;
+      if (opts.slide) {
+        const axis = opts.slide.axis ?? 'y';
+        if (axis === 'x') pad.rotation.z = Math.PI / 2; // 원기둥을 눕혀 x축 방향으로
+        pad.position[axis] = (opts.slide.min + opts.slide.max) / 2 - position[axis];
+      }
       pad.userData.socket = this;
       this.anchor.add(pad);
     }
@@ -178,13 +209,16 @@ export class Socket {
     let parent: THREE.Object3D = this.anchor;
     this.owner.object.updateWorldMatrix(true, false);
     if (this.opts.slide) {
-      // 막대의 탭한 높이에 개별 기준점을 만든다 (1 cm 단위)
+      // 막대·레일의 탭한 자리에 개별 기준점을 만든다 (1 cm 단위)
+      const { min, max, axis = 'y' } = this.opts.slide;
       const local = hitWorld ? this.owner.object.worldToLocal(hitWorld.clone()) : this.anchor.position.clone();
-      const y = THREE.MathUtils.clamp(Math.round(local.y * 100) / 100, this.opts.slide.min, this.opts.slide.max);
+      const v = THREE.MathUtils.clamp(Math.round(local[axis] * 100) / 100, min, max);
       const a = new THREE.Group();
-      a.position.set(this.anchor.position.x, y, this.anchor.position.z);
+      a.position.copy(this.anchor.position);
+      a.position[axis] = v;
       this.owner.object.add(a);
       parent = a;
+      if (this.opts.faceCenter) parent.rotation.y = v <= (min + max) / 2 ? 0 : Math.PI;
     }
     if (this.opts.faceCamera && cameraWorld) {
       // 소켓 위치에서 카메라를 향하는 수평 방향으로 돌린다
@@ -216,6 +250,13 @@ export class Socket {
   worldPosition(target = new THREE.Vector3()): THREE.Vector3 {
     return this.anchor.getWorldPosition(target);
   }
+}
+
+/** 조립체 전체에서 실험 열기 동작을 모은다 */
+export function assemblyExperiments(root: Item): Action[] {
+  const out: Action[] = [];
+  for (const it of root.assembly()) out.push(...it.experimentActions());
+  return out;
 }
 
 /** a가 b의 조립체 안(자식·손자…)에 있는가 */
