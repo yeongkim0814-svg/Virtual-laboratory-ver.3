@@ -40,7 +40,7 @@ import { WireSystem, type Terminal } from './world/wires';
 import { solveCircuits, type PhotoCircuitState } from './equipment/electrical';
 import { PhotoPanel } from './ui/photoPanel';
 import { CircuitPanel } from './ui/circuitPanel';
-import { solveDCCircuits, type DCCircuitState } from './equipment/circuitParts';
+import { Led, solveDCCircuits, type DCCircuitState } from './equipment/circuitParts';
 import { RotateBar } from './ui/rotateBar';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -250,6 +250,7 @@ for (const p of stock.circuitParts) {
     const st = dcStates.find((c) => c.parts.includes(part));
     if (st) circuitPanel.open(st.supply);
   };
+  if (p instanceof Led) p.onBurn = (l) => toast(`<b>${l.name}</b> — 과전류로 타 버렸습니다 (접합 온도 150 °C 초과). LED에는 직렬 저항을 다세요 — 두 번 탭해 새 LED로 교체`);
 }
 
 // 레이저 광선 추적

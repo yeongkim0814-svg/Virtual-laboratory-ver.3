@@ -9,6 +9,8 @@
  *
  * 전원 장치 = 이상 전압원 E + 내부 저항 r  →  노턴 등가(전류원 E/r ∥ 컨덕턴스 1/r)로 바꿔 넣는다.
  *   전류가 한계 I_max를 넘으면 실제 실험용 전원처럼 정전류(CC) 모드로 바뀐다 (단락해도 안전).
+ * 다이오드(LED)처럼 전류가 전압에 비례하지 않는 소자는 뉴턴 반복으로 푼다:
+ *   지금 추정한 전압 V_d에서 I(V)를 접선(컨덕턴스 g = dI/dV + 전류원)으로 바꿔 넣고 → 선형으로 풀고 → V_d를 고쳐 다시.
  * 기준 전위: 모든 마디에 아주 작은 컨덕턴스(gmin)를 땅(0 V)으로 달아, 떠 있는 마디도 전위가 정해지게 한다.
  */
 
@@ -41,10 +43,27 @@ export interface CircuitResult {
   limited: boolean[];
 }
 
+/**
+ * 이상적인 pn 접합 (쇼클리 식): I = I_s (e^{V/(nV_T)} − 1)
+ * 직렬 저항은 따로 Conductor로 넣는다. vd = 지난번 풀이의 접합 전압 (다음 풀이의 첫 추정값)
+ */
+export interface Junction {
+  /** 애노드(+) 마디 · 캐소드(−) 마디 */
+  a: number;
+  b: number;
+  Is: number;
+  nVt: number;
+  vd: number;
+}
+
+export function junctionCurrent(j: Pick<Junction, 'Is' | 'nVt'>, V: number): number {
+  return j.Is * (Math.exp(V / j.nVt) - 1);
+}
+
 const GMIN = 1e-12;
 
 /** n개 마디 회로를 푼다 */
-export function solveDC(n: number, parts: Conductor[], sources: Source[]): CircuitResult {
+export function solveDC(n: number, parts: Conductor[], sources: Source[], junctions: Junction[] = []): CircuitResult {
   const limited = sources.map(() => false);
   /** 정전류 모드일 때 + 단자에서 밖으로 내보내는 전류 (부호 포함) */
   const Icc = sources.map(() => 0);
@@ -73,7 +92,7 @@ export function solveDC(n: number, parts: Conductor[], sources: Source[]): Circu
       I[s.a] += s.E / s.r;
       I[s.b] -= s.E / s.r;
     });
-    V = gauss(G, I);
+    V = junctions.length ? newton(G, I, junctions) : gauss(G, I);
     let changed = false;
     sources.forEach((s, k) => {
       if (limited[k] || s.a === s.b) return;
@@ -95,6 +114,39 @@ export function solveDC(n: number, parts: Conductor[], sources: Source[]): Circu
   });
   const sourceI = sources.map((s, k) => (limited[k] ? Icc[k] : s.a === s.b ? 0 : (s.E - (V[s.a] - V[s.b])) / s.r));
   return { V, sourceI, limited };
+}
+
+/** 선형 부분(G, I)에 접합을 접선으로 넣어 되풀이 풀기 */
+function newton(G0: Float64Array[], I0: Float64Array, js: Junction[]): Float64Array {
+  let V: Float64Array = new Float64Array(I0.length);
+  for (let it = 0; it < 200; it++) {
+    const G = G0.map((r) => Float64Array.from(r));
+    const I = Float64Array.from(I0);
+    for (const j of js) {
+      if (j.a === j.b) continue;
+      const e = Math.exp(j.vd / j.nVt);
+      const g = (j.Is / j.nVt) * e + 1e-12;
+      const Ieq = j.Is * (e - 1) - g * j.vd; // I(V) ≈ Ieq + g·V
+      G[j.a][j.a] += g;
+      G[j.b][j.b] += g;
+      G[j.a][j.b] -= g;
+      G[j.b][j.a] -= g;
+      I[j.a] -= Ieq;
+      I[j.b] += Ieq;
+    }
+    V = gauss(G, I);
+    let done = true;
+    for (const j of js) {
+      const want = V[j.a] - V[j.b];
+      // 접합 전압 제한: 지수 함수가 폭주하지 않도록 한 번에 조금씩만 올린다 (SPICE의 pnjlim과 같은 생각)
+      let next = want;
+      if (want > j.vd + 2 * j.nVt && want > 0.3) next = j.vd + 2 * j.nVt * Math.log(1 + (want - j.vd) / (2 * j.nVt));
+      if (Math.abs(next - j.vd) > 1e-9) done = false;
+      j.vd = next;
+    }
+    if (done) break;
+  }
+  return V;
 }
 
 /** 부분 피벗 가우스 소거 (마디 수가 작아 밀집 행렬로 충분) */

@@ -15,7 +15,7 @@ import { Item } from '../world/items';
 import type { Action } from '../world/interactable';
 import { Terminal, type WireSystem } from '../world/wires';
 import { Lcd, type DCPowerSupply, type Microammeter, type Phototube } from './electrical';
-import { Filament, solveDC, type Conductor, type Source } from '../sim/circuit';
+import { Filament, junctionCurrent, solveDC, type Conductor, type Junction, type Source } from '../sim/circuit';
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const BOARD = new THREE.MeshLambertMaterial({ color: 0xd9d2bc });
@@ -128,6 +128,110 @@ export class Bulb extends CircuitPart {
     this.glow.color.copy(c);
     this.glass.emissive.setRGB(0.9 * b, 0.65 * b, 0.3 * b);
     this.light.intensity = 0.9 * b;
+  }
+}
+
+/**
+ * 발광 다이오드(LED): 한쪽으로만 전류가 흐르는 pn 접합 + 직렬 저항 10 Ω
+ *   I = I_s (e^{V_j/(nV_T)} − 1): 문턱(빨강 약 1.8 V) 아래에서는 거의 0, 넘으면 전압이 조금만 올라도 전류가 폭발적으로 는다
+ *   → "전압을 너무 걸면 망가진다"의 정체는 전압이 아니라 이렇게 늘어나는 **전류(발열)**다. 그래서 LED에는 늘 직렬 저항을 단다.
+ * 접합 온도: dT/dt = (P·R_th − (T − 25 °C)) / τ,  R_th 1000 K/W, τ 0.3 s. 150 °C를 넘으면 타서 끊어진다(열린 회로).
+ *   정격 20 mA에서는 약 65 °C, 빨강은 대략 55 mA 이상을 계속 흘리면 탄다.
+ * 문턱 전압 ≈ 빛알 에너지/e: 빨강(620 nm, 2.0 eV) < 초록(525 nm, 2.4 eV) < 파랑(465 nm, 2.7 eV)
+ */
+export class Led extends CircuitPart {
+  static readonly RS = 10;
+  static readonly N_VT = 2 * 0.02585;
+  static readonly T_BURN = 150;
+  readonly a: Terminal;
+  readonly b: Terminal;
+  readonly junction: Junction;
+  burnt = false;
+  /** 접합 온도 (°C) */
+  Tj = 25;
+  onBurn: (l: Led) => void = () => {};
+  private dome: THREE.MeshLambertMaterial;
+  private chip: THREE.MeshBasicMaterial;
+  private light: THREE.PointLight;
+  private readonly color: THREE.Color;
+
+  /** @param vj20 20 mA에서의 접합 전압 (V) */
+  constructor(readonly colorName: string, readonly nm: number, color: number, vj20: number) {
+    const g = new THREE.Group();
+    g.add(mesh(new THREE.BoxGeometry(0.07, 0.012, 0.05), BOARD, 0, 0.006, 0));
+    g.add(mesh(new THREE.BoxGeometry(0.0015, 0.02, 0.0015), METAL, -0.003, 0.02, 0)); // 다리
+    g.add(mesh(new THREE.BoxGeometry(0.0015, 0.02, 0.0015), METAL, 0.003, 0.02, 0));
+    const dome = new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.75, emissive: 0x000000 });
+    g.add(mesh(new THREE.CylinderGeometry(0.0055, 0.0055, 0.01, 10), dome, 0, 0.034, 0));
+    g.add(mesh(new THREE.SphereGeometry(0.0055, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), dome, 0, 0.039, 0));
+    const chip = new THREE.MeshBasicMaterial({ color: 0x222222 });
+    g.add(mesh(new THREE.BoxGeometry(0.003, 0.002, 0.003), chip, 0, 0.034, 0));
+    super(g, { name: `LED ${colorName}`, radius: 0.045, mass: 0.02, touchPad: false });
+    this.dome = dome;
+    this.chip = chip;
+    this.color = new THREE.Color(color);
+    this.light = new THREE.PointLight(color, 0, 0.8, 2);
+    this.light.position.set(0, 0.04, 0);
+    g.add(this.light);
+    this.junction = { a: 0, b: 0, Is: 0.02 / Math.exp(vj20 / Led.N_VT), nVt: Led.N_VT, vd: 0 };
+    // 애노드(+, 긴 다리) · 캐소드(−)
+    this.a = new Terminal(this, '+ (애노드)', '+', v(-0.022, 0.02, 0.012), FRONT);
+    this.b = new Terminal(this, '− (캐소드)', '-', v(0.022, 0.02, 0.012), FRONT);
+  }
+
+  /** 옴 소자가 아님 — 회로 해석이 따로 다룬다 */
+  resistance(): number | null {
+    return null;
+  }
+
+  /** 정상 상태 I(V) (이론 곡선용): V = I·R_s + V_j */
+  steadyCurrent(V: number): number {
+    if (this.burnt || V <= 0) return 0;
+    let lo = 0;
+    let hi = V / Led.RS;
+    for (let i = 0; i < 60; i++) {
+      const I = (lo + hi) / 2;
+      if (junctionCurrent(this.junction, V - I * Led.RS) > I) lo = I;
+      else hi = I;
+    }
+    return (lo + hi) / 2;
+  }
+
+  heat(dt: number): void {
+    if (this.burnt) {
+      this.Tj += (25 - this.Tj) * Math.min(1, dt / 0.3);
+      return;
+    }
+    const P = Math.max(0, this.voltage * this.current);
+    this.Tj += ((P * 1000 - (this.Tj - 25)) / 0.3) * dt;
+    if (this.Tj > Led.T_BURN) {
+      this.burnt = true;
+      this.current = 0;
+      this.onBurn(this);
+    }
+  }
+
+  replace(): void {
+    this.burnt = false;
+    this.Tj = 25;
+    this.junction.vd = 0;
+  }
+
+  extraActions(): Action[] {
+    const out = this.circuitActions();
+    if (this.burnt) out.unshift({ label: '새 LED로 교체 (탄 LED 버리기)', run: () => this.replace() });
+    return out;
+  }
+
+  update(): void {
+    // 밝기 ∝ 전류 (20 mA에서 1)
+    const b = this.burnt ? 0 : Math.min(1.5, Math.max(0, this.current) / 0.02);
+    this.dome.emissive.copy(this.color).multiplyScalar(0.9 * b);
+    this.chip.color.copy(this.burnt ? new THREE.Color(0x0a0a0a) : new THREE.Color(0x222222).lerp(new THREE.Color(0xffffff), Math.min(1, b)));
+    this.dome.opacity = this.burnt ? 0.95 : 0.75;
+    if (this.burnt) this.dome.color.setRGB(this.color.r * 0.25, this.color.g * 0.25, this.color.b * 0.25);
+    else this.dome.color.copy(this.color);
+    this.light.intensity = 0.25 * b;
   }
 }
 
@@ -275,7 +379,11 @@ export function solveDCCircuits(
     id(a);
     id(b);
   }
-  const n = idx.size;
+  // LED마다 속 마디 하나 (애노드 ─ R_s ─ 속 마디 ─ 접합 ─ 캐소드)
+  const leds = parts.filter((p): p is Led => p instanceof Led);
+  const inner = new Map<Led, number>();
+  for (const l of leds) inner.set(l, idx.size + inner.size);
+  const n = idx.size + leds.length;
   const comp = Array.from({ length: n }, (_, i) => i);
   const find = (i: number): number => (comp[i] === i ? i : (comp[i] = find(comp[i])));
   for (const [a, b] of all) comp[find(id(a))] = find(id(b));
@@ -289,26 +397,43 @@ export function solveDCCircuits(
       if (R !== null) out.push({ a: id(p.a), b: id(p.b), R });
     }
     for (const m of microammeters) out.push({ a: id(m.plus), b: id(m.minus), R: 0.01 });
+    for (const l of leds) if (!l.burnt) out.push({ a: id(l.a), b: inner.get(l)!, R: Led.RS });
+    return out;
+  };
+  const junctions = (): Junction[] => {
+    const out: Junction[] = [];
+    for (const l of leds) {
+      if (l.burnt) continue;
+      l.junction.a = inner.get(l)!;
+      l.junction.b = id(l.b);
+      out.push(l.junction);
+    }
     return out;
   };
   const sources: Source[] = liveSupplies.map((s) => ({ a: id(s.plus), b: id(s.minus), E: s.output, r: SUPPLY_R, Imax: SUPPLY_IMAX }));
 
   const bulbs = parts.filter((p): p is Bulb => p instanceof Bulb);
   const steps = Math.max(1, Math.min(12, Math.ceil(dt / 0.004)));
-  let res = solveDC(n, conductors(), sources);
+  const ledCurrent = (l: Led, V: Float64Array) => (l.burnt ? 0 : (V[id(l.a)] - V[inner.get(l)!]) / Led.RS);
+  let res = solveDC(n, conductors(), sources, junctions());
   for (let k = 0; k < steps; k++) {
     for (const b of bulbs) {
       const I = (res.V[id(b.a)] - res.V[id(b.b)]) / b.filament.R;
       b.filament.heat(I, dt / steps);
     }
-    res = solveDC(n, conductors(), sources);
+    for (const l of leds) {
+      l.voltage = res.V[id(l.a)] - res.V[id(l.b)];
+      l.current = ledCurrent(l, res.V);
+      l.heat(dt / steps);
+    }
+    res = solveDC(n, conductors(), sources, junctions());
   }
 
   for (const p of parts) {
     const c = find(id(p.a));
     const R = p.resistance();
     p.voltage = tubeComp.has(c) ? 0 : res.V[id(p.a)] - res.V[id(p.b)];
-    p.current = R === null || tubeComp.has(c) ? 0 : p.voltage / R;
+    p.current = tubeComp.has(c) ? 0 : p instanceof Led ? ledCurrent(p, res.V) : R === null ? 0 : p.voltage / R;
     p.inCircuit = false;
   }
   // 광전관이 없는 회로의 마이크로전류계는 여기서 채운다 (광전 효과 해석이 먼저 null로 비워 둠)

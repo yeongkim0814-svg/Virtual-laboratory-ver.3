@@ -9,7 +9,7 @@
  *      거듭제곱 I ∝ Vⁿ 맞춤 → n = 1이면 옴 소자, n < 1이면 전구처럼 전류가 커질수록 저항이 커지는 소자
  */
 import type { DCPowerSupply } from '../equipment/electrical';
-import { Ammeter, Voltmeter, type DCCircuitState } from '../equipment/circuitParts';
+import { Ammeter, Led, Voltmeter, type DCCircuitState } from '../equipment/circuitParts';
 import { downloadCsv, drawPlot, stamp, type Series } from './plotKit';
 
 interface Row {
@@ -159,6 +159,9 @@ export class CircuitPanel {
         .filter((p) => !(p instanceof Voltmeter) && !(p instanceof Ammeter))
         .map((p) => {
           const R = p.resistance();
+          if (p instanceof Led) {
+            return `${p.name}: ${p.voltage.toFixed(3)} V, ${(p.current * 1000).toFixed(1)} mA, ${p.burnt ? '탐 (끊어짐)' : `접합 온도 ${p.Tj.toFixed(0)} °C (150 °C 넘으면 탐)`}`;
+          }
           return `${p.name}: ${p.voltage.toFixed(3)} V, ${(p.current * 1000).toFixed(1)} mA, R = ${R === null ? '∞ (열림)' : `${R.toFixed(2)} Ω`}`;
         })
         .join('\n');
@@ -235,9 +238,20 @@ function fitText(rows: Row[]): string {
       ? '→ n ≈ 1: 전류가 전압에 비례 (옴의 법칙을 따르는 소자)'
       : f.n < 1
         ? '→ n < 1: 전압을 올릴수록 V/I(저항)가 커짐 — 전구 필라멘트가 뜨거워지며 저항이 증가'
-        : '→ n > 1: 전압을 올릴수록 저항이 작아지는 소자');
+        : '→ n > 1: 전압을 올릴수록 저항이 작아지는 소자 (다이오드·LED: 문턱을 넘으면 전류가 급격히 증가)');
+    const th = threshold(rows);
+    if (f.n > 1.3 && th !== null) lines.push(`문턱 전압(전류 1 mA가 되는 전압) ≈ ${th.toFixed(2)} V → e·V = ${th.toFixed(2)} eV. 빛알 에너지 hc/λ(빨강 620 nm 2.00 · 초록 525 nm 2.36 · 파랑 465 nm 2.67 eV)와 비교 — 문턱을 어디로 잡느냐에 따라 조금 작게 나온다`);
   }
   return lines.join('\n');
+}
+
+/** 전류가 처음 1 mA를 넘는 전압 (이웃 두 점 사이 직선 보간) */
+function threshold(rows: Row[]): number | null {
+  const r = [...rows].sort((a, b) => a.V - b.V);
+  for (let i = 1; i < r.length; i++) {
+    if (r[i - 1].I < 1e-3 && r[i].I >= 1e-3) return r[i - 1].V + ((1e-3 - r[i - 1].I) / (r[i].I - r[i - 1].I)) * (r[i].V - r[i - 1].V);
+  }
+  return null;
 }
 
 function niceStep(max: number): number {

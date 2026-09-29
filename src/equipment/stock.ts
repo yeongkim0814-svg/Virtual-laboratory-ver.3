@@ -24,7 +24,7 @@ import { PendulumString } from './pendulumString';
 import { Spring } from './spring';
 import { Laser, OpticScreen, SlitPlate } from './optics';
 import { DCPowerSupply, Microammeter, Phototube } from './electrical';
-import { Ammeter, Bulb, KnifeSwitch, Resistor, Voltmeter, type CircuitPart } from './circuitParts';
+import { Ammeter, Bulb, KnifeSwitch, Led, Resistor, Voltmeter, type CircuitPart } from './circuitParts';
 import { Cart, Pulley, Rail, massBar } from './track';
 import { Laptop, MotionSensor, PHSensor } from './sensors';
 import { Container, DropperBottle, PHPaper, REAGENTS, beaker, burette, cylinder, flask, reagentBottle } from './glassware';
@@ -79,7 +79,9 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
   const knife = new KnifeSwitch();
   const voltmeters = [new Voltmeter('전압계 1'), new Voltmeter('전압계 2')];
   const dcAmmeters = [new Ammeter('전류계 1'), new Ammeter('전류계 2')];
-  const circuitParts: CircuitPart[] = [...resistors, ...bulbs, knife, ...voltmeters, ...dcAmmeters];
+  // LED: 20 mA에서 V_f = 접합 전압 + 10 Ω × 20 mA ≈ 빨강 2.0 · 초록 2.4 · 파랑 2.9 V
+  const leds = [new Led('빨강', 620, 0xff3020, 1.8), new Led('초록', 525, 0x30e040, 2.2), new Led('파랑', 465, 0x3060ff, 2.7)];
+  const circuitParts: CircuitPart[] = [...resistors, ...bulbs, knife, ...voltmeters, ...dcAmmeters, ...leds];
   const rails = [new Rail()];
   const carts = [new Cart('수레 A', 0x2f6fb0), new Cart('수레 B', 0xd07a2a)];
   // 교탁(높이 0.76 m): 화면이 실험실 쪽(+x)을 보게 90° 돌려 놓는다. 스탠딩 테이블(1.05 m): 교사 쪽(−x)을 보게
@@ -127,7 +129,7 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(motionSensors[0], low.slot(2, 0, 0.25)),
     at(motionSensors[1], low.slot(2, 0, 0.75)),
     at(new Pulley(), low.slot(3, 0, 0.5)),
-    // 직류 회로: 칸 4 = 전원 장치(바닥)·전압계·전류계(선반), 칸 5 = 저항(바닥)·전구·스위치(선반), 칸 6 = 두 번째 전압계·전류계
+    // 직류 회로: 칸 4 = 전원 장치(바닥)·전압계·전류계(선반), 칸 5 = 저항(바닥)·전구·스위치(선반), 칸 6 = LED 3색(바닥)·두 번째 전압계·전류계
     at(supplies[1], low.slot(4, 0, 0.5)),
     at(voltmeters[0], low.slot(4, 1, 0.2)),
     at(dcAmmeters[0], low.slot(4, 1, 0.8)),
@@ -135,6 +137,7 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(bulbs[0], low.slot(5, 1, 0.0)),
     at(bulbs[1], low.slot(5, 1, 0.45)),
     at(knife, low.slot(5, 1, 0.95)),
+    ...leds.map((l, i) => at(l, low.slot(6, 0, 0.1 + i * 0.4))),
     at(voltmeters[1], low.slot(6, 1, 0.2)),
     at(dcAmmeters[1], low.slot(6, 1, 0.8)),
     at(new Stand(), cab.slot(0, 0, 0.2)),
