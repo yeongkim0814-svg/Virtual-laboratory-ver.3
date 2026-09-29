@@ -66,8 +66,8 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     return it;
   };
   const items: Item[] = [
-    desk(laptops[0], 2.3, 2.25, Math.PI / 2),
-    desk(laptops[1], 2.3, 3.25, Math.PI / 2),
+    desk(laptops[0], 2.2, 2.2, Math.PI / 2),
+    desk(laptops[1], 2.2, 3.3, Math.PI / 2),
     desk(laptops[2], 2.15, 4.92, -Math.PI / 2, 1.05),
     // 뒤쪽 벽 수납장: 칸 0(넓은 칸) 레일, 칸 1(넓은 칸) 수레·질량 막대, 칸 2 운동 센서
     at(rails[0], low.slot(0, 0, 0.5)),
