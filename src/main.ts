@@ -25,6 +25,8 @@ import { bindSettingsPanel, enterFullscreen, loadSettings } from './ui/settings'
 import { RetroPipeline, applyRetroMaterials } from './render/retro';
 import { PendulumPanel } from './ui/pendulumPanel';
 import { SpringPanel } from './ui/springPanel';
+import { SupplyPanel } from './ui/supplyPanel';
+import { TrackPanel } from './ui/trackPanel';
 import { SlitPanel } from './ui/slitPanel';
 import { stockEquipment } from './equipment/stock';
 import { BeamSystem } from './equipment/beams';
@@ -114,7 +116,10 @@ const slitPanel = new SlitPanel((open) => panelToggled(slitPanel, open));
 const wires = new WireSystem(scene);
 let circuits: PhotoCircuitState[] = [];
 const photoPanel = new PhotoPanel((open) => panelToggled(photoPanel, open), (s) => circuits.find((c) => c.supply === s) ?? null);
-const panels = [pendulumPanel, springPanel, slitPanel, photoPanel];
+const supplyPanel = new SupplyPanel((open) => panelToggled(supplyPanel, open));
+const trackPanel = new TrackPanel((open) => panelToggled(trackPanel, open));
+const panels = [pendulumPanel, springPanel, slitPanel, photoPanel, supplyPanel, trackPanel];
+for (const r of stock.rails) r.onOpenPanel = (rail) => trackPanel.open(rail);
 for (const s of stock.strings) s.onOpenPanel = (str) => pendulumPanel.open(str);
 for (const s of stock.springs) s.onOpenPanel = (sp) => springPanel.open(sp);
 for (const l of stock.lasers) l.onOpenPanel = (laser) => slitPanel.open(laser);
@@ -125,6 +130,7 @@ for (const l of stock.lasers) l.powerActions = (laser) => power.deviceActions(la
 for (const s of stock.supplies) {
   s.powerActions = (d) => power.deviceActions(d);
   s.onOpenPanel = (d) => photoPanel.open(d);
+  s.onOpenControls = (d) => supplyPanel.open(d);
 }
 
 // 레이저 광선 추적
@@ -179,6 +185,10 @@ function updateDock(): void {
 }
 
 // 확대 보기: 시야각 70° ↔ 18° (약 4배 확대) — 480×270 화면에서 mm 단위 무늬·눈금을 보려면 필요
+// 조작 방법 도움말: ? 버튼으로 열고 닫기
+const helpEl = $('help');
+$('btn-help').addEventListener('click', () => { helpEl.hidden = !helpEl.hidden; });
+$('help-close').addEventListener('click', () => { helpEl.hidden = true; });
 const zoomBtn = $('btn-zoom');
 zoomBtn.addEventListener('click', () => {
   const on = zoomBtn.getAttribute('aria-pressed') !== 'true';
@@ -463,6 +473,7 @@ renderer.setAnimationLoop(() => {
     s.update(dt, pendulumPanel.speed, pendulumPanel.target === s);
   }
   for (const s of stock.springs) s.update(dt, springPanel.speed, springPanel.target === s);
+  for (const r of stock.rails) r.update(dt);
   updateLights(now / 1000);
   camera.updateMatrixWorld();
   collectEquipmentBoxes();
@@ -478,14 +489,11 @@ renderer.setAnimationLoop(() => {
   rotateBar.update();
   hand.update(aimX);
 
-  // 조준점 아래 안내 문구: 한 번 탭 / 두 번 탭하면 일어날 일
-  const aimed = singleActionsAt(aimX, 0);
-  const aimed2 = wires.pending ? [] : doubleActionsAt(aimX, 0);
-  const parts: string[] = [];
-  if (aimed.length) parts.push(`[탭] ${aimed[0].label}${aimed.length > 1 ? ' …' : ''}`);
-  else if (hand.held && hand.aim && !aimed2.length) parts.push('여기에는 놓을 수 없음');
-  if (aimed2.length) parts.push(`[두 번 탭] ${aimed2.length === 1 ? aimed2[0].label : '조작 메뉴'}`);
-  const prompt = parts.join('   ');
+  // 조준점 아래: 조준한 장비의 이름만 (단자는 "기구 +"처럼). 조작 방법은 ? 버튼의 도움말 페이지에
+  const aimHitObj = raycast(aimX, 0)?.object ?? null;
+  const aimTerm = terminalOf(aimHitObj);
+  const aimOwner = ownerOf(aimHitObj);
+  const prompt = aimTerm ? aimTerm.label : aimOwner instanceof Item ? aimOwner.name : '';
   if (promptEl.textContent !== prompt) promptEl.textContent = prompt;
   promptEl.hidden = !prompt;
 
@@ -493,7 +501,7 @@ renderer.setAnimationLoop(() => {
   heldEl.hidden = !hand.held;
 
   // PC: E 키 → 조준점의 첫 번째 동작
-  if (input.interactKey) aimed[0]?.run();
+  if (input.interactKey) singleActionsAt(aimX, 0)[0]?.run();
 
   // 화면 탭 (한 번 / 두 번 구별)
   for (const t of input.taps) handleTap(t.x, t.y);
@@ -514,6 +522,8 @@ renderer.setAnimationLoop(() => {
   springPanel.update();
   slitPanel.update();
   photoPanel.update();
+  supplyPanel.update();
+  trackPanel.update();
   updateDock();
   roomLabel.textContent = roomNameAt(player.pos.x, player.pos.z);
 

@@ -314,6 +314,7 @@ canvas.plot {
 #stage.panel-open #minimap, #stage.panel-open .icon-btn, #stage.panel-open #hint { display: none; }
 /* 확대 버튼: 설정 버튼 왼쪽. 패널이 열려 있어도 패널 왼쪽에 남아 있다 (측정하면서 무늬를 확대해 보도록) */
 #btn-zoom { right: calc(16px + min(280px, 24%) + 10px + 54px); }
+#btn-help { right: calc(16px + min(280px, 24%) + 10px + 108px); font-weight: 700; }
 #stage.panel-open #btn-zoom { display: block; right: calc(var(--panel-w) + 24px); }
 #btn-zoom[aria-pressed='true'] { background: var(--amber); color: var(--bg); }
 
@@ -341,3 +342,19 @@ canvas.plot {
   #start .big { animation: blink 1.6s steps(2, jump-none) infinite; }
   @keyframes blink { 50% { border-color: var(--amber-faint); } }
 }
+
+/* ---------- 조작 방법 도움말 ---------- */
+.panel.help { width: min(620px, calc(100% - 32px)); font-size: 14px; line-height: 1.5; }
+.help-head { display: flex; align-items: center; justify-content: space-between; }
+.help-head h2 { margin: 0; }
+.panel.help h3 { margin: 16px 0 6px; font-size: 15px; letter-spacing: 1px; }
+.panel.help ul, .panel.help ol { margin: 0; padding-left: 20px; color: var(--text); }
+.panel.help li { margin: 3px 0; }
+.panel.help p { margin: 0; color: var(--text); }
+.panel.help b { color: var(--amber); }
+
+/* ---------- 궤도 실험: 수레별 조절 ---------- */
+.cart-row { margin: 12px 0; padding: 10px; border: 1px solid rgba(255, 154, 46, 0.4); }
+.cart-row h3 { margin: 0 0 6px; font-size: 15px; }
+.cart-row .segmented { margin-top: 6px; }
+.cart-row label { margin: 8px 0 0; }

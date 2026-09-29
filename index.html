@@ -27,6 +27,8 @@
         <button id="btn-settings" class="icon-btn" aria-label="설정">⚙</button>
         <!-- 확대 보기: 시야각을 좁혀 멀리 있는 눈금·간섭무늬를 자세히 본다 -->
         <button id="btn-zoom" class="icon-btn" aria-label="확대 보기" aria-pressed="false">🔍</button>
+        <!-- 조작 방법 도움말 -->
+        <button id="btn-help" class="icon-btn" aria-label="조작 방법">?</button>
         <div id="prompt" hidden></div>
         <!-- 탭한 물체에 동작이 여러 개일 때 그 자리에 뜨는 선택 메뉴 -->
         <div id="action-menu" hidden></div>
@@ -42,7 +44,7 @@
           <span id="rb-val"></span>
           <button id="rb-done" class="primary">완료</button>
         </div>
-        <div id="hint">왼쪽: 이동 · 드래그: 둘러보기 · 탭: 집기/놓기/열기</div>
+        <div id="hint">조작 방법: 오른쪽 위 ? 버튼</div>
       </div>
 
       <!-- 단진자 실험 패널 (화면 오른쪽) -->
@@ -283,6 +285,105 @@
         <p class="legend">V_s–f 그래프: 가로 4 ~ 8 ×10¹⁴ Hz, 세로 0 ~ 1.5 V · <span class="ca">■</span> Na <span style="color:#ffd27a">■</span> Cs</p>
         <p id="pe-fit" class="fit"></p>
       </section>
+
+      <!-- 직류 전원 장치 패널 (어떤 실험에서든 전압 조절) -->
+      <section id="sup-panel" class="exp-panel" hidden>
+        <header>
+          <h2>직류 전원 장치</h2>
+          <button id="sup-close">닫기</button>
+        </header>
+        <p id="sup-status" class="status"></p>
+        <div class="field">전원
+          <div class="segmented"><button id="sup-power"></button></div>
+        </div>
+        <div class="field">극성
+          <div id="sup-pol" class="segmented">
+            <button data-v="fwd">정방향</button>
+            <button data-v="rev">역방향 (극성 스위치)</button>
+          </div>
+        </div>
+        <label>전압 크기 <span id="sup-v-val"></span>
+          <input id="sup-v" type="range" min="0" max="5" step="0.01" />
+        </label>
+        <div class="segmented fine">
+          <button data-dv="-0.1">−0.1</button><button data-dv="-0.01">−0.01</button>
+          <button data-dv="0.01">+0.01</button><button data-dv="0.1">+0.1</button>
+        </div>
+        <dl class="readout">
+          <dt>출력 (+ 단자 − − 단자)</dt><dd id="sup-out"></dd>
+          <dt>연결된 도선</dt><dd id="sup-wires"></dd>
+        </dl>
+      </section>
+
+      <!-- 궤도(레일·수레) 실험 패널 -->
+      <section id="track-panel" class="exp-panel" hidden>
+        <header>
+          <h2>궤도 실험</h2>
+          <button id="tr-close">닫기</button>
+        </header>
+        <p id="tr-status" class="status"></p>
+        <label>레일 기울기 (오른쪽 끝을 올림) <span id="tr-inc-val"></span>
+          <input id="tr-inc" type="range" min="0" max="10" step="0.1" />
+        </label>
+        <div class="field">구름 저항 μ
+          <div id="tr-fric" class="segmented">
+            <button data-v="0">없음</button>
+            <button data-v="0.004">작음 0.004</button>
+            <button data-v="0.015">큼 0.015</button>
+          </div>
+        </div>
+        <div class="field">재생 속도
+          <div id="tr-speed" class="segmented">
+            <button data-v="1">1×</button>
+            <button data-v="0.5">½×</button>
+            <button data-v="0.25">¼×</button>
+            <button data-v="0">멈춤</button>
+          </div>
+        </div>
+        <div id="tr-carts"></div>
+        <div class="buttons">
+          <button id="tr-stop">모두 멈추기</button>
+          <button id="tr-reset">처음 자리로</button>
+        </div>
+        <p class="legend">속도·가속도·충돌 측정은 센서(추후 추가)로 한다. "처음 자리로" = 마지막으로 밀기 직전의 위치.</p>
+      </section>
+
+      <!-- 조작 방법 도움말 (? 버튼) -->
+      <div id="help" class="panel help" hidden>
+        <header class="help-head">
+          <h2>조작 방법</h2>
+          <button id="help-close">닫기</button>
+        </header>
+        <h3>움직이기</h3>
+        <ul>
+          <li><b>이동</b> 화면 왼쪽 40%를 누른 채 밀기 (PC: WASD)</li>
+          <li><b>둘러보기</b> 나머지 영역을 드래그</li>
+          <li><b>🔍 확대</b> 시야를 약 4배 좁혀 눈금·무늬를 자세히 보기</li>
+        </ul>
+        <h3>한 번 탭</h3>
+        <ul>
+          <li>놓인 기구 → <b>집기</b> (붙어 있는 기구도 함께 들림)</li>
+          <li>들고 있을 때 책상·바닥 → <b>놓기</b> (호박색 고리 = 놓을 수 있음, 빨강 = 불가)</li>
+          <li>문·보관장 문 → 열기/닫기, 콘센트 → 들고 있는 기기 꽂기·뽑기</li>
+        </ul>
+        <h3>두 번 탭 (또는 길게 누르기)</h3>
+        <ul>
+          <li>놓인 기구 → <b>조작 메뉴</b>: 실험 패널 열기, 전원 연결·뽑기, 켜기·끄기, 전압 조절, 파장·세기, 회전(1° 단위), 높이 ±1 cm, 범퍼 바꾸기, 밀기, 도선 연결·빼기</li>
+          <li>들고 있을 때 다른 기구 → <b>끼우기·매달기</b>: 클램프 → 스탠드 막대, 실·용수철·레이저·슬릿 → 클램프 집게, 추 → 실·용수철 고리, 수레 → 레일, 질량 막대 → 수레</li>
+        </ul>
+        <h3>도선</h3>
+        <ol>
+          <li>기구를 두 번 탭 → <b>도선 연결 시작 · +</b> (단자를 직접 두 번 탭해도 됨)</li>
+          <li>이을 기구를 한 번 탭 → 단자 고르기 (노란 선이 조준점까지 따라옴)</li>
+          <li>빈 곳을 탭하면 취소. 빼기는 기구 두 번 탭 → <b>도선 빼기</b></li>
+        </ol>
+        <h3>전원</h3>
+        <p>전원이 필요한 기기(레이저, 직류 전원 장치)는 실험 테이블 짧은 옆면의 콘센트에 꽂아야 작동한다. 전원선은 2 m, 도선은 1.5 m — 더 멀어지면 빠진다.</p>
+        <h3>기구 위치</h3>
+        <p>주 실험실 오른쪽 벽 보관장: 스탠드·클램프·실·용수철·추·레이저·슬릿·스크린, 아래 칸(불투명 문)에 전원 장치·전류계·광전관. 레일과 수레는 뒤쪽 벽 수납장 위.</p>
+        <h3>실험 패널</h3>
+        <p>기구가 실험할 수 있게 조립되면 화면 왼쪽 위에 <b>▸ 실험 이름</b> 버튼이 뜬다. 패널은 한 번에 하나, 화면 오른쪽에 열린다.</p>
+      </div>
 
       <!-- 설정 패널 -->
       <div id="settings" class="panel" hidden>

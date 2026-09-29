@@ -19,7 +19,8 @@ export type PlugType =
   | 'grip' // 클램프 집게로 잡을 수 있는 부분
   | 'hook' // 실 끝 고리에 걸 수 있는 고리
   | 'accessory' // 클램프에 붙이는 부속 (각도기)
-  | 'railMount'; // 광학대 레일에 끼우는 받침 (레이저·슬릿판·스크린)
+  | 'railMount' // 역학 레일에 올리는 수레 바퀴
+  | 'cartMass'; // 수레 위에 얹는 질량 막대
 
 export interface Plug {
   type: PlugType;
@@ -106,9 +107,10 @@ export class Item implements Interactable {
     const s = this.attachedTo;
     if (!s?.opts.slide) return [];
     const now = Math.round(s.slidePosition(this) * 100);
+    const what = (s.opts.slide.axis ?? 'y') === 'y' ? '높이' : '위치';
     return [
-      { label: `높이 +1 cm (지금 ${now} cm)`, secondary: true, run: () => s.shift(this, 0.01) },
-      { label: `높이 −1 cm (지금 ${now} cm)`, secondary: true, run: () => s.shift(this, -0.01) },
+      { label: `${what} +1 cm (지금 ${now} cm)`, secondary: true, run: () => s.shift(this, 0.01) },
+      { label: `${what} −1 cm (지금 ${now} cm)`, secondary: true, run: () => s.shift(this, -0.01) },
     ];
   }
 
@@ -240,13 +242,13 @@ export class Socket {
    */
   attach(item: Item, plug: Plug, hitWorld?: THREE.Vector3, cameraWorld?: THREE.Vector3): void {
     let parent: THREE.Object3D = this.anchor;
-    this.owner.object.updateWorldMatrix(true, false);
+    this.owner.object.updateWorldMatrix(true, true);
     if (this.opts.slide) {
-      // 막대·레일의 탭한 자리에 개별 기준점을 만든다 (1 cm 단위)
+      // 막대·레일의 탭한 자리에 개별 기준점을 만든다 (1 cm 단위). 소켓과 같은 좌표계(기울어진 레일 몸체 등)에
       const a = new THREE.Group();
       a.position.copy(this.anchor.position);
       a.position[this.opts.slide.axis ?? 'y'] = this.slideValue(hitWorld);
-      this.owner.object.add(a);
+      this.anchor.parent!.add(a);
       parent = a;
     }
     parent.rotation.y = 0; // 이전에 끼웠던 물체가 돌려 놓은 방향은 지운다
@@ -281,8 +283,9 @@ export class Socket {
   /** 미끄럼 소켓에서 탭한 점이 해당하는 위치 (물체 좌표, 1 cm 단위로 반올림, 범위 안으로) */
   slideValue(hitWorld?: THREE.Vector3): number {
     const { min, max, axis = 'y' } = this.opts.slide!;
-    this.owner.object.updateWorldMatrix(true, false);
-    const local = hitWorld ? this.owner.object.worldToLocal(hitWorld.clone()) : this.anchor.position.clone();
+    const frame = this.anchor.parent!;
+    frame.updateWorldMatrix(true, false);
+    const local = hitWorld ? frame.worldToLocal(hitWorld.clone()) : this.anchor.position.clone();
     return THREE.MathUtils.clamp(Math.round(local[axis] * 100) / 100, min, max);
   }
 

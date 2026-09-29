@@ -61,7 +61,10 @@ class Lcd {
   }
 }
 
-/** 직류 전원 장치: 0 ~ 5 V, 극성 스위치. 콘센트에 꽂혀 있고 켜져 있어야 전압이 나온다 */
+/**
+ * 직류 전원 장치: 0 ~ 5 V, 극성 스위치. 콘센트에 꽂혀 있고 켜져 있어야 전압이 나온다.
+ * 특정 실험 전용이 아닌 범용 기기 — 광전관이 회로에 있으면 광전 효과 패널도 열 수 있다.
+ */
 export class DCPowerSupply extends Item implements Powered {
   on = false;
   /** 설정 전압 크기 (V) */
@@ -75,6 +78,8 @@ export class DCPowerSupply extends Item implements Powered {
   port: OutletPort | null = null;
   powerActions: (d: DCPowerSupply) => Action[] = () => [];
   onOpenPanel: (d: DCPowerSupply) => void = () => {};
+  /** 범용 조절 패널 (어떤 실험에서든 전압 조절) */
+  onOpenControls: (d: DCPowerSupply) => void = () => {};
   /** 광전관과 한 고리로 이어져 있는가 (main이 매 프레임 채움) */
   hasTube = false;
   private lcd = new Lcd(0.1, 0.028);
@@ -100,7 +105,7 @@ export class DCPowerSupply extends Item implements Powered {
     const out: Action[] = [];
     if (this.port) out.push({ label: this.on ? '전원 장치 끄기' : '전원 장치 켜기', run: () => { this.on = !this.on; } });
     out.push(...this.powerActions(this));
-    if (!this.hasTube) out.push({ label: '전압 조절', run: () => this.onOpenPanel(this) });
+    out.push({ label: '전압 조절', run: () => this.onOpenControls(this) });
     return out;
   }
 

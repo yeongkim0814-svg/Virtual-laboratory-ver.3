@@ -10,6 +10,8 @@
  *   칸 6                    : 레이저 (650 · 532 · 405 nm 선택), 스크린
  *   칸 7                    : 이중 슬릿 d = 0.10 · 0.20 mm, 단일 슬릿 a = 0.10 mm
  *   칸 6, 7 아래 선반 (불투명 문 안) : 직류 전원 장치, 마이크로전류계, 광전관 2개 (Cs · Na 음극)
+ *
+ * 뒤쪽 벽 수납장(높이 0.9 m) 위: 역학 레일 1.2 m, 수레 2대, 질량 막대 250 g × 4 (길어서 보관장에 안 들어감)
  */
 import type { StorageCabinet } from '../world/cabinet';
 import { at, type Item } from '../world/items';
@@ -18,6 +20,8 @@ import { PendulumString } from './pendulumString';
 import { Spring } from './spring';
 import { Laser, OpticScreen, SlitPlate } from './optics';
 import { DCPowerSupply, Microammeter, Phototube } from './electrical';
+import { Cart, Rail, massBar } from './track';
+import * as THREE from 'three';
 
 export interface Stock {
   items: Item[];
@@ -27,6 +31,8 @@ export interface Stock {
   supplies: DCPowerSupply[];
   ammeters: Microammeter[];
   tubes: Phototube[];
+  rails: Rail[];
+  carts: Cart[];
 }
 
 export function stockEquipment(cab: StorageCabinet): Stock {
@@ -41,7 +47,14 @@ export function stockEquipment(cab: StorageCabinet): Stock {
   const ammeters = [new Microammeter()];
   // 일함수: 세슘 2.14 eV (문턱 파장 579 nm), 나트륨 2.28 eV (544 nm) → 빨강 650 nm로는 둘 다 전자가 안 나옴
   const tubes = [new Phototube('Cs', 2.14), new Phototube('Na', 2.28)];
+  const rails = [new Rail()];
+  const carts = [new Cart('수레 A', 0x2f6fb0), new Cart('수레 B', 0xd07a2a)];
+  const top = (x: number, z: number) => new THREE.Vector3(x, 0.9, z);
   const items: Item[] = [
+    at(rails[0], top(7.6, 7.3)),
+    at(carts[0], top(6.45, 7.3)),
+    at(carts[1], top(6.75, 7.3)),
+    ...[8.45, 8.58, 8.71, 8.84].map((x) => at(massBar(), top(x, 7.3))),
     at(new Stand(), cab.slot(0, 0, 0.2)),
     at(new Stand(), cab.slot(0, 0, 0.8)),
     at(new Stand(), cab.slot(1, 0, 0.2)),
@@ -77,5 +90,5 @@ export function stockEquipment(cab: StorageCabinet): Stock {
     at(tubes[0], cab.slot(7, 1, 0.55)),
     at(tubes[1], cab.slot(7, 1, 0.85)),
   ];
-  return { items, strings, springs, lasers, supplies, ammeters, tubes };
+  return { items, strings, springs, lasers, supplies, ammeters, tubes, rails, carts };
 }
