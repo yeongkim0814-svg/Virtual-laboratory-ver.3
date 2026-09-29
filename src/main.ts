@@ -155,7 +155,7 @@ function updateDock(): void {
   const actions = items.flatMap((it) => it.experimentActions());
   // 정렬 안내: 레이저 빛이 슬릿판에 닿았지만 슬릿을 지나지 못할 때
   const hints = stock.lasers.map((l) => l.alignHint).filter((h): h is string => !!h);
-  if (wires.pending) hints.unshift(`도선 연결 중: ${wires.pending.label} → 이을 단자를 탭하세요`);
+  if (wires.pending) hints.unshift(`도선 연결 중: ${wires.pending.label} → 이을 단자나 기구를 탭 (빈 곳을 탭하면 취소)`);
   const key = actions.map((a) => a.label).join('|') + '#' + hints.join('|');
   if (key === dockKey) return;
   dockKey = key;
@@ -252,35 +252,83 @@ function terminalOf(o: THREE.Object3D | null): Terminal | null {
   return null;
 }
 
-function actionsAt(x: number, y: number): Action[] {
+/** 기구에 달린 단자들 (자기 것만, 끼워진 다른 기구의 단자는 빼고) */
+function terminalsOf(item: Item): Terminal[] {
+  const out: Terminal[] = [];
+  item.object.traverse((o) => {
+    const t = o.userData.terminal as Terminal | undefined;
+    if (t && t.owner === item) out.push(t);
+  });
+  return out;
+}
+
+/** 도선을 잇는 중: 단자를 탭하면 바로 연결, 기구를 탭하면 그 기구의 단자 고르기, 다른 곳은 취소 */
+function pendingWireActions(hit: THREE.Intersection | null): Action[] {
+  const p = wires.pending!;
+  const term = hit ? terminalOf(hit.object) : null;
+  if (term && term !== p) return wires.actionsFor(term);
+  const owner = hit && ownerOf(hit.object);
+  if (owner instanceof Item) {
+    const ts = terminalsOf(owner).filter((t) => t !== p);
+    if (ts.length) return ts.map((t) => wires.actionsFor(t)[0]);
+  }
+  return [{ label: '도선 연결 취소', run: () => { wires.pending = null; } }];
+}
+
+/**
+ * 한 번 탭: 빈손이면 기구 집기 · 문/콘센트 동작, 들고 있으면 놓기
+ * (도선 연결 중이면 이을 단자 고르기)
+ */
+function singleActionsAt(x: number, y: number): Action[] {
   const hit = raycast(x, y);
-  const held = hand.held;
-  // 빈손으로 단자를 탭하면 도선 동작, 도선 연결 중에 다른 곳을 탭하면 취소
-  const term = !held && hit ? terminalOf(hit.object) : null;
-  if (term) return wires.actionsFor(term);
-  if (wires.pending) return [{ label: '도선 연결 취소', run: () => { wires.pending = null; } }];
-  if (held) {
-    const att = hit && findAttach(held, hit);
-    if (att) {
-      const point = hit!.point.clone();
-      // 막대에 끼울 때는 집게가 올 높이(책상 면 기준)를 미리 보여 준다.
-      // 집게에 물린 물체는 잡힌 점이 집게 높이에 오므로 = 레이저 빛 높이 / 슬릿 중심 높이 (레이저·슬릿 높이 맞추기용)
-      const where = att.socket.opts.slide ? ` (높이 ${Math.round(att.socket.slideValue(hit!.point) * 100)} cm)` : '';
-      return [{
-        label: `연결 · ${held.name} → ${att.socket.label}${where}`,
-        run: () => {
-          const item = hand.handOver();
-          if (item) att.socket.attach(item, att.plug, point, camera.getWorldPosition(camPos));
-        },
-      }];
-    }
-    const owner = hit && ownerOf(hit.object);
-    if (owner && !(owner instanceof Item)) return owner.actions(); // 들고 있어도 문은 열 수 있다
+  if (wires.pending) return pendingWireActions(hit);
+  const owner = hit && ownerOf(hit.object);
+  if (hand.held) {
+    if (owner && !(owner instanceof Item)) return owner.actions(); // 들고 있어도 문·콘센트는 다룰 수 있다
     const place = hand.findTarget(x, y);
     return place?.valid ? [{ label: '놓기', run: () => hand.place(place) }] : [];
   }
-  const owner = hit && ownerOf(hit.object);
+  if (owner instanceof Item) return owner.actions().filter((a) => a.kind === 'pick');
   return owner ? owner.actions() : [];
+}
+
+/**
+ * 두 번 탭: 배치된 기구의 조작 전부
+ *  - 빈손: 실험 열기, 전원, 켜기/끄기, 파장·세기, 회전, 높이, 도선 연결 시작/빼기
+ *  - 들고 있음: 탭한 기구에 끼우기·매달기
+ */
+function doubleActionsAt(x: number, y: number): Action[] {
+  const hit = raycast(x, y);
+  if (wires.pending) return pendingWireActions(hit);
+  if (!hit) return [];
+  const held = hand.held;
+  if (held) {
+    const att = findAttach(held, hit);
+    if (!att) return [];
+    const point = hit.point.clone();
+    // 막대에 끼울 때는 집게가 올 높이(책상 면 기준)를 미리 보여 준다 (레이저·슬릿 높이 맞추기용)
+    const where = att.socket.opts.slide ? ` (높이 ${Math.round(att.socket.slideValue(hit.point) * 100)} cm)` : '';
+    return [{
+      label: `연결 · ${held.name} → ${att.socket.label}${where}`,
+      run: () => {
+        const item = hand.handOver();
+        if (item) att.socket.attach(item, att.plug, point, camera.getWorldPosition(camPos));
+      },
+    }];
+  }
+  const term = terminalOf(hit.object);
+  if (term) return wires.actionsFor(term); // 단자를 직접 두 번 탭 → 그 단자에서 도선 시작
+  const owner = ownerOf(hit.object);
+  if (!(owner instanceof Item)) return [];
+  const acts = owner.actions().filter((a) => a.kind !== 'pick');
+  for (const t of terminalsOf(owner)) {
+    acts.push({ label: `도선 연결 시작 · ${t.name}`, run: () => { wires.pending = t; } });
+    for (const w of t.wires) {
+      const other = w.a === t ? w.b : w.a;
+      acts.push({ label: `도선 빼기 · ${t.name} ↔ ${other.label}`, secondary: true, run: () => wires.remove(w) });
+    }
+  }
+  return acts;
 }
 
 // ---------- 동작 선택 메뉴 (동작이 여러 개일 때 탭한 자리에) ----------
@@ -309,11 +357,40 @@ function hideMenu(): void {
 }
 canvas.addEventListener('pointerdown', hideMenu); // 다른 곳을 만지면 닫힘
 
-/** 짧은 탭: 주 동작이 하나면 바로, 여럿이면 메뉴 (보조 동작도 함께 보여 줌) */
+/** 동작이 하나면 바로, 여럿이면 탭한 자리에 메뉴 */
 function runActions(actions: Action[], x: number, y: number): void {
-  const primary = actions.filter((a) => !a.secondary);
-  if (primary.length === 1) primary[0].run();
-  else if (primary.length > 1) showMenu(actions, x, y);
+  if (actions.length === 1) actions[0].run();
+  else if (actions.length > 1) showMenu(actions, x, y);
+}
+
+/**
+ * 한 번 탭 / 두 번 탭 구별: 탭하면 0.3초 기다렸다가 두 번째 탭이 같은 자리(60 px 안)에 오면 두 번 탭.
+ * 그 자리에 두 번 탭 동작이 없으면 기다리지 않고 바로 한 번 탭으로 처리한다 (반응이 늦지 않게).
+ */
+const DOUBLE_MS = 300;
+let firstTap: { x: number; y: number; t: number; timer: number; run: () => void } | null = null;
+function handleTap(px: number, py: number): void {
+  const x = (px / stage.clientWidth) * 2 - 1;
+  const y = -(py / stage.clientHeight) * 2 + 1;
+  const now = performance.now();
+  if (firstTap && now - firstTap.t < DOUBLE_MS && Math.hypot(px - firstTap.x, py - firstTap.y) < 60) {
+    clearTimeout(firstTap.timer);
+    firstTap = null;
+    runActions(doubleActionsAt(x, y), px, py);
+    return;
+  }
+  if (firstTap) { // 다른 자리를 탭함 → 앞의 탭은 한 번 탭으로 바로 처리
+    clearTimeout(firstTap.timer);
+    firstTap.run();
+    firstTap = null;
+  }
+  const single = singleActionsAt(x, y);
+  const run = () => runActions(single, px, py);
+  if (wires.pending || !doubleActionsAt(x, y).length) {
+    run();
+    return;
+  }
+  firstTap = { x: px, y: py, t: now, run, timer: window.setTimeout(() => { firstTap = null; run(); }, DOUBLE_MS) };
 }
 
 // ---------- 메인 루프 ----------
@@ -323,32 +400,46 @@ let fpsTime = 0;
 let fps = 0;
 
 /**
- * 전선이 타고 넘어갈 장비 상자: 장면에 놓인 기구의 보이는 부품마다 월드 상자 하나.
- * (손에 든 기구, 투명 판정용 원기둥, 단자 꼭지, 가늘고 긴 막대는 뺀다)
+ * 전선이 돌아갈 장비 상자: 장면에 놓인 기구마다 보이는 부품을 합친 월드 상자 하나.
+ * (손에 든 기구, 투명 판정용 원기둥, 단자 꼭지, 전선·실은 뺀다. 클램프처럼 떠 있는 기구는 cable.ts에서 높이로 거른다)
  */
 const tmpBox = new THREE.Box3();
+const itemBox = new THREE.Box3();
+const toItem = new THREE.Matrix4();
+const tmpM = new THREE.Matrix4();
 function collectEquipmentBoxes(): void {
   equipmentBoxes.length = 0;
   if (!wires.wires.length && !power.hasCords()) return;
   for (const it of items) {
     const root = it.root();
     if (root.object.parent !== scene) continue;
+    // 기구 자신의 좌표계에서 상자를 만든다 → 비스듬히 놓여도 딱 맞는 (돌려 놓인) 상자
+    it.object.updateWorldMatrix(true, false);
+    toItem.copy(it.object.matrixWorld).invert();
+    itemBox.makeEmpty();
     const visit = (o: THREE.Object3D): void => {
       if (!o.visible || (o !== it.object && o.userData.item) || o.userData.noPick || o.userData.cableIgnore) return;
       const m = o as THREE.Mesh;
       if (m.isMesh && m.material !== HITBOX_MAT) {
         const g = m.geometry;
         if (!g.boundingBox) g.computeBoundingBox();
-        tmpBox.copy(g.boundingBox!).applyMatrix4(m.matrixWorld);
-        const h = tmpBox.max.y - tmpBox.min.y;
-        const wMin = Math.min(tmpBox.max.x - tmpBox.min.x, tmpBox.max.z - tmpBox.min.z);
-        if (!(h > 0.3 && wMin < 0.06)) {
-          equipmentBoxes.push({ x1: tmpBox.min.x, z1: tmpBox.min.z, x2: tmpBox.max.x, z2: tmpBox.max.z, top: tmpBox.max.y, owner: root.object });
-        }
+        itemBox.union(tmpBox.copy(g.boundingBox!).applyMatrix4(tmpM.multiplyMatrices(toItem, m.matrixWorld)));
       }
       for (const c of o.children) visit(c);
     };
     visit(it.object);
+    if (itemBox.isEmpty()) continue;
+    const e = it.object.matrixWorld.elements;
+    const c = itemBox.getCenter(new THREE.Vector3()).applyMatrix4(it.object.matrixWorld);
+    const u = new THREE.Vector3(e[0], 0, e[2]).normalize();
+    const v = new THREE.Vector3(e[8], 0, e[10]).normalize();
+    const y0 = new THREE.Vector3(0, itemBox.min.y, 0).applyMatrix4(it.object.matrixWorld).y;
+    const y1 = new THREE.Vector3(0, itemBox.max.y, 0).applyMatrix4(it.object.matrixWorld).y;
+    equipmentBoxes.push({
+      cx: c.x, cz: c.z, ux: u.x, uz: u.z, vx: v.x, vz: v.z,
+      hx: (itemBox.max.x - itemBox.min.x) / 2, hz: (itemBox.max.z - itemBox.min.z) / 2,
+      bottom: Math.min(y0, y1), top: Math.max(y0, y1), owner: root.object,
+    });
   }
 }
 
@@ -387,11 +478,14 @@ renderer.setAnimationLoop(() => {
   rotateBar.update();
   hand.update(aimX);
 
-  // 조준점 아래 안내 문구: 지금 탭하면 일어날 일 (동작이 더 있으면 "…")
-  const aimed = actionsAt(aimX, 0).filter((a) => !a.secondary);
-  let prompt = '';
-  if (aimed.length) prompt = `[탭] ${aimed[0].label}${aimed.length > 1 ? ' …' : ''}`;
-  else if (hand.held && hand.aim) prompt = '여기에는 놓을 수 없음';
+  // 조준점 아래 안내 문구: 한 번 탭 / 두 번 탭하면 일어날 일
+  const aimed = singleActionsAt(aimX, 0);
+  const aimed2 = wires.pending ? [] : doubleActionsAt(aimX, 0);
+  const parts: string[] = [];
+  if (aimed.length) parts.push(`[탭] ${aimed[0].label}${aimed.length > 1 ? ' …' : ''}`);
+  else if (hand.held && hand.aim && !aimed2.length) parts.push('여기에는 놓을 수 없음');
+  if (aimed2.length) parts.push(`[두 번 탭] ${aimed2.length === 1 ? aimed2[0].label : '조작 메뉴'}`);
+  const prompt = parts.join('   ');
   if (promptEl.textContent !== prompt) promptEl.textContent = prompt;
   promptEl.hidden = !prompt;
 
@@ -401,19 +495,18 @@ renderer.setAnimationLoop(() => {
   // PC: E 키 → 조준점의 첫 번째 동작
   if (input.interactKey) aimed[0]?.run();
 
-  // 화면 탭
-  for (const t of input.taps) {
-    const x = (t.x / stage.clientWidth) * 2 - 1;
-    const y = -(t.y / stage.clientHeight) * 2 + 1;
-    runActions(actionsAt(x, y), t.x, t.y);
-  }
-  // 길게 누르기: 보조 동작(방향 돌리기 등)까지 모두 담은 메뉴
+  // 화면 탭 (한 번 / 두 번 구별)
+  for (const t of input.taps) handleTap(t.x, t.y);
+  // 길게 누르기 = 두 번 탭과 같은 조작 메뉴
   for (const t of input.holds) {
     const x = (t.x / stage.clientWidth) * 2 - 1;
     const y = -(t.y / stage.clientHeight) * 2 + 1;
-    const all = actionsAt(x, y);
+    const all = doubleActionsAt(x, y);
     if (all.length) showMenu(all, t.x, t.y);
   }
+  // 도선 잇는 중: 단자에서 조준점까지 미리 보기 선
+  const aimHit = wires.pending ? raycast(aimX, 0) : null;
+  wires.updatePreview(wires.pending ? (aimHit?.point ?? camera.getWorldPosition(camPos).addScaledVector(camera.getWorldDirection(new THREE.Vector3()), 0.8)) : null);
 
   retro.render();
   minimap.draw();

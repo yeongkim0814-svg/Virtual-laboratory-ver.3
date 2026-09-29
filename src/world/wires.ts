@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { HITBOX_MAT, type Item } from './items';
 import type { Action } from './interactable';
-import { Cable, drape } from './cable';
+import { Cable, cablePath, settle, surfaceBelow } from './cable';
 
 const WIRE_MAX = 1.5; // m
 const KNOB_RED = new THREE.MeshLambertMaterial({ color: 0xc0302a });
@@ -74,25 +74,21 @@ export class Wire {
   }
 
   /**
-   * 단자에서 바깥으로 3 cm 뻗은 뒤, 가운데가 처지는 곡선으로 잇는다.
-   * 그다음 책상·장비를 뚫는 부분은 그 위로 올려 걸친다 (drape).
+   * 단자에서 바깥으로 3 cm 뻗은 뒤 놓인 면으로 내려가, 그 면 위의 장비를 옆으로 돌아서(길찾기) 다른 단자로 간다.
+   * 높이가 다른 면(책상 ↔ 바닥)이면 책상 가장자리를 넘어 늘어진다.
    */
   redraw(): void {
+    const CLR = 0.006;
     const p = this.a.worldPosition();
     const q = this.b.worldPosition();
     const ps = p.clone().addScaledVector(this.a.worldFacing(), 0.03);
     const qs = q.clone().addScaledVector(this.b.worldFacing(), 0.03);
-    const path = [p, ps];
-    const sag = 0.1 + 0.2 * ps.distanceTo(qs);
-    const n = 16;
-    for (let i = 1; i < n; i++) {
-      const t = i / n;
-      const m = ps.clone().lerp(qs, t);
-      m.y -= sag * 4 * t * (1 - t);
-      path.push(m);
-    }
-    path.push(qs, q);
-    drape(path, this.pts, 0.006);
+    const sp = surfaceBelow(ps.x, ps.z, ps.y + 0.02);
+    const sq = surfaceBelow(qs.x, qs.z, qs.y + 0.02);
+    const A = new THREE.Vector3(ps.x, Math.min(ps.y, sp + CLR), ps.z);
+    const B = new THREE.Vector3(qs.x, Math.min(qs.y, sq + CLR), qs.z);
+    const path = [p, ps, ...cablePath(A, sp, B, sq, CLR), qs, q];
+    settle(path, this.pts, CLR);
     this.cable.setPoints(this.pts);
   }
 }
@@ -101,8 +97,29 @@ export class WireSystem {
   readonly wires: Wire[] = [];
   /** 연결을 시작한 단자 (다른 단자를 탭하기를 기다리는 중) */
   pending: Terminal | null = null;
+  /** 연결 중일 때 단자 → 조준점까지 보여 주는 미리 보기 선 */
+  private preview = new Cable(20, 0.004, 0xffd27a);
+  private previewPts = Array.from({ length: 20 }, () => new THREE.Vector3());
 
-  constructor(private scene: THREE.Scene) {}
+  constructor(private scene: THREE.Scene) {
+    this.preview.mesh.visible = false;
+    scene.add(this.preview.mesh);
+  }
+
+  /** 미리 보기 선을 조준점 to까지 (null이면 숨김) */
+  updatePreview(to: THREE.Vector3 | null): void {
+    const p = this.pending;
+    this.preview.mesh.visible = !!(p && to);
+    if (!p || !to) return;
+    const a = p.worldPosition();
+    const n = this.previewPts.length;
+    const sag = 0.1 * a.distanceTo(to);
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      this.previewPts[i].lerpVectors(a, to, t).y -= sag * 4 * t * (1 - t);
+    }
+    this.preview.setPoints(this.previewPts);
+  }
 
   /** 단자를 탭했을 때의 동작 */
   actionsFor(t: Terminal): Action[] {

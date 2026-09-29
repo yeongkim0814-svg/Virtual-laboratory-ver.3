@@ -95,7 +95,7 @@ export class Item implements Interactable {
     return [
       ...assemblyExperiments(this.root()),
       ...this.extraActions(),
-      { label: `집기 · ${this.name}`, run: () => this.onPick(this) },
+      { label: `집기 · ${this.name}`, kind: 'pick', run: () => this.onPick(this) },
       ...this.rotateAction(),
       ...this.slideActions(),
     ];

@@ -10,8 +10,7 @@
  */
 import * as THREE from 'three';
 import type { Action, Interactable } from './interactable';
-import { FURNITURE } from './layout';
-import { Cable, drape } from './cable';
+import { Cable, cablePath, settle, surfaceBelow } from './cable';
 
 export interface Powered {
   readonly name: string;
@@ -64,12 +63,17 @@ export class Outlet implements Interactable {
     this.object.lookAt(position.clone().add(facing)); // +z를 facing 방향으로
   }
 
+  /** 콘센트 면이 향한 방향 (월드) */
+  facing(): THREE.Vector3 {
+    return new THREE.Vector3(0, 0, 1).applyQuaternion(this.object.quaternion);
+  }
+
   actions(): Action[] {
     return this.getActions(this);
   }
 }
 
-const CORD_PTS = 110; // 점 간격이 3 cm보다 촘촘하도록 (전원선 2 m + 경로)
+const CORD_PTS = 140; // 점 간격이 3 cm보다 촘촘하도록 (전원선 2 m + 경로)
 
 /**
  * 전원선 한 가닥. 실제 선처럼 놓이도록:
@@ -86,52 +90,32 @@ class Cord {
   }
 
   /**
-   * @param restY 기기(조립체)가 놓인 면의 높이 — null이면 손에 들고 있는 중
-   * @param own 기기 조립체 (선이 자기 기기 위로 타고 넘지 않게 장애물에서 뺀다)
+   * 전원선 경로: 기기 → (놓인 면으로 내려와) 면 위의 장비를 돌아 가장자리 → 가구를 돌아 늘어짐 → 콘센트
+   * 콘센트는 실험대 상판(6 cm 튀어나옴) 아래 수납장 면에 있으므로, 플러그에서 먼저 10 cm 수평으로 나와
+   * 상판 가장자리 바깥에서 오르내린다 (상판을 뚫지 않게).
+   * @param a 기기의 전원선 출구, center 기기 중심 (출구에서 바깥으로 뻗을 방향을 정함)
+   * @param restY 기기가 놓인 면의 높이 — null이면 손에 들고 있음 (손 아래 면으로 늘어진다)
+   * @param b 콘센트 구멍, out 콘센트 면이 향한 방향
    */
-  set(a: THREE.Vector3, b: THREE.Vector3, restY: number | null, own: THREE.Object3D): void {
+  set(a: THREE.Vector3, center: THREE.Vector3, restY: number | null, b: THREE.Vector3, out: THREE.Vector3): void {
+    const CLR = 0.005;
     const path: THREE.Vector3[] = [a.clone()];
+    let S: number;
+    let A: THREE.Vector3;
     if (restY === null) {
-      // 들고 있을 때: 손에서 콘센트까지 그냥 늘어진다
-      const sag = 0.35 * a.distanceTo(b);
-      for (let i = 1; i <= 20; i++) {
-        const t = i / 20;
-        const p = a.clone().lerp(b, t);
-        p.y -= sag * 4 * t * (1 - t);
-        path.push(p);
-      }
-      drape(path, this.out, 0.005);
-      this.cable.setPoints(this.out);
-      this.line.visible = true;
-      return;
+      S = surfaceBelow(a.x, a.z, a.y);
+      A = new THREE.Vector3(a.x, S + CLR, a.z);
+    } else {
+      S = restY;
+      const dir = new THREE.Vector3(a.x - center.x, 0, a.z - center.z);
+      if (dir.lengthSq() < 1e-8) dir.set(1, 0, 0);
+      const a1 = a.clone().addScaledVector(dir.normalize(), 0.03);
+      path.push(a1);
+      A = new THREE.Vector3(a1.x, Math.min(a1.y, S + CLR), a1.z);
     }
-    const onTop = new THREE.Vector3(a.x, restY + 0.006, a.z);
-    path.push(onTop);
-    // 기기가 가구 윗면 위에 있으면: 콘센트 방향으로 그 면의 가장자리까지 면을 따라 간다
-    const top = FURNITURE.find((f) => Math.abs(f.height - restY) < 0.03
-      && a.x >= f.rect.x1 && a.x <= f.rect.x2 && a.z >= f.rect.z1 && a.z <= f.rect.z2);
-    let hangFrom = onTop;
-    if (top) {
-      const dx = b.x - a.x;
-      const dz = b.z - a.z;
-      // 광선 (a + t·d)이 직사각형을 빠져나가는 t
-      const tx = dx > 0 ? (top.rect.x2 - a.x) / dx : dx < 0 ? (top.rect.x1 - a.x) / dx : Infinity;
-      const tz = dz > 0 ? (top.rect.z2 - a.z) / dz : dz < 0 ? (top.rect.z1 - a.z) / dz : Infinity;
-      const t = Math.min(tx, tz, 1);
-      // 가장자리 위의 점: 모서리에 걸쳐 넘어가도록 가장자리보다 1 cm 바깥
-      const len = Math.hypot(dx, dz) || 1;
-      hangFrom = new THREE.Vector3(a.x + dx * t + (dx / len) * 0.01, restY + 0.006, a.z + dz * t + (dz / len) * 0.01);
-      path.push(hangFrom);
-    }
-    // 가장자리 → 콘센트: 처지는 곡선
-    const sag = 0.3 * hangFrom.distanceTo(b);
-    for (let i = 1; i <= 20; i++) {
-      const t = i / 20;
-      const p = hangFrom.clone().lerp(b, t);
-      p.y -= sag * 4 * t * (1 - t);
-      path.push(p);
-    }
-    drape(path, this.out, 0.005, own);
+    const b1 = b.clone().addScaledVector(out, 0.1);
+    path.push(...cablePath(A, S, b1, b1.y, CLR), b);
+    settle(path, this.out, CLR);
     this.cable.setPoints(this.out);
     this.line.visible = true;
   }
@@ -238,7 +222,8 @@ export class PowerSystem {
         root = root.parent;
         if ((root as THREE.Camera).isCamera) held = true;
       }
-      cord.set(a, b, held ? null : root.getWorldPosition(new THREE.Vector3()).y, root);
+      const center = d.object.getWorldPosition(new THREE.Vector3());
+      cord.set(a, center, held ? null : root.getWorldPosition(new THREE.Vector3()).y, b, d.port.outlet.facing());
     }
   }
 }
