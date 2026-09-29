@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- 핀치 확대·더블탭 확대를 막아 게임 조작과 충돌하지 않게 한다 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#20242a" />
+    <title>가상 실험실</title>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <!-- 조이스틱 (왼쪽 영역을 터치하면 그 자리에 나타남) -->
+    <div id="joy-base"><div id="joy-knob"></div></div>
+
+    <!-- 게임 중 화면 정보 -->
+    <div id="hud" hidden>
+      <div id="crosshair"></div>
+      <div id="room"></div>
+      <div id="debug"></div>
+      <canvas id="minimap"></canvas>
+      <button id="btn-settings" class="icon-btn" aria-label="설정">⚙</button>
+      <button id="btn-interact" hidden></button>
+      <div id="hint">왼쪽: 이동 · 오른쪽 드래그: 둘러보기 · 탭: 상호작용</div>
+    </div>
+
+    <!-- 설정 패널 -->
+    <div id="settings" class="panel" hidden>
+      <h2>설정</h2>
+      <label>시점 감도 <span id="set-sens-val"></span>
+        <input id="set-sens" type="range" min="0.3" max="2.5" step="0.1" />
+      </label>
+      <label>이동 속도 <span id="set-speed-val"></span>
+        <input id="set-speed" type="range" min="1" max="4" step="0.1" />
+      </label>
+      <label class="row"><input id="set-debug" type="checkbox" /> FPS·좌표 표시</label>
+      <div class="buttons">
+        <button id="set-fullscreen">전체화면</button>
+        <button id="set-reset">처음 위치로</button>
+        <button id="set-close" class="primary">닫기</button>
+      </div>
+    </div>
+
+    <!-- 시작 화면 -->
+    <div id="start">
+      <div class="card">
+        <h1>가상 실험실</h1>
+        <p class="sub">물리 · 화학 법칙을 직접 확인하는 1인칭 실험실</p>
+        <ul class="guide">
+          <li><b>이동</b> 화면 왼쪽을 누른 채 밀기 (PC: WASD)</li>
+          <li><b>둘러보기</b> 화면 오른쪽 드래그 (PC: 마우스 드래그)</li>
+          <li><b>상호작용</b> 물체를 탭하거나 버튼 누르기 (PC: 클릭 / E)</li>
+        </ul>
+        <button id="btn-enter" class="primary big">실험실 입장</button>
+        <p class="note">태블릿을 가로로 들고 사용하세요.</p>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,154 @@
+:root {
+  --bg: #20242a;
+  --panel: rgba(24, 28, 34, 0.88);
+  --text: #eef1f4;
+  --muted: #a9b1bb;
+  --accent: #5ab4ff;
+  --radius: 14px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Noto Sans KR", sans-serif;
+  /* 스크롤·새로고침 당기기·텍스트 선택 등 브라우저 기본 제스처를 끈다 */
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+[hidden] { display: none !important; }
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none; /* 터치를 전부 우리 코드가 처리 */
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+button:active { transform: scale(0.97); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #06223a; font-weight: 600; }
+
+/* ---------- HUD ---------- */
+#hud { position: fixed; inset: 0; pointer-events: none; }
+#hud button { pointer-events: auto; }
+
+#crosshair {
+  position: absolute; left: 50%; top: 50%;
+  width: 6px; height: 6px; margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.4);
+}
+
+#room {
+  position: absolute; left: 16px; top: 14px;
+  padding: 6px 12px;
+  background: var(--panel); border-radius: 10px;
+  font-weight: 600;
+}
+
+#debug {
+  position: absolute; left: 16px; top: 54px;
+  font-size: 12px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px #000;
+}
+
+#minimap {
+  position: absolute; right: 16px; top: 14px;
+  width: min(260px, 32vw);
+  background: var(--panel); border-radius: 10px;
+}
+
+.icon-btn {
+  position: absolute; right: calc(16px + min(260px, 32vw) + 10px); top: 14px;
+  width: 44px; height: 44px; padding: 0;
+  font-size: 22px; background: var(--panel);
+}
+
+#btn-interact {
+  position: absolute; right: 32px; bottom: 40px;
+  min-width: 120px; padding: 18px 26px;
+  font-size: 18px; font-weight: 700;
+  background: var(--accent); color: #06223a; border: none;
+  border-radius: 999px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+#hint {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  font-size: 13px; color: var(--muted);
+  text-shadow: 0 1px 2px #000;
+  white-space: nowrap;
+}
+
+/* ---------- 조이스틱 ---------- */
+#joy-base {
+  position: fixed; width: 120px; height: 120px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  pointer-events: none; display: none;
+}
+#joy-base.active { display: block; }
+#joy-knob {
+  position: absolute; left: 50%; top: 50%;
+  width: 52px; height: 52px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+/* ---------- 패널 ---------- */
+.panel {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(380px, calc(100% - 32px));
+  padding: 20px 22px;
+  background: var(--panel); border-radius: var(--radius);
+  backdrop-filter: blur(8px);
+}
+.panel h2 { margin: 0 0 14px; font-size: 18px; }
+.panel label { display: block; margin: 12px 0; font-size: 15px; }
+.panel label span { float: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.panel input[type="range"] { width: 100%; margin-top: 8px; accent-color: var(--accent); height: 28px; }
+.panel label.row { display: flex; align-items: center; gap: 10px; }
+.panel input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent); }
+.panel .buttons { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+.panel .buttons button { flex: 1; }
+
+/* ---------- 시작 화면 ---------- */
+#start {
+  position: fixed; inset: 0;
+  display: grid; place-items: center;
+  padding: 16px;
+  background: radial-gradient(ellipse at center, rgba(32, 36, 42, 0.75), rgba(10, 12, 15, 0.95));
+}
+#start .card { max-width: 480px; text-align: center; }
+#start h1 { margin: 0; font-size: 34px; letter-spacing: -0.5px; }
+#start .sub { margin: 6px 0 22px; color: var(--muted); }
+#start .guide { list-style: none; padding: 0; margin: 0 0 26px; text-align: left; line-height: 1.9; }
+#start .guide b { display: inline-block; width: 88px; color: var(--accent); }
+#start .big { padding: 16px 40px; font-size: 18px; border-radius: 999px; }
+#start .note { margin-top: 14px; font-size: 13px; color: var(--muted); }
