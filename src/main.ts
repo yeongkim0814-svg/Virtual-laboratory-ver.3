@@ -17,6 +17,7 @@ import { Hand, isNoPick } from './player/hand';
 import { Controls } from './input/controls';
 import { Minimap } from './ui/minimap';
 import { bindSettingsPanel, enterFullscreen, loadSettings } from './ui/settings';
+import { RetroPipeline, applyRetroMaterials } from './render/retro';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -24,27 +25,29 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 // 모든 화면 요소는 16:9 비율의 "무대(stage)" 안에 있다. 화면비가 다르면 위아래(또는 좌우)에 검은 띠가 생긴다.
 const stage = $('stage');
 const canvas = $<HTMLCanvasElement>('scene');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-// 태블릿의 고해상도 화면을 그대로 쓰면 무거우므로 픽셀 비율을 1.5로 제한
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+// 안티에일리어싱 끔: 계단 현상도 옛 게임 느낌의 일부
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.05, 100);
 camera.userData.noPick = true; // 카메라에 붙은 것(손에 든 물체)은 광선 판정에서 제외
 scene.add(camera); // 카메라에 붙인 물체도 그려지도록 장면에 넣는다
 
+const settings = loadSettings();
+const retro = new RetroPipeline(renderer, scene, camera);
+
 function resize(): void {
-  const w = stage.clientWidth;
-  const h = stage.clientHeight;
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
+  const aspect = stage.clientWidth / stage.clientHeight || 16 / 9;
+  retro.setResolution(settings.pixelHeight, aspect); // 화면 크기와 무관하게 내부 해상도는 작게 고정
+  camera.aspect = aspect;
   camera.updateProjectionMatrix();
 }
 new ResizeObserver(resize).observe(stage);
 resize();
+retro.setJitter(settings.jitter);
 
 // ---------- 실험실 만들기 ----------
-buildLab(scene);
+const updateLights = buildLab(scene);
 buildFurniture(scene);
 const door = new Door();
 scene.add(door.object);
@@ -55,19 +58,24 @@ for (const it of items) scene.add(it.object);
 const interactables: Interactable[] = [door, ...items];
 
 // ---------- 플레이어·손·입력·UI ----------
-const settings = loadSettings();
 const player = new Player(camera, door, SPAWN);
 const hand = new Hand(scene, camera, items);
 for (const it of items) it.onPick = (item) => hand.pickUp(item);
 const controls = new Controls(canvas);
 const minimap = new Minimap($<HTMLCanvasElement>('minimap'), player, door, items);
-bindSettingsPanel(settings, { resetPosition: () => player.reset() });
+bindSettingsPanel(settings, {
+  resetPosition: () => player.reset(),
+  applyGraphics: () => {
+    resize();
+    retro.setJitter(settings.jitter);
+  },
+});
+applyRetroMaterials(scene); // 모든 재질에 PS1 정점 흔들림 적용 (첫 렌더 전에)
 
 const roomLabel = $('room');
 const debugEl = $('debug');
 const heldEl = $('held');
-const interactBtn = $<HTMLButtonElement>('btn-interact');
-const placeBtn = $<HTMLButtonElement>('btn-place');
+const promptEl = $('prompt');
 
 $('btn-enter').addEventListener('click', () => {
   $('start').hidden = true;
@@ -100,8 +108,6 @@ function usable(target: Interactable | null): Interactable | null {
 }
 
 let focused: Interactable | null = null;
-interactBtn.addEventListener('click', () => focused?.interact());
-placeBtn.addEventListener('click', () => hand.place(hand.aim));
 
 // ---------- 메인 루프 ----------
 let last = performance.now();
@@ -120,22 +126,19 @@ renderer.setAnimationLoop(() => {
 
   player.update(dt, input, settings);
   door.update(dt);
+  updateLights(now / 1000);
   camera.updateMatrixWorld();
   hand.update();
 
-  // 화면 중앙(조준점)에 있는 물체 → 상호작용 버튼
+  // 조준점 아래 안내 문구: 조준한 물체 → "[탭] 집기 · 비커", 들고 있으면 → 놓기 가능 여부
   focused = usable(pick(0, 0));
-  interactBtn.hidden = !focused;
-  if (focused) interactBtn.textContent = focused.label();
+  let prompt = '';
+  if (focused) prompt = `[탭] ${focused.label()}`;
+  else if (hand.held && hand.aim) prompt = hand.aim.valid ? '[탭] 놓기' : '여기에는 놓을 수 없음';
+  if (promptEl.textContent !== prompt) promptEl.textContent = prompt;
+  promptEl.hidden = !prompt;
 
-  // 들고 있는 물체 → 놓기 버튼 (놓을 수 있는 면을 조준할 때만 활성)
-  placeBtn.hidden = !hand.held;
-  if (hand.held) {
-    const ok = !!hand.aim?.valid;
-    placeBtn.disabled = !ok;
-    placeBtn.textContent = ok ? '놓기' : '놓을 곳 조준';
-    heldEl.textContent = `손에 든 물체: ${hand.held.name} · ${(hand.held.mass * 1000).toFixed(0)} g`;
-  }
+  if (hand.held) heldEl.textContent = `들고 있음: ${hand.held.name}`;
   heldEl.hidden = !hand.held;
 
   // PC: E 키 → 조준한 물체와 상호작용, 없으면 들고 있는 물체 내려놓기
@@ -153,7 +156,7 @@ renderer.setAnimationLoop(() => {
     else if (hand.held) hand.place(hand.findTarget(x, y));
   }
 
-  renderer.render(scene, camera);
+  retro.render();
   minimap.draw();
   roomLabel.textContent = roomNameAt(player.pos.x, player.pos.z);
 

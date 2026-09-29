@@ -1,12 +1,22 @@
+/* 레트로 호러 HUD: 호박색 단색 + 픽셀 글꼴 + 주사선, 모서리 둥글림 없음
+   글꼴: Galmuri11 Bold (SIL Open Font License 1.1, assets/fonts/Galmuri-OFL.md) */
+@font-face {
+  font-family: 'Galmuri11';
+  src: url('./assets/fonts/Galmuri11-Bold.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+}
+
 :root {
-  --bg: #20242a;
-  --panel: rgba(24, 28, 34, 0.88);
-  --text: #eef1f4;
-  --muted: #a9b1bb;
-  --accent: #5ab4ff;
-  --radius: 14px;
-  --letterbox: #0b0d10; /* 16:9 무대 바깥 여백 색 */
-  --place: #4ade80;
+  --bg: #0a0b08;
+  --letterbox: #000;          /* 16:9 무대 바깥 여백 색 */
+  --panel: rgba(8, 9, 6, 0.88);
+  --amber: #ff9a2e;           /* 주 HUD 색 */
+  --amber-dim: rgba(255, 154, 46, 0.55);
+  --amber-faint: rgba(255, 154, 46, 0.18);
+  --text: #ffd9a8;
+  --bad: #ff5a3c;
+  --font: 'Galmuri11', ui-monospace, monospace;
   color-scheme: dark;
 }
 
@@ -18,7 +28,8 @@ html, body {
   overflow: hidden;
   background: var(--letterbox);
   color: var(--text);
-  font-family: system-ui, -apple-system, "Noto Sans KR", sans-serif;
+  font-family: var(--font);
+  font-size: 15px;
   /* 스크롤·새로고침 당기기·텍스트 선택 등 브라우저 기본 제스처를 끈다 */
   overscroll-behavior: none;
   user-select: none;
@@ -50,87 +61,96 @@ html, body {
   width: 100%;
   height: 100%;
   display: block;
-  touch-action: none; /* 터치를 전부 우리 코드가 처리 */
+  image-rendering: pixelated; /* 저해상도 화면을 확대할 때 흐리게 보간하지 않고 네모난 픽셀 그대로 */
+  touch-action: none;         /* 터치를 전부 우리 코드가 처리 */
+}
+
+/* CRT 주사선: 얇은 가로줄을 화면 전체에 겹친다 */
+#stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px);
 }
 
 button {
   font: inherit;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
+  color: var(--amber);
+  background: transparent;
+  border: 2px solid var(--amber-dim);
+  border-radius: 0;
   padding: 10px 16px;
   cursor: pointer;
   touch-action: manipulation;
 }
-button:active { transform: scale(0.97); }
-button.primary { background: var(--accent); border-color: var(--accent); color: #06223a; font-weight: 600; }
+button:active, button[aria-pressed='true'] { background: var(--amber); color: var(--bg); border-color: var(--amber); }
+button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+button.primary { border-color: var(--amber); }
 
 /* ---------- HUD ---------- */
-#hud { position: absolute; inset: 0; pointer-events: none; }
+#hud {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  color: var(--amber);
+  text-shadow: 0 0 6px rgba(255, 140, 30, 0.45);
+}
 #hud button { pointer-events: auto; }
 
 #crosshair {
   position: absolute; left: 50%; top: 50%;
-  width: 6px; height: 6px; margin: -3px 0 0 -3px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.4);
+  width: 4px; height: 4px; margin: -2px 0 0 -2px;
+  background: var(--amber);
+  box-shadow: 0 0 4px rgba(255, 140, 30, 0.8);
+}
+
+/* 조준점 바로 아래 안내 문구 ("[탭] 집기 · 비커") */
+#prompt {
+  position: absolute; left: 50%; top: calc(50% + 18px);
+  transform: translateX(-50%);
+  font-size: 16px;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
 }
 
 #room {
   position: absolute; left: 16px; top: 14px;
-  padding: 6px 12px;
-  background: var(--panel); border-radius: 10px;
-  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 1px;
 }
 
 #debug {
-  position: absolute; left: 16px; top: 54px;
-  font-size: 12px; color: var(--muted);
+  position: absolute; left: 16px; top: 42px;
+  font-size: 12px;
+  color: var(--amber-dim);
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 2px #000;
 }
 
 #minimap {
   position: absolute; right: 16px; top: 14px;
   width: min(280px, 24%);
-  background: var(--panel); border-radius: 10px;
+  border: 2px solid var(--amber-dim);
+  background: rgba(10, 8, 4, 0.8);
+  image-rendering: pixelated;
 }
 
 .icon-btn {
   position: absolute; right: calc(16px + min(280px, 24%) + 10px); top: 14px;
   width: 44px; height: 44px; padding: 0;
-  font-size: 22px; background: var(--panel);
+  font-size: 22px; line-height: 1;
+  background: rgba(10, 8, 4, 0.8);
 }
-
-/* 오른쪽 아래 동작 버튼들 (놓기 위, 상호작용 아래) */
-.actions {
-  position: absolute; right: 32px; bottom: 40px;
-  display: flex; flex-direction: column; align-items: flex-end; gap: 12px;
-}
-.actions button {
-  min-width: 120px; padding: 18px 26px;
-  font-size: 18px; font-weight: 700;
-  border: none; border-radius: 999px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-}
-#btn-interact { background: var(--accent); color: #06223a; }
-#btn-place { background: var(--place); color: #05301a; }
-#btn-place:disabled { background: var(--panel); color: var(--muted); box-shadow: none; }
 
 #held {
-  position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
-  padding: 8px 14px;
-  background: var(--panel); border-radius: 10px;
-  font-size: 14px; font-variant-numeric: tabular-nums;
+  position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%);
+  font-size: 15px;
   white-space: nowrap;
 }
 
 #hint {
   position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
-  font-size: 13px; color: var(--muted);
-  text-shadow: 0 1px 2px #000;
+  font-size: 12px;
+  color: var(--amber-dim);
   white-space: nowrap;
 }
 
@@ -138,34 +158,37 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 #joy-base {
   position: absolute; width: 120px; height: 120px;
   transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  border: 2px solid rgba(255, 255, 255, 0.35);
+  border: 2px solid var(--amber-dim);
+  background: var(--amber-faint);
   pointer-events: none; display: none;
 }
 #joy-base.active { display: block; }
 #joy-knob {
   position: absolute; left: 50%; top: 50%;
-  width: 52px; height: 52px;
+  width: 44px; height: 44px;
   transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--amber-dim);
 }
 
-/* ---------- 패널 ---------- */
+/* ---------- 설정 패널 ---------- */
 .panel {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  width: min(380px, calc(100% - 32px));
-  padding: 20px 22px;
-  background: var(--panel); border-radius: var(--radius);
-  backdrop-filter: blur(8px);
+  width: min(400px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  padding: 18px 20px;
+  background: var(--panel);
+  border: 2px solid var(--amber);
+  color: var(--amber);
 }
-.panel h2 { margin: 0 0 14px; font-size: 18px; }
-.panel label { display: block; margin: 12px 0; font-size: 15px; }
-.panel label span { float: right; color: var(--muted); font-variant-numeric: tabular-nums; }
-.panel input[type="range"] { width: 100%; margin-top: 8px; accent-color: var(--accent); height: 28px; }
+.panel h2 { margin: 0 0 12px; font-size: 18px; font-weight: 700; letter-spacing: 2px; }
+.panel label, .panel .field { display: block; margin: 12px 0; font-size: 15px; }
+.panel label span { float: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.panel input[type='range'] { width: 100%; margin-top: 8px; accent-color: var(--amber); height: 28px; }
 .panel label.row { display: flex; align-items: center; gap: 10px; }
-.panel input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent); }
+.panel input[type='checkbox'] { width: 22px; height: 22px; accent-color: var(--amber); }
+.panel .segmented { display: flex; gap: 6px; margin-top: 8px; }
+.panel .segmented button { flex: 1; padding: 8px 0; }
 .panel .buttons { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
 .panel .buttons button { flex: 1; }
 
@@ -174,12 +197,22 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
   position: absolute; inset: 0;
   display: grid; place-items: center;
   padding: 16px;
-  background: radial-gradient(ellipse at center, rgba(32, 36, 42, 0.75), rgba(10, 12, 15, 0.95));
+  background: radial-gradient(ellipse at center, rgba(20, 16, 8, 0.8), rgba(0, 0, 0, 0.96));
+  color: var(--amber);
 }
-#start .card { max-width: 480px; text-align: center; }
-#start h1 { margin: 0; font-size: 34px; letter-spacing: -0.5px; }
-#start .sub { margin: 6px 0 22px; color: var(--muted); }
-#start .guide { list-style: none; padding: 0; margin: 0 0 26px; text-align: left; line-height: 1.9; }
-#start .guide b { display: inline-block; width: 88px; color: var(--accent); }
-#start .big { padding: 16px 40px; font-size: 18px; border-radius: 999px; }
-#start .note { margin-top: 14px; font-size: 13px; color: var(--muted); }
+#start .card { max-width: 500px; }
+#start h1 {
+  margin: 0; font-size: 40px; letter-spacing: 4px;
+  text-shadow: 0 0 10px rgba(255, 140, 30, 0.6);
+}
+#start .sub { margin: 8px 0 22px; color: var(--amber-dim); }
+#start .guide { list-style: none; padding: 0; margin: 0 0 26px; line-height: 2; color: var(--text); }
+#start .guide b { display: inline-block; width: 92px; color: var(--amber); font-weight: 700; }
+#start .big { padding: 14px 40px; font-size: 20px; letter-spacing: 2px; }
+#start .note { margin-top: 14px; font-size: 13px; color: var(--amber-dim); }
+
+/* 입장 버튼이 천천히 깜빡이는 커서처럼 */
+@media (prefers-reduced-motion: no-preference) {
+  #start .big { animation: blink 1.6s steps(2, jump-none) infinite; }
+  @keyframes blink { 50% { border-color: var(--amber-faint); } }
+}

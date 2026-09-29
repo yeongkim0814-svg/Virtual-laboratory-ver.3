@@ -86,7 +86,8 @@ export const FURNITURE: Furniture[] = [
   { kind: 'bin', name: '쓰레기통', rect: { x1: 0.25, z1: 6.8, x2: 0.85, z2: 7.4 }, height: 0.7 },
   // ---- 준비실 ----
   { kind: 'tallCabinet', name: '준비실 보관장 (왼쪽)', rect: { x1: 12.7, z1: 0, x2: 13.45, z2: 4.95 }, height: 2.1 },
-  { kind: 'prepTable', name: '준비 테이블', rect: { x1: 13.45, z1: 0, x2: 16.25, z2: 1.1 }, height: 0.85 },
+  // 준비 테이블: 양옆 보관장 문 앞을 막지 않도록 좌우에 0.7 m 통로를 둔다 (몸 지름 0.6 m < 0.7 m)
+  { kind: 'prepTable', name: '준비 테이블', rect: { x1: 14.15, z1: 0, x2: 15.55, z2: 1.1 }, height: 0.85 },
   { kind: 'tallCabinet', name: '준비실 보관장 (오른쪽)', rect: { x1: 16.25, z1: 0, x2: 17.2, z2: 5.65 }, height: 2.1 },
   { kind: 'wasteCabinet', name: '폐시약 보관함', rect: { x1: 12.7, z1: 7.05, x2: 14.15, z2: 7.6 }, height: 0.9 },
   { kind: 'largeEquipment', name: '대형 실험 기구', rect: { x1: 14.7, z1: 6.4, x2: 17.0, z2: 7.6 }, height: 1.2 },

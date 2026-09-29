@@ -1,5 +1,5 @@
 /**
- * 설정 패널 (⚙ 버튼): 시점 감도, 이동 속도, 정보 표시
+ * 설정 패널 (⚙ 버튼): 시점 감도, 이동 속도, 화면 해상도, PS1 떨림, 정보 표시
  * 설정값은 브라우저(localStorage)에 저장되어 다음에 들어와도 유지된다.
  */
 const STORAGE_KEY = 'vlab-settings-v1';
@@ -8,14 +8,21 @@ export interface Settings {
   lookSensitivity: number;
   moveSpeed: number;
   showDebug: boolean;
+  /** 내부 렌더링 세로 픽셀 수 (240 / 270 / 360) — 작을수록 도트가 굵다 */
+  pixelHeight: number;
+  /** PS1식 정점 흔들림 */
+  jitter: boolean;
 }
 
-const DEFAULTS: Settings = { lookSensitivity: 1.0, moveSpeed: 2.2, showDebug: true };
+const DEFAULTS: Settings = { lookSensitivity: 1.0, moveSpeed: 2.2, showDebug: true, pixelHeight: 270, jitter: true };
+const PIXEL_HEIGHTS = [240, 270, 360];
 
 export function loadSettings(): Settings {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
-    return { ...DEFAULTS, ...saved };
+    const s = { ...DEFAULTS, ...saved };
+    if (!PIXEL_HEIGHTS.includes(s.pixelHeight)) s.pixelHeight = DEFAULTS.pixelHeight;
+    return s;
   } catch {
     return { ...DEFAULTS };
   }
@@ -30,12 +37,14 @@ function save(s: Settings): void {
 }
 
 /** 패널의 입력 요소와 settings 객체를 연결한다. */
-export function bindSettingsPanel(settings: Settings, actions: { resetPosition(): void }): void {
+export function bindSettingsPanel(settings: Settings, actions: { resetPosition(): void; applyGraphics(): void }): void {
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const panel = $('settings');
   const sens = $<HTMLInputElement>('set-sens');
   const speed = $<HTMLInputElement>('set-speed');
   const debug = $<HTMLInputElement>('set-debug');
+  const jitter = $<HTMLInputElement>('set-jitter');
+  const resButtons = [...document.querySelectorAll<HTMLButtonElement>('#set-res button')];
   const sensVal = $('set-sens-val');
   const speedVal = $('set-speed-val');
 
@@ -43,6 +52,8 @@ export function bindSettingsPanel(settings: Settings, actions: { resetPosition()
     sens.value = String(settings.lookSensitivity);
     speed.value = String(settings.moveSpeed);
     debug.checked = settings.showDebug;
+    jitter.checked = settings.jitter;
+    for (const b of resButtons) b.setAttribute('aria-pressed', String(Number(b.dataset.h) === settings.pixelHeight));
     sensVal.textContent = settings.lookSensitivity.toFixed(1) + '×';
     speedVal.textContent = settings.moveSpeed.toFixed(1) + ' m/s';
     $('debug').hidden = !settings.showDebug;
@@ -52,6 +63,10 @@ export function bindSettingsPanel(settings: Settings, actions: { resetPosition()
   sens.addEventListener('input', () => { settings.lookSensitivity = Number(sens.value); refresh(); save(settings); });
   speed.addEventListener('input', () => { settings.moveSpeed = Number(speed.value); refresh(); save(settings); });
   debug.addEventListener('change', () => { settings.showDebug = debug.checked; refresh(); save(settings); });
+  jitter.addEventListener('change', () => { settings.jitter = jitter.checked; refresh(); save(settings); actions.applyGraphics(); });
+  for (const b of resButtons) {
+    b.addEventListener('click', () => { settings.pixelHeight = Number(b.dataset.h); refresh(); save(settings); actions.applyGraphics(); });
+  }
 
   $('btn-settings').addEventListener('click', () => { panel.hidden = !panel.hidden; });
   $('set-close').addEventListener('click', () => { panel.hidden = true; });

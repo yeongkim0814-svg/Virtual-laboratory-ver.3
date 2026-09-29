@@ -4,20 +4,24 @@
  */
 import * as THREE from 'three';
 import { FURNITURE, ROOMS, type Furniture, type Rect } from './layout';
+import { grimeTexture, woodTexture, worldUV } from '../render/textures';
 
-// ---- 재질 (여러 가구가 함께 쓴다) ----
+// ---- 재질 (여러 가구가 함께 쓴다) — 픽셀 텍스처 × 색 ----
+const grime = grimeTexture();
+const wood = woodTexture();
+const lambert = (color: number, map: THREE.Texture | null = grime) => new THREE.MeshLambertMaterial({ color, map });
 const M = {
-  wood: new THREE.MeshStandardMaterial({ color: 0xa8784c, roughness: 0.7 }),
-  woodDark: new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 0.7 }),
-  epoxy: new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.35 }), // 실험대 상판 (검은 에폭시)
-  cabinet: new THREE.MeshStandardMaterial({ color: 0xd9dcd8, roughness: 0.6 }),
-  door: new THREE.MeshStandardMaterial({ color: 0xc4c9c4, roughness: 0.55 }),
-  metal: new THREE.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.7, roughness: 0.35 }),
-  handle: new THREE.MeshStandardMaterial({ color: 0x5c6166, metalness: 0.6, roughness: 0.4 }),
-  glass: new THREE.MeshStandardMaterial({ color: 0xbfd9e6, transparent: true, opacity: 0.3, roughness: 0.1, depthWrite: false }),
-  plastic: new THREE.MeshStandardMaterial({ color: 0x6f7a82, roughness: 0.8 }),
-  hazard: new THREE.MeshStandardMaterial({ color: 0xe8b82a, roughness: 0.6 }),
-  white: new THREE.MeshStandardMaterial({ color: 0xf0f0ea, roughness: 0.5 }),
+  wood: lambert(0x9a6c40, wood),
+  woodDark: lambert(0x5a3d26, wood),
+  epoxy: lambert(0x2c2f2c), // 실험대 상판 (검은 에폭시)
+  cabinet: lambert(0xb9bcae),
+  door: lambert(0xa3a898),
+  metal: lambert(0x8d9290),
+  handle: lambert(0x3d403c),
+  glass: new THREE.MeshLambertMaterial({ color: 0x9fc4c8, transparent: true, opacity: 0.35, depthWrite: false }),
+  plastic: lambert(0x5d665f),
+  hazard: lambert(0xd6a21e),
+  white: lambert(0xd8d6c8),
 };
 
 export function buildFurniture(scene: THREE.Scene): void {
@@ -39,7 +43,7 @@ const BUILDERS: Record<Furniture['kind'], Builder> = {
     // 칠판 면: 캔버스에 분필 글씨를 그려 텍스처로 사용
     const w = r.z2 - r.z1 - 0.1;
     const h = f.height - bottom - 0.1;
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: chalkTexture(w, h), roughness: 0.95 }));
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshLambertMaterial({ map: chalkTexture(w, h) }));
     board.rotation.y = Math.PI / 2; // +x(방 안쪽)를 보게
     board.position.set(r.x2 + 0.002, (bottom + f.height) / 2, (r.z1 + r.z2) / 2);
     g.add(board);
@@ -69,7 +73,7 @@ const BUILDERS: Record<Furniture['kind'], Builder> = {
     screenGroup.rotation.z = -0.25; // 뒤로(+x) 살짝 젖힘
     const lid = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.22, 0.34), M.handle);
     lid.position.y = 0.11;
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.31, 0.19), new THREE.MeshBasicMaterial({ color: 0x2c6e9e }));
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.31, 0.19), new THREE.MeshBasicMaterial({ color: 0x3a7f9e }));
     screen.rotation.y = -Math.PI / 2;
     screen.position.set(-0.009, 0.11, 0);
     screenGroup.add(lid, screen);
@@ -119,9 +123,9 @@ const BUILDERS: Record<Furniture['kind'], Builder> = {
     const n = 2;
     for (let i = 0; i < n; i++) {
       const t = (i + 0.5) / n;
-      const can = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.32, 20), M.white);
+      const can = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.32, 8), M.white);
       can.position.set(r.x1 + t * (r.x2 - r.x1), f.height + 0.16, (r.z1 + r.z2) / 2);
-      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.04, 12), M.hazard);
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.04, 6), M.hazard);
       cap.position.set(can.position.x, f.height + 0.34, can.position.z);
       g.add(can, cap);
     }
@@ -132,11 +136,11 @@ const BUILDERS: Record<Furniture['kind'], Builder> = {
     const cx = (r.x1 + r.x2) / 2;
     const cz = (r.z1 + r.z2) / 2;
     const rad = (r.x2 - r.x1) / 2 - 0.02;
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad * 0.85, f.height, 24, 1, true), M.plastic);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad * 0.85, f.height, 10, 1, true), M.plastic);
     body.material = M.plastic.clone();
-    (body.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
+    (body.material as THREE.MeshLambertMaterial).side = THREE.DoubleSide;
     body.position.set(cx, f.height / 2, cz);
-    const bottom = new THREE.Mesh(new THREE.CircleGeometry(rad * 0.85, 24), M.handle);
+    const bottom = new THREE.Mesh(new THREE.CircleGeometry(rad * 0.85, 10), M.handle);
     bottom.rotation.x = -Math.PI / 2;
     bottom.position.set(cx, 0.02, cz);
     g.add(body, bottom);
@@ -148,9 +152,9 @@ const BUILDERS: Record<Furniture['kind'], Builder> = {
     box(g, { x1: r.x1, z1: r.z1 + 0.2, x2: r.x1 + 0.9, z2: r.z2 }, 0, 0.8, M.wood);
     // 기체 봄베 2개 (초록: 산소)
     for (const dx of [1.15, 1.45]) {
-      const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 1.2, 20), new THREE.MeshStandardMaterial({ color: 0x2f7d4a, roughness: 0.5 }));
+      const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 1.2, 8), lambert(0x2f6b45));
       tank.position.set(r.x1 + dx, 0.6, r.z2 - 0.25);
-      const valve = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.12, 12), M.metal);
+      const valve = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.12, 6), M.metal);
       valve.position.set(tank.position.x, 1.26, tank.position.z);
       g.add(tank, valve);
     }
@@ -163,8 +167,10 @@ const BUILDERS: Record<Furniture['kind'], Builder> = {
 
 /** 도면 직사각형을 높이 y1~y2의 상자로 세운다. */
 function box(g: THREE.Group, r: Rect, y1: number, y2: number, mat: THREE.Material): THREE.Mesh {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(r.x2 - r.x1, y2 - y1, r.z2 - r.z1), mat);
+  const geo = new THREE.BoxGeometry(r.x2 - r.x1, y2 - y1, r.z2 - r.z1);
+  const m = new THREE.Mesh(geo, mat);
   m.position.set((r.x1 + r.x2) / 2, (y1 + y2) / 2, (r.z1 + r.z2) / 2);
+  worldUV(geo, m.position); // 텍스처 1장 = 1 m
   g.add(m);
   return m;
 }
@@ -240,23 +246,34 @@ function doors(g: THREE.Group, r: Rect, f: Front, y1: number, y2: number, glass:
   }
 }
 
-/** 칠판에 분필 글씨 (진자 주기 공식 — 1단계 예고) */
+/**
+ * 칠판에 분필 글씨 (진자 주기 공식 — 1단계 예고)
+ * 저해상도 캔버스 + 픽셀 글꼴(Galmuri) + NearestFilter → 도트 글씨.
+ * 글꼴 파일이 늦게 로드되면 로드 후에 다시 그린다.
+ */
 function chalkTexture(w: number, h: number): THREE.CanvasTexture {
   const c = document.createElement('canvas');
-  c.width = 1024;
-  c.height = Math.round((1024 * h) / w);
+  c.width = 320;
+  c.height = Math.round((320 * h) / w);
   const g = c.getContext('2d')!;
-  g.fillStyle = '#23402f';
-  g.fillRect(0, 0, c.width, c.height);
-  g.fillStyle = 'rgba(240,240,230,0.88)';
-  g.font = '600 44px system-ui, sans-serif';
-  g.fillText('가상 실험실', 50, 70);
-  g.font = '34px system-ui, sans-serif';
-  g.fillText('단진자의 주기   T = 2π √(L / g)', 50, 140);
-  g.fillStyle = 'rgba(240,240,230,0.55)';
-  g.font = '26px system-ui, sans-serif';
-  g.fillText('작은 각 근사 sin θ ≈ θ 는 어디까지 맞을까?', 50, 190);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  const draw = () => {
+    g.fillStyle = '#1f3527';
+    g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = 'rgba(150,170,150,0.12)'; // 지운 자국
+    g.fillRect(180, 8, 120, 30);
+    g.fillStyle = '#e6e4d6';
+    g.font = '12px Galmuri11, monospace';
+    g.fillText('가상 실험실', 14, 20);
+    g.fillText('단진자의 주기  T = 2π√(L/g)', 14, 40);
+    g.fillStyle = '#a9ad9e';
+    g.fillText('sin θ ≈ θ 는 어디까지 맞을까?', 14, 58);
+    tex.needsUpdate = true;
+  };
+  draw();
+  document.fonts?.load('12px Galmuri11').then(draw, () => {});
   return tex;
 }

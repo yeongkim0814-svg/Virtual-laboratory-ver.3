@@ -4,7 +4,7 @@
  * 태블릿 조작
  *   - 화면(16:9 무대) 왼쪽 40%: 손가락을 댄 곳에 조이스틱이 생긴다 → 이동
  *   - 나머지 영역 드래그: 시점 회전
- *   - 짧게 톡 치기(탭): 그 위치의 물체와 상호작용
+ *   - 짧게 톡 치기(탭, 화면 어디든): 그 위치의 물체 집기 / 면에 놓기 / 문 열기
  * PC 조작
  *   - WASD / 방향키: 이동,  마우스 드래그: 시점,  클릭: 상호작용,  E: 조준한 물체와 상호작용
  */
@@ -149,7 +149,9 @@ export class Controls {
     if (p.role === 'joystick') {
       this.joyX = this.joyY = 0;
       this.joyBase.classList.remove('active');
-    } else if (e.type === 'pointerup' && !p.moved && performance.now() - p.startTime < TAP_MAX_TIME) {
+    }
+    // 거의 움직이지 않고 짧게 뗐으면 탭 (조이스틱 영역에서도 — 화면 왼쪽의 물체도 탭할 수 있게)
+    if (e.type === 'pointerup' && !p.moved && performance.now() - p.startTime < TAP_MAX_TIME) {
       this.state.taps.push(this.local(e));
     }
   }

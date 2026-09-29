@@ -5,7 +5,7 @@
     <!-- 핀치 확대·더블탭 확대를 막아 게임 조작과 충돌하지 않게 한다 -->
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="theme-color" content="#20242a" />
+    <meta name="theme-color" content="#0a0b08" />
     <title>가상 실험실</title>
   </head>
   <body>
@@ -23,12 +23,9 @@
         <div id="debug"></div>
         <canvas id="minimap"></canvas>
         <button id="btn-settings" class="icon-btn" aria-label="설정">⚙</button>
+        <div id="prompt" hidden></div>
         <div id="held" hidden></div>
-        <div class="actions">
-          <button id="btn-place" hidden></button>
-          <button id="btn-interact" hidden></button>
-        </div>
-        <div id="hint">왼쪽: 이동 · 오른쪽 드래그: 둘러보기 · 탭: 집기/놓기/열기</div>
+        <div id="hint">왼쪽: 이동 · 드래그: 둘러보기 · 탭: 집기/놓기/열기</div>
       </div>
 
       <!-- 설정 패널 -->
@@ -40,6 +37,14 @@
         <label>이동 속도 <span id="set-speed-val"></span>
           <input id="set-speed" type="range" min="1" max="4" step="0.1" />
         </label>
+        <div class="field">화면 해상도 (세로 픽셀)
+          <div id="set-res" class="segmented">
+            <button data-h="240">240</button>
+            <button data-h="270">270</button>
+            <button data-h="360">360</button>
+          </div>
+        </div>
+        <label class="row"><input id="set-jitter" type="checkbox" /> PS1 정점 떨림</label>
         <label class="row"><input id="set-debug" type="checkbox" /> FPS·좌표 표시</label>
         <div class="buttons">
           <button id="set-fullscreen">전체화면</button>
@@ -56,8 +61,8 @@
           <ul class="guide">
             <li><b>이동</b> 화면 왼쪽을 누른 채 밀기 (PC: WASD)</li>
             <li><b>둘러보기</b> 화면 오른쪽 드래그 (PC: 마우스 드래그)</li>
-            <li><b>집기</b> 물체를 탭하거나 버튼 누르기 (PC: 클릭 / E)</li>
-            <li><b>놓기</b> 책상·바닥을 탭하거나 조준 후 놓기 버튼</li>
+            <li><b>집기</b> 물체를 탭 (PC: 클릭 / E)</li>
+            <li><b>놓기</b> 들고 있을 때 책상·바닥을 탭</li>
           </ul>
           <button id="btn-enter" class="primary big">실험실 입장</button>
           <p class="note">태블릿을 가로로 들고 사용하세요.</p>

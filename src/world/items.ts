@@ -3,7 +3,7 @@
  *
  * 모든 물체는 "바닥면 중심"이 원점이 되도록 만든다.
  * → 어떤 면 위에 놓을 때 그 면의 높이 y에 그대로 두면 딱 올라앉는다.
- * mass(질량)는 지금은 표시만 하고, 나중에 역학 실험에서 사용한다.
+ * mass(질량)는 화면에 표시하지 않고, 나중에 역학 실험에서 계산에 사용한다.
  */
 import * as THREE from 'three';
 import type { Interactable } from './interactable';
@@ -32,7 +32,7 @@ export class Item implements Interactable {
   }
 
   label(): string {
-    return `집기 · ${this.name}`;
+    return `집기 · ${this.name}`; // 조준점 아래 안내 문구
   }
 
   interact(): void {
@@ -42,19 +42,19 @@ export class Item implements Interactable {
 
 // ---- 재질 ----
 const glass = () =>
-  new THREE.MeshStandardMaterial({ color: 0xdff1f7, transparent: true, opacity: 0.35, roughness: 0.05, depthWrite: false });
-const liquid = (color: number) => new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.75, roughness: 0.2 });
+  new THREE.MeshLambertMaterial({ color: 0xcfe6e0, transparent: true, opacity: 0.4, depthWrite: false });
+const liquid = (color: number) => new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.8 });
 
 function beaker(liquidColor: number): THREE.Group {
   const g = new THREE.Group();
   const r = 0.04;
   const h = 0.1;
-  const wall = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 24, 1, true), glass());
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 8, 1, true), glass());
   wall.position.y = h / 2;
-  const bottom = new THREE.Mesh(new THREE.CircleGeometry(r, 24), glass());
+  const bottom = new THREE.Mesh(new THREE.CircleGeometry(r, 8), glass());
   bottom.rotation.x = -Math.PI / 2;
   bottom.position.y = 0.002;
-  const water = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.94, r * 0.94, h * 0.55, 24), liquid(liquidColor));
+  const water = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.94, r * 0.94, h * 0.55, 8), liquid(liquidColor));
   water.position.y = (h * 0.55) / 2 + 0.003;
   g.add(water, wall, bottom);
   return g;
@@ -62,11 +62,11 @@ function beaker(liquidColor: number): THREE.Group {
 
 function flask(liquidColor: number): THREE.Group {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.055, 0.1, 24, 1, true), glass());
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.055, 0.1, 8, 1, true), glass());
   body.position.y = 0.05;
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.06, 16, 1, true), glass());
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.06, 6, 1, true), glass());
   neck.position.y = 0.13;
-  const water = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.052, 0.035, 24), liquid(liquidColor));
+  const water = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.052, 0.035, 8), liquid(liquidColor));
   water.position.y = 0.0185;
   g.add(water, body, neck);
   return g;
@@ -74,11 +74,11 @@ function flask(liquidColor: number): THREE.Group {
 
 function hangingMass(): THREE.Group {
   const g = new THREE.Group();
-  const brass = new THREE.MeshStandardMaterial({ color: 0xc9a54a, metalness: 0.85, roughness: 0.3 });
+  const brass = new THREE.MeshLambertMaterial({ color: 0xc9a54a });
   // 황동(밀도 ≈ 8500 kg/m³) 100 g → 부피 ≈ 11.8 cm³ → 반지름 1.3 cm, 높이 2.2 cm
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.022, 20), brass);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.022, 8), brass);
   body.position.y = 0.011;
-  const hook = new THREE.Mesh(new THREE.TorusGeometry(0.007, 0.002, 8, 16), brass);
+  const hook = new THREE.Mesh(new THREE.TorusGeometry(0.007, 0.002, 4, 8), brass);
   hook.position.y = 0.03;
   g.add(body, hook);
   return g;
@@ -86,7 +86,7 @@ function hangingMass(): THREE.Group {
 
 function woodBlock(): THREE.Group {
   const g = new THREE.Group();
-  const m = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.07), new THREE.MeshStandardMaterial({ color: 0xc89b62, roughness: 0.8 }));
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.07), new THREE.MeshLambertMaterial({ color: 0xc89b62 }));
   m.position.y = 0.025;
   g.add(m);
   return g;
@@ -95,7 +95,7 @@ function woodBlock(): THREE.Group {
 function steelBall(): THREE.Group {
   const g = new THREE.Group();
   const r = 0.025;
-  const m = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), new THREE.MeshStandardMaterial({ color: 0xc0c4c8, metalness: 0.9, roughness: 0.2 }));
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), new THREE.MeshLambertMaterial({ color: 0xb4b8b6 }));
   m.position.y = r;
   g.add(m);
   return g;

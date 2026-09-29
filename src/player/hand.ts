@@ -34,10 +34,10 @@ export class Hand {
     private camera: THREE.PerspectiveCamera,
     private items: Item[],
   ) {
-    // 놓을 자리 표시: 바닥에 눕힌 고리 (초록 = 가능, 빨강 = 불가)
+    // 놓을 자리 표시: 바닥에 눕힌 고리 (호박색 = 가능, 빨강 = 불가)
     this.marker = new THREE.Mesh(
-      new THREE.RingGeometry(0.85, 1, 32),
-      new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.9, depthTest: false }),
+      new THREE.RingGeometry(0.8, 1, 12),
+      new THREE.MeshBasicMaterial({ color: 0xffa640, transparent: true, opacity: 0.9, depthTest: false }),
     );
     this.marker.rotation.x = -Math.PI / 2;
     this.marker.renderOrder = 1000;
@@ -107,7 +107,7 @@ export class Hand {
     m.position.copy(this.aim.point).add(new THREE.Vector3(0, 0.003, 0));
     const r = this.held.radius;
     m.scale.set(r, r, r);
-    (m.material as THREE.MeshBasicMaterial).color.set(this.aim.valid ? 0x4ade80 : 0xf87171);
+    (m.material as THREE.MeshBasicMaterial).color.set(this.aim.valid ? 0xffa640 : 0xff3c28);
   }
 }
 
