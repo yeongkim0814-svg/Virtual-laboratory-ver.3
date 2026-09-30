@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#0a0b08" />
     <title>가상 실험실</title>
-    <script type="module" crossorigin src="./assets/index-gY7oFDV_.js"></script>
+    <script type="module" crossorigin src="./assets/index-BzoqmpH6.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-DYOIiM-P.css">
   </head>
   <body>
@@ -455,6 +455,27 @@
           <dl class="readout" id="lg-ph-stats"></dl>
           <p class="legend">V = 기록 시작 뒤 전극이 꽂힌 그릇이 뷰렛에서 받은 부피. 전극은 약 1초 늦게 따라오므로 당량점 근처에서는 한 방울씩.</p>
         </div>
+        <!-- 힘 센서: F–t, 충돌마다 충격량 -->
+        <div id="lg-force" hidden>
+          <p class="plot-title">F 힘 (N) — 전체 기록 <span id="lg-f-leg"></span></p>
+          <canvas id="lg-f-all" class="plot"></canvas>
+          <div id="lg-f-pick" class="segmented"></div>
+          <p class="plot-title">고른 충돌 확대 (칠한 넓이 = 충격량 ∫F dt) <span id="lg-f-zoom-leg"></span></p>
+          <canvas id="lg-f-zoom" class="plot tall"></canvas>
+          <dl class="readout" id="lg-f-stats"></dl>
+          <p class="legend">1 kHz 기록. 범퍼를 바꿔(힘 센서 두 번 탭) 같은 속도로 부딪혀 보라 — 모양은 달라도 넓이(충격량)는 거의 같다.</p>
+        </div>
+        <!-- 포토게이트: 가림 시간 → 속력, 두 게이트 → 가속도 -->
+        <div id="lg-gate" hidden>
+          <div class="table-wrap">
+            <table id="lg-gate-log" class="log">
+              <thead><tr><th>#</th><th>게이트</th><th>t (s)</th><th>Δt (ms)</th><th>v (m/s)</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <dl class="readout" id="lg-gate-stats"></dl>
+          <p class="legend">v = 차단판 폭 2.0 cm ÷ 가린 시간 Δt (그 사이 평균 속력 ≈ 가운데 순간의 속력). 두 게이트를 차례로 지나면 a = Δv / (두 가운데 시각의 차).</p>
+        </div>
         <div id="lg-motion">
         <p class="plot-title">x 위치 (m) <span id="lg-x-leg"></span></p>
         <canvas id="lg-x" class="plot tall"></canvas>
@@ -572,9 +593,11 @@
         </ul>
         <h3>센서 · 노트북</h3>
         <ul>
-          <li>센서를 두 번 탭 → <b>노트북에 연결</b> (USB 2 m, 노트북 한 대에 센서 2개까지)</li>
+          <li>센서를 두 번 탭 → <b>노트북에 연결</b> (USB 2 m, 노트북 한 대에 센서 4개까지)</li>
           <li>운동 센서를 들고 레일 끝을 두 번 탭 → <b>센서 받침</b>에 끼워져 레일 방향을 바라봄 (측정 범위 0.15 ~ 3 m)</li>
           <li>노트북을 두 번 탭 → <b>측정 프로그램</b>: 기록 시작·멈춤, x·v·a 그래프, 커서 A·B 구간 분석, CSV</li>
+          <li><b>힘 센서</b>(칸 7): 레일 끝 받침에 끼움, 1 kHz로 F–t 기록 → 충돌마다 충격량 ∫F dt. 두 번 탭 → 범퍼 용수철/고무</li>
+          <li><b>포토게이트</b>(칸 7): 들고 레일을 두 번 탭 → 레일을 넘어가게 걸림. 수레 차단판(2.0 cm)이 가린 시간 → v, 두 개면 가속도</li>
         </ul>
         <h3>화학 (준비실)</h3>
         <ul>

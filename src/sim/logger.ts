@@ -192,3 +192,43 @@ export function analyzeTitration(samples: { V: number; pH: number | null }[]): {
     startPH: points.length ? points[0].pH : null,
   };
 }
+
+/**
+ * 힘 센서 기록에서 충돌(힘이 솟은 구간) 찾기
+ *   힘이 thresh(기본 0.3 N)를 넘는 구간을 찾고, 앞뒤로 잡음 수준(0.06 N) 아래가 될 때까지 넓힌다
+ *   → 닿기 시작·떨어지는 순간의 작은 힘까지 넓이에 넣는다.
+ * 충격량 J = ∫F dt (사다리꼴), 평균 힘 = J / 충돌 시간
+ */
+export interface ForceEpisode {
+  t0: number;
+  t1: number;
+  J: number;
+  Fmax: number;
+  tPeak: number;
+}
+
+export function forceEpisodes(s: { t: number; F: number }[], thresh = 0.3, floor = 0.06): ForceEpisode[] {
+  const out: ForceEpisode[] = [];
+  let i = 0;
+  while (i < s.length) {
+    if (s[i].F < thresh) {
+      i++;
+      continue;
+    }
+    let a = i;
+    while (a > 0 && s[a - 1].F > floor) a--;
+    let b = i;
+    while (b < s.length - 1 && s[b + 1].F > floor) b++;
+    let J = 0;
+    let Fmax = 0;
+    let tPeak = s[a].t;
+    for (let k = a; k <= b; k++) {
+      if (k > a) J += 0.5 * (s[k].F + s[k - 1].F) * (s[k].t - s[k - 1].t);
+      if (s[k].F > Fmax) { Fmax = s[k].F; tPeak = s[k].t; }
+    }
+    // 너무 짧은 잡음 튐은 버림 (3 ms 미만)
+    if (s[b].t - s[a].t >= 0.003) out.push({ t0: s[a].t, t1: s[b].t, J, Fmax, tPeak });
+    i = b + 1;
+  }
+  return out;
+}

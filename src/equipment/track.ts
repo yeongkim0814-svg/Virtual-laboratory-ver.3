@@ -13,7 +13,8 @@ import * as THREE from 'three';
 import { Item, Socket } from '../world/items';
 import { Cable, surfaceBelow } from '../world/cable';
 import type { Action } from '../world/interactable';
-import { BUMPER_NAME, TrackSim, type Bumper, type CartBody, type HangingLoad } from '../sim/track';
+import { BUMPER_NAME, FLAG_W, FORCE_BUMPER, TrackSim, type Bumper, type CartBody, type GateBody, type HangingLoad } from '../sim/track';
+import { ForceSensor, Photogate } from './dynamicsSensors';
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
@@ -61,6 +62,8 @@ function rulerTexture(): THREE.CanvasTexture {
 export class Rail extends Item {
   readonly sim = new TrackSim();
   readonly track: Socket;
+  /** 포토게이트 자리 (레일을 따라 1 cm 단위) */
+  readonly gateTrack: Socket;
   /** 양 끝 센서 받침 [왼쪽, 오른쪽] */
   readonly mounts: Socket[];
   onOpenPanel: (r: Rail) => void = () => {};
@@ -94,6 +97,10 @@ export class Rail extends Item {
     // 수레 자리: 몸체 좌표에서 x = 0.1 ~ 1.1 (레일 가운데 = 0.6)
     this.track = new Socket(this, '역학 레일', ['railMount'], v(HALF, RAIL_TOP, 0), {
       slide: { min: 0.1, max: RAIL_LENGTH - 0.1, axis: 'x' }, multi: true, hitRadius: 0.04,
+    }, body);
+    // 포토게이트 자리: 레일을 넘어가는 문을 레일 몸체 바닥에 걸친다 (수레와 같은 구간)
+    this.gateTrack = new Socket(this, '역학 레일 (포토게이트 자리)', ['railGate'], v(HALF, 0, 0), {
+      slide: { min: 0.15, max: RAIL_LENGTH - 0.15, axis: 'x' }, multi: true, hitRadius: 0.05,
     }, body);
     // 양 끝 센서 받침: 멈추개 바깥, 센서 앞면 중심이 수레 몸체 높이(레일 윗면 + 3.2 cm)에 오게.
     // 오른쪽 받침은 180° 돌려서 두 받침 모두 +x 쪽(받침 좌표)이 레일 가운데를 향한다
@@ -227,6 +234,7 @@ export class Rail extends Item {
       b.bumper = c.bumper;
     }
     this.syncLoad();
+    this.syncSensors();
     // 레일을 들고 있으면 멈춤
     if (this.object.parent?.type === 'Scene' && this.speed > 0) this.sim.advance(dt * this.speed);
     for (const c of this.carts) {
@@ -238,6 +246,57 @@ export class Rail extends Item {
       c.roll(a.position.x - old);
     }
     this.drawString();
+  }
+
+  private gateBodies = new Map<Photogate, GateBody>();
+  private nextGate = 1;
+
+  /**
+   * 끝 받침의 힘 센서 → 시뮬레이션의 범퍼 접촉, 포토게이트 → 빛줄기 위치
+   * (범퍼 끝면·빛줄기 위치는 레일 몸체 좌표로 바꿔 s = x − 0.6 m)
+   */
+  private syncSensors(): void {
+    const body = this.body;
+    body.updateWorldMatrix(true, false);
+    const inv = body.matrixWorld.clone().invert();
+    for (let i = 0; i < 2; i++) {
+      const f = this.mounts[i].children[0];
+      if (!(f instanceof ForceSensor)) {
+        this.sim.ends[i] = null;
+        continue;
+      }
+      f.object.updateWorldMatrix(true, false);
+      const tip = f.object.localToWorld(f.tipLocal.clone()).applyMatrix4(inv);
+      const spec = FORCE_BUMPER[f.bumper];
+      const E = this.sim.ends[i] ?? { face: 0, k: spec.k, e: spec.e, F: 0, vIn: 0, log: [] };
+      E.face = tip.x - HALF;
+      E.k = spec.k;
+      E.e = spec.e;
+      this.sim.ends[i] = E;
+      f.track = this.sim;
+      f.end = E;
+      // 이 끝에 가장 가까운 수레의 질량 (충격량 = 운동량 변화 비교용)
+      const bs = [...this.bodies.values()];
+      const near = bs.reduce<CartBody | null>((a, b) => (!a || (i ? b.s > a.s : b.s < a.s) ? b : a), null);
+      f.cartMass = near ? near.mass : null;
+    }
+    const gates = this.gateTrack.children.filter((c): c is Photogate => c instanceof Photogate);
+    for (const [g, b] of this.gateBodies) {
+      if (gates.includes(g)) continue;
+      this.gateBodies.delete(g);
+      this.sim.gates.splice(this.sim.gates.indexOf(b), 1);
+    }
+    for (const g of gates) {
+      let b = this.gateBodies.get(g);
+      if (!b) {
+        b = { id: this.nextGate++, s: 0, blocked: false, passes: [] };
+        this.gateBodies.set(g, b);
+        this.sim.gates.push(b);
+      }
+      b.s = g.object.parent!.position.x - HALF;
+      g.track = this.sim;
+      g.gate = b;
+    }
   }
 
   /** 끝 받침에 끼운 도르래 (있으면)와 그 쪽 방향 */
@@ -346,6 +405,8 @@ export class Cart extends Item {
       bumpers.push(b);
       g.add(b);
     }
+    // 차단판 (포토게이트용): 가운데 위에 폭 2.0 cm, 질량 막대 두 개 사이
+    g.add(mesh(new THREE.BoxGeometry(FLAG_W, 0.053, 0.003), DARK, 0, 0.0735, 0));
     super(g, {
       name, radius: 0.1, mass: Cart.BASE_MASS, dragArea: 0,
       plugs: [{ type: 'railMount', point: v(0, 0, 0) }],

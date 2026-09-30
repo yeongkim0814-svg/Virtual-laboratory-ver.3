@@ -134,7 +134,7 @@ const trackPanel = new TrackPanel((open) => panelToggled(trackPanel, open));
 const loggerPanel = new LoggerPanel((open) => panelToggled(loggerPanel, open));
 const panels = [pendulumPanel, springPanel, slitPanel, photoPanel, supplyPanel, circuitPanel, trackPanel, loggerPanel];
 // 센서 ↔ 노트북 (USB)
-const sensorNet = new SensorNetwork(scene, stock.laptops, [...stock.motionSensors, ...stock.phSensors]);
+const sensorNet = new SensorNetwork(scene, stock.laptops, [...stock.motionSensors, ...stock.phSensors, ...stock.forceSensors, ...stock.photogates]);
 for (const l of stock.laptops) l.onOpenPanel = (lap) => loggerPanel.open(lap);
 
 // ---------- 화학: 따르기 · 알림 · 폐액통 ----------
@@ -230,7 +230,7 @@ wasteHooks.alert = (title, body) => {
   alertEl.hidden = false;
 };
 for (const w of wasteCans) w.getHeld = () => hand.held;
-for (const s of stock.motionSensors) {
+for (const s of [...stock.motionSensors, ...stock.forceSensors, ...stock.photogates]) {
   // 레일 끝에 끼워져 있으면 레일의 재생 속도(느리게 보기)만큼 시간도 느리게 흐른다 → 측정값은 실제 물리량
   s.timeScale = () => (s.attachedTo?.owner instanceof Rail ? s.attachedTo.owner.speed : 1);
 }

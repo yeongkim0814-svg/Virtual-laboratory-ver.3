@@ -23,7 +23,8 @@ export type PlugType =
   | 'cartMass' // 수레 위에 얹는 질량 막대
   | 'sensorMount' // 레일 끝 센서 받침에 끼우는 센서 뒷면
   | 'probe' // 그릇에 꽂는 pH 전극
-  | 'railEnd'; // 레일 끝 받침에 끼우는 도르래
+  | 'railEnd' // 레일 끝 받침에 끼우는 도르래
+  | 'railGate'; // 레일을 넘어가게 거는 포토게이트
 
 export interface Plug {
   type: PlugType;

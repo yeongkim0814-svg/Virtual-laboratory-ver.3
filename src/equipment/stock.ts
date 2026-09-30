@@ -25,6 +25,7 @@ import { Spring } from './spring';
 import { Laser, OpticScreen, SlitPlate } from './optics';
 import { DCPowerSupply, Microammeter, Phototube } from './electrical';
 import { Textbook } from './textbook';
+import { ForceSensor, Photogate } from './dynamicsSensors';
 import { BoardEraser, Chalk } from '../world/chalkboard';
 import { CHALK_TRAY } from '../world/buildFurniture';
 import { CHEM_BOOK, PHYSICS_BOOK } from '../content/books';
@@ -51,6 +52,8 @@ export interface Stock {
   laptops: Laptop[];
   motionSensors: MotionSensor[];
   phSensors: PHSensor[];
+  forceSensors: ForceSensor[];
+  photogates: Photogate[];
   /** 용액을 담는 그릇 전부 (시약병 포함) */
   containers: Container[];
 }
@@ -93,6 +96,8 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
   // 교탁(높이 0.76 m): 화면이 실험실 쪽(+x)을 보게 90° 돌려 놓는다. 스탠딩 테이블(1.05 m): 교사 쪽(−x)을 보게
   const laptops = [new Laptop('노트북 1'), new Laptop('노트북 2'), new Laptop('노트북 3')];
   const motionSensors = [new MotionSensor('운동 센서 1'), new MotionSensor('운동 센서 2')];
+  const forceSensors = [new ForceSensor('힘 센서')];
+  const photogates = [new Photogate('포토게이트 1'), new Photogate('포토게이트 2')];
   const desk = (it: Item, x: number, z: number, yaw: number, y = 0.76) => {
     at(it, new THREE.Vector3(x, y, z));
     it.object.rotation.y = yaw;
@@ -152,6 +157,10 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(bulbs[1], low.slot(5, 1, 0.45)),
     at(knife, low.slot(5, 1, 0.95)),
     ...leds.map((l, i) => at(l, low.slot(6, 0, 0.1 + i * 0.4))),
+    // 칸 7: 힘 센서(바닥), 포토게이트 2개(선반)
+    at(forceSensors[0], low.slot(7, 0, 0.5)),
+    at(photogates[0], low.slot(7, 1, 0.2)),
+    at(photogates[1], low.slot(7, 1, 0.8)),
     at(voltmeters[1], low.slot(6, 1, 0.2)),
     at(dcAmmeters[1], low.slot(6, 1, 0.8)),
     at(new Stand(), cab.slot(0, 0, 0.2)),
@@ -189,5 +198,5 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(tubes[0], cab.slot(7, 1, 0.55)),
     at(tubes[1], cab.slot(7, 1, 0.85)),
   ];
-  return { items, strings, springs, lasers, supplies, ammeters, tubes, circuitParts, textbooks, rails, carts, laptops, motionSensors, phSensors, containers };
+  return { items, strings, springs, lasers, supplies, ammeters, tubes, circuitParts, textbooks, rails, carts, laptops, motionSensors, phSensors, forceSensors, photogates, containers };
 }

@@ -1,7 +1,7 @@
 /**
  * 센서와 노트북 (측정 프로그램)
  *
- *   노트북: 센서를 USB 선(2 m)으로 최대 2개까지 연결. 화면에 실시간 값·그래프가 나오고,
+ *   노트북: 센서를 USB 선(2 m)으로 최대 4개까지 연결. 화면에 실시간 값·그래프가 나오고,
  *           두 번 탭 → "측정 프로그램"으로 기록·분석 패널을 연다.
  *   운동 센서(초음파): 앞면(원형 진동판)에서 초음파를 쏘아 되돌아오는 시간으로 가장 가까운 물체까지의 거리를 잰다.
  *     거리 = 음속 × 왕복 시간 / 2. 측정 범위 0.15 ~ 3 m, 해상도 1 mm.
@@ -226,7 +226,7 @@ export class PHSensor extends DataSensor {
 /** 노트북 한 대의 측정 프로그램 상태 */
 export class Laptop extends Item {
   readonly sensors: DataSensor[] = [];
-  readonly maxSensors = 2;
+  readonly maxSensors = 4; // 운동 센서 + 힘 센서 + 포토게이트 2개까지
   recording = false;
   /** 기록 시각 (s) — 레일을 느리게 돌리면 그만큼 느리게 흐른다 (실험 속 시간) */
   clock = 0;

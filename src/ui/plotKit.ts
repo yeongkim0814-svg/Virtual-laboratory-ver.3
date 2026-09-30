@@ -13,6 +13,8 @@ export interface Series {
   line?: boolean;
   /** 점 크기 (px, 기본 3) */
   size?: number;
+  /** 선 아래(가로축 y = 0까지)를 칠함 — 넓이(충격량 등)를 보여 줄 때 */
+  fill?: boolean;
 }
 
 export interface PlotSpec {
@@ -46,6 +48,16 @@ export function drawPlot(c: HTMLCanvasElement, spec: PlotSpec): void {
   g.fillRect(Math.round(X(Math.max(x0, 0))), 0, 1, h);
   g.fillRect(0, Math.round(Y(Math.max(y0, 0))), w, 1);
   for (const s of spec.series) {
+    if (s.fill && s.points.length > 1) {
+      g.fillStyle = s.color;
+      g.beginPath();
+      g.moveTo(X(s.points[0][0]), Y(0));
+      for (const [x, y] of s.points) g.lineTo(X(x), Y(y));
+      g.lineTo(X(s.points[s.points.length - 1][0]), Y(0));
+      g.closePath();
+      g.fill();
+      continue;
+    }
     if (s.line) {
       g.strokeStyle = s.color;
       g.beginPath();
