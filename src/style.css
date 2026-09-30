@@ -442,3 +442,17 @@ canvas.plot.tall { height: 130px; }
   #book-toc { display: none; }
   #book.toc-open #book-toc { display: flex; position: absolute; top: 58px; left: 0; bottom: 58px; width: 75%; background: #e6dcc0; z-index: 2; box-shadow: 4px 0 8px rgba(0, 0, 0, 0.3); }
 }
+
+/* ---------- 칠판 쓰기 ---------- */
+#board-ed {
+  position: absolute; inset: 0; z-index: 30;
+  display: flex; flex-direction: column;
+  background: rgba(10, 8, 4, 0.92);
+}
+.be-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 2px solid var(--amber); }
+.be-bar .segmented { display: flex; gap: 4px; }
+#board-ed button { font: inherit; color: var(--amber); background: var(--panel); border: 2px solid var(--amber); padding: 6px 10px; min-height: 40px; }
+#board-ed button[aria-pressed='true'] { background: var(--amber); color: var(--bg); }
+#be-close { margin-left: auto; }
+#be-wrap { flex: 1; min-height: 0; display: grid; place-items: center; padding: 10px; }
+#be-canvas { border: 10px solid #4a3522; box-sizing: content-box; touch-action: none; cursor: crosshair; background: #1f3527; }

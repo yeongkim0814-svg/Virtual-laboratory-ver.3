@@ -490,6 +490,21 @@
         </div>
       </section>
 
+      <!-- 칠판 쓰기 (분필·지우개를 들고 칠판을 탭) -->
+      <div id="board-ed" hidden>
+        <header class="be-bar">
+          <div class="segmented">
+            <button data-tool="white">흰 분필</button><button data-tool="yellow">노란 분필</button><button data-tool="erase">지우개</button>
+          </div>
+          <div class="segmented">
+            <button data-view="left">왼쪽</button><button data-view="mid">가운데</button><button data-view="right">오른쪽</button><button data-view="all">전체</button>
+          </div>
+          <button id="be-clear">전체 지우기</button>
+          <button id="be-close">다 썼음</button>
+        </header>
+        <div id="be-wrap"><canvas id="be-canvas"></canvas></div>
+      </div>
+
       <!-- 교재 읽기 (교탁 위 교재를 두 번 탭 → 교재 펼치기) -->
       <div id="book" hidden>
         <header class="book-head">
@@ -512,6 +527,8 @@
           <h2>조작 방법</h2>
           <button id="help-close">닫기</button>
         </header>
+        <h3>칠판</h3>
+        <p>칠판 아래 작은 받침(교탁 오른쪽 끝 너머)의 <b>분필</b>(흰색·노란색)이나 <b>지우개</b>를 집고 칠판을 탭 → 쓰기 화면: 손가락으로 쓰기, 보기(왼쪽·가운데·오른쪽·전체), 전체 지우기, <b>다 썼음</b>.</p>
         <h3>실험 교재</h3>
         <p>교탁 위 <b>물리 · 화학 실험 교재</b>를 두 번 탭 → <b>교재 펼치기</b>: 실험마다 목표 · 원리 · 방법 · 분석 · 시험 포인트 · 한계. 한 번 탭하면 들고 다닐 수 있다.</p>
         <h3>움직이기</h3>

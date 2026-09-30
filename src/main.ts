@@ -42,6 +42,7 @@ import { solveCircuits, type PhotoCircuitState } from './equipment/electrical';
 import { PhotoPanel } from './ui/photoPanel';
 import { CircuitPanel } from './ui/circuitPanel';
 import { BookReader } from './ui/bookReader';
+import { BoardEditor } from './ui/boardEditor';
 import { Led, solveDCCircuits, type DCCircuitState } from './equipment/circuitParts';
 import { RotateBar } from './ui/rotateBar';
 
@@ -250,6 +251,12 @@ for (const s of stock.supplies) {
 // 교재: 두 번 탭 → 펼치기 (읽는 동안 다른 패널은 닫고 이동·조작은 화면이 가려 멈춘다)
 const bookReader = new BookReader((open) => { if (open) for (const p of panels) if (p.isOpen) p.close(); });
 for (const b of stock.textbooks) b.onOpen = (t) => bookReader.open(t.book);
+// 칠판: 분필·지우개를 들고 탭 → 쓰기 화면
+const boardEditor = new BoardEditor((open) => { if (open) for (const p of panels) if (p.isOpen) p.close(); });
+for (const b of furniture.boards) {
+  b.getHeld = () => hand.held;
+  b.onWrite = (board, tool) => boardEditor.open(board, tool);
+}
 for (const p of stock.circuitParts) {
   p.onOpenPanel = (part) => {
     const st = dcStates.find((c) => c.parts.includes(part));
@@ -270,6 +277,7 @@ for (const p of stock.circuitParts) {
   doors.forEach((d, i) => reg.add(`door${i}`, d));
   furniture.outlets.forEach((o, i) => reg.add(`outlet${i}`, o));
   wasteCans.forEach((w, i) => reg.add(`waste${i}`, w));
+  furniture.boards.forEach((b, i) => reg.add(`board${i}`, b));
 }
 /** 물체 → 이름표 (등록 안 된 물체면 개발 중 실수이므로 바로 알린다) */
 function ref(o: object | null): string {
@@ -787,6 +795,7 @@ renderer.setAnimationLoop(() => {
   slitPanel.update();
   photoPanel.update();
   circuitPanel.update();
+  boardEditor.update();
   supplyPanel.update();
   trackPanel.update();
   loggerPanel.update();

@@ -25,6 +25,8 @@ import { Spring } from './spring';
 import { Laser, OpticScreen, SlitPlate } from './optics';
 import { DCPowerSupply, Microammeter, Phototube } from './electrical';
 import { Textbook } from './textbook';
+import { BoardEraser, Chalk } from '../world/chalkboard';
+import { CHALK_TRAY } from '../world/buildFurniture';
 import { CHEM_BOOK, PHYSICS_BOOK } from '../content/books';
 import { Ammeter, Bulb, KnifeSwitch, Led, Resistor, Voltmeter, type CircuitPart } from './circuitParts';
 import { Cart, Pulley, Rail, massBar } from './track';
@@ -103,6 +105,10 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     // 교재: 교탁 위 노트북 사이·옆에, 표지가 실험실 쪽(+x)에서 바로 읽히게
     desk(textbooks[0], 2.25, 2.75, Math.PI / 2),
     desk(textbooks[1], 2.25, 3.85, Math.PI / 2),
+    // 칠판 아래 분필 받침: 흰 분필·노란 분필·지우개 (칠판과 나란히)
+    desk(new Chalk('white'), CHALK_TRAY.x, CHALK_TRAY.z1 + 0.07, Math.PI / 2, CHALK_TRAY.y),
+    desk(new Chalk('yellow'), CHALK_TRAY.x, CHALK_TRAY.z1 + 0.17, Math.PI / 2, CHALK_TRAY.y),
+    desk(new BoardEraser(), CHALK_TRAY.x, CHALK_TRAY.z2 - 0.14, Math.PI / 2, CHALK_TRAY.y),
     desk(laptops[1], 2.2, 3.3, Math.PI / 2),
     desk(laptops[2], 2.15, 4.92, -Math.PI / 2, 1.05),
     // 뒤쪽 벽 수납장: 칸 0(가로로 긴 칸, 젖히는 문) 레일, 칸 1 수레(바닥)·질량 막대(선반), 칸 2 운동 센서

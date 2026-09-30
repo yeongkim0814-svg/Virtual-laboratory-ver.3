@@ -3,6 +3,7 @@
  * 모든 가구의 윗면 높이는 layout의 height와 같아서, 그 위에 물체를 놓을 수 있다.
  */
 import * as THREE from 'three';
+import { Chalkboard } from './chalkboard';
 import { FURNITURE, ROOMS, type Furniture, type Rect } from './layout';
 import { grimeTexture, woodTexture, worldUV } from '../render/textures';
 import { StorageCabinet, type CabinetDoor } from './cabinet';
@@ -33,6 +34,9 @@ const cabinets = new Map<string, StorageCabinet>();
 const outlets: Outlet[] = [];
 const wasteCans: THREE.Object3D[] = [];
 const tickers: ((t: number) => void)[] = [];
+const boards: Chalkboard[] = [];
+/** 칠판 아래 분필 받침 (z 범위, 윗면 높이) — 분필·지우개를 여기 놓는다 */
+export const CHALK_TRAY = { z1: 4.45, z2: 5.05, y: 0.88, x: 0.12 };
 
 export interface FurnitureResult {
   cabinets: Map<string, StorageCabinet>;
@@ -44,6 +48,8 @@ export interface FurnitureResult {
   wasteCans: THREE.Object3D[];
   /** 매 프레임 불러 줄 것 (시약장 온도·습도 표시 등), t = 경과 시간 (s) */
   tickers: ((t: number) => void)[];
+  /** 직접 쓸 수 있는 칠판 */
+  boards: Chalkboard[];
 }
 
 export function buildFurniture(scene: THREE.Scene): FurnitureResult {
@@ -57,7 +63,7 @@ export function buildFurniture(scene: THREE.Scene): FurnitureResult {
     BUILDERS[f.kind](g, f);
     scene.add(g);
   }
-  return { cabinets, doors: [...cabinets.values()].flatMap((c) => c.doors), outlets: [...outlets], wasteCans: [...wasteCans], tickers: [...tickers] };
+  return { cabinets, doors: [...cabinets.values()].flatMap((c) => c.doors), outlets: [...outlets], wasteCans: [...wasteCans], tickers: [...tickers], boards: [...boards] };
 }
 
 type Builder = (g: THREE.Group, f: Furniture) => void;
@@ -67,14 +73,18 @@ const BUILDERS: Record<Furniture['kind'], Builder> = {
     const r = f.rect;
     const bottom = 0.9;
     box(g, r, bottom, f.height, M.woodDark); // 테두리
-    // 칠판 면: 캔버스에 분필 글씨를 그려 텍스처로 사용
+    // 칠판 면: 직접 쓸 수 있는 캔버스 (world/chalkboard.ts)
     const w = r.z2 - r.z1 - 0.1;
     const h = f.height - bottom - 0.1;
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshLambertMaterial({ map: chalkTexture(w, h) }));
-    board.rotation.y = Math.PI / 2; // +x(방 안쪽)를 보게
-    board.position.set(r.x2 + 0.002, (bottom + f.height) / 2, (r.z1 + r.z2) / 2);
-    g.add(board);
-    box(g, { x1: r.x2, z1: r.z1, x2: r.x2 + 0.08, z2: r.z2 }, bottom - 0.03, bottom, M.woodDark); // 분필 받침
+    const board = new Chalkboard(w, h);
+    board.object.rotation.y = Math.PI / 2; // +x(방 안쪽)를 보게
+    board.object.position.set(r.x2 + 0.002, (bottom + f.height) / 2, (r.z1 + r.z2) / 2);
+    g.add(board.object);
+    boards.push(board);
+    // 분필·지우개 받침: 칠판 아래 작은 선반 (교탁 오른쪽 끝 너머, 걸어가 닿는 자리) + 앞 턱
+    const t = CHALK_TRAY;
+    box(g, { x1: r.x2, z1: t.z1, x2: r.x2 + 0.09, z2: t.z2 }, t.y - 0.02, t.y, M.woodDark);
+    box(g, { x1: r.x2 + 0.08, z1: t.z1, x2: r.x2 + 0.09, z2: t.z2 }, t.y, t.y + 0.012, M.woodDark);
   },
 
   desk(g, f) {
@@ -201,8 +211,8 @@ const BUILDERS: Record<Furniture['kind'], Builder> = {
     const r = f.rect;
     const front = frontOf(r);
     const cab = new StorageCabinet(r, front, f.height, 0, CAB_MATS, {
-      // 칸 하나 + 양문: 넓은 수납 공간 하나를 가운데에서 양쪽으로 연다
-      sections: [1], shelves: [0.05, 0.45], solidDoors: true, doorTop: f.height - 0.12, doubleDoors: true,
+      // 칸 둘 × 양문: 문짝 폭이 약 0.36 m라 열어도 앞으로 0.36 m만 나온다 (앞 0.55 m에 준비실 문이 지나감)
+      sections: [1, 1], shelves: [0.05, 0.45], solidDoors: true, doorTop: f.height - 0.12, doubleDoors: true,
     });
     g.add(cab.group);
     cabinets.set(f.name, cab);
@@ -318,34 +328,3 @@ function faceStrip(r: Rect, f: Front, t: number): Rect {
 }
 
 
-/**
- * 칠판에 분필 글씨 (진자 주기 공식 — 1단계 예고)
- * 저해상도 캔버스 + 픽셀 글꼴(Galmuri) + NearestFilter → 도트 글씨.
- * 글꼴 파일이 늦게 로드되면 로드 후에 다시 그린다.
- */
-function chalkTexture(w: number, h: number): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = 320;
-  c.height = Math.round((320 * h) / w);
-  const g = c.getContext('2d')!;
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.magFilter = tex.minFilter = THREE.NearestFilter;
-  tex.generateMipmaps = false;
-  const draw = () => {
-    g.fillStyle = '#1f3527';
-    g.fillRect(0, 0, c.width, c.height);
-    g.fillStyle = 'rgba(150,170,150,0.12)'; // 지운 자국
-    g.fillRect(180, 8, 120, 30);
-    g.fillStyle = '#e6e4d6';
-    g.font = '12px Galmuri11, monospace';
-    g.fillText('가상 실험실', 14, 20);
-    g.fillText('단진자의 주기  T = 2π√(L/g)', 14, 40);
-    g.fillStyle = '#a9ad9e';
-    g.fillText('sin θ ≈ θ 는 어디까지 맞을까?', 14, 58);
-    tex.needsUpdate = true;
-  };
-  draw();
-  document.fonts?.load('12px Galmuri11').then(draw, () => {});
-  return tex;
-}

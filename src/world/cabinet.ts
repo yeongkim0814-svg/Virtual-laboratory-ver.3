@@ -92,7 +92,7 @@ export interface CabinetOptions {
   glassDoors?: boolean;
   /** 긴 기구용 칸 번호: 가로로 긴 문 한 짝을 아래로 젖혀 연다 (레일처럼 긴 것) */
   longSections?: number[];
-  /** 양문: 칸마다 문 두 짝을 양쪽 옆판에 경첩으로 달아 가운데서 연다 (칸 하나짜리 장 — 이웃 칸과 경첩을 나눠 쓰지 않을 때만) */
+  /** 양문: 칸마다 문 두 짝을 양쪽 옆판·칸막이에 경첩으로 달아 가운데서 연다 (문짝 폭이 반이라 앞으로 덜 튀어나온다) */
   doubleDoors?: boolean;
 }
 
@@ -160,12 +160,16 @@ export class StorageCabinet {
         : [[base + 0.01, 0.97, false], [1.0, top, true]];
       const leaves = o.doubleDoors ? 2 : long ? 1 : Math.max(1, Math.ceil(w / 0.7));
       const lw = w / leaves;
+      const last = i === widths.length - 1;
       for (let k = 0; k < leaves; k++) {
-        // 양문의 오른쪽 짝은 오른쪽 옆판에 경첩 → 두 짝이 가운데에서 양쪽으로 벌어진다
+        // 양문의 오른쪽 짝은 오른쪽 칸막이에 경첩 → 두 짝이 가운데에서 양쪽으로 벌어진다.
+        // 칸막이 하나에 이웃 칸 문과 경첩이 마주 붙으면, 열었을 때 두 문짝이 같은 자리로 돌아와 겹친다
+        // → 칸막이 쪽 경첩은 칸 안쪽으로 3 cm씩 물려 단다 (열린 문짝 두 장과 서로 마주 보는 손잡이 사이에 틈)
         const right = !!o.doubleDoors && k === 1;
+        const inset = !o.doubleDoors ? 0 : right ? (last ? 0 : 0.03) : i > 0 ? 0.03 : 0;
         for (const [y1, y2, glass] of spans) {
-          const door = new CabinetDoor(lw, y1, y2, !right, glass, m, long);
-          door.object.position.set(right ? x1 : x0 + k * lw, 0, hd + 0.011);
+          const door = new CabinetDoor(lw - inset, y1, y2, !right, glass, m, long);
+          door.object.position.set(right ? x1 - inset : x0 + k * lw + inset, 0, hd + 0.011);
           this.group.add(door.object);
           this.doors.push(door);
         }
