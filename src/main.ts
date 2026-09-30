@@ -36,6 +36,8 @@ import { PourBar } from './ui/pourBar';
 import { SlitPanel } from './ui/slitPanel';
 import { stockEquipment } from './equipment/stock';
 import { BeamSystem } from './equipment/beams';
+import { OpticalElement } from './equipment/opticalElements';
+import { OpticsPanel } from './ui/opticsPanel';
 import { PowerSystem } from './world/power';
 import { WireSystem, type Terminal } from './world/wires';
 import { solveCircuits, type PhotoCircuitState } from './equipment/electrical';
@@ -132,7 +134,7 @@ let dcStates: DCCircuitState[] = [];
 const circuitPanel = new CircuitPanel((open) => panelToggled(circuitPanel, open), (s) => dcStates.find((c) => c.supply === s) ?? null);
 const trackPanel = new TrackPanel((open) => panelToggled(trackPanel, open));
 const loggerPanel = new LoggerPanel((open) => panelToggled(loggerPanel, open));
-const panels = [pendulumPanel, springPanel, slitPanel, photoPanel, supplyPanel, circuitPanel, trackPanel, loggerPanel];
+const panels: { el: HTMLElement; isOpen: boolean; close(): void }[] = [pendulumPanel, springPanel, slitPanel, photoPanel, supplyPanel, circuitPanel, trackPanel, loggerPanel];
 // 센서 ↔ 노트북 (USB)
 const sensorNet = new SensorNetwork(scene, stock.laptops, [...stock.motionSensors, ...stock.phSensors, ...stock.forceSensors, ...stock.photogates]);
 for (const l of stock.laptops) l.onOpenPanel = (lap) => loggerPanel.open(lap);
@@ -240,7 +242,8 @@ for (const s of stock.springs) s.onOpenPanel = (sp) => springPanel.open(sp);
 for (const l of stock.lasers) l.onOpenPanel = (laser) => slitPanel.open(laser);
 
 // 전원: 실험 테이블 옆면의 콘센트 ↔ 전원이 필요한 기기(레이저)
-const power = new PowerSystem(scene, furniture.outlets, [...stock.lasers, ...stock.supplies]);
+const power = new PowerSystem(scene, furniture.outlets, [...stock.lasers, ...stock.supplies, ...stock.lightBoxes]);
+for (const b of stock.lightBoxes) b.powerActions = (box) => power.deviceActions(box);
 for (const l of stock.lasers) l.powerActions = (laser) => power.deviceActions(laser);
 for (const s of stock.supplies) {
   s.powerActions = (d) => power.deviceActions(d);
@@ -377,6 +380,12 @@ function updateGlowLights(): void {
 
 // 레이저 광선 추적
 const beams = new BeamSystem(scene, items);
+// 광학 패널: 광선 경로 (레이저·백색 광원), 거울 미세 조정
+const opticsPanel = new OpticsPanel((open) => panelToggled(opticsPanel, open), beams);
+panels.push(opticsPanel);
+for (const l of stock.lasers) l.onOpenRays = (laser) => opticsPanel.openSource(laser);
+for (const b of stock.lightBoxes) b.onOpenPanel = (box) => opticsPanel.openSource(box);
+for (const it of items) if (it instanceof OpticalElement) it.onFine = (e) => opticsPanel.openFine(e);
 
 // ---------- 입력·UI ----------
 const controls = new Controls(canvas);
@@ -714,7 +723,7 @@ function collectEquipmentBoxes(): void {
 
 // 테스트용: 주소 끝이 #debug일 때만 내부 객체를 노출 (자동 테스트가 조립을 빠르게 재현하는 데 씀)
 if (location.hash === '#debug') {
-  (window as unknown as Record<string, unknown>).lab = { THREE, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt };
+  (window as unknown as Record<string, unknown>).lab = { THREE, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel };
 }
 
 renderer.setAnimationLoop(() => {
@@ -795,6 +804,7 @@ renderer.setAnimationLoop(() => {
   slitPanel.update();
   photoPanel.update();
   circuitPanel.update();
+  opticsPanel.update();
   boardEditor.update();
   supplyPanel.update();
   trackPanel.update();

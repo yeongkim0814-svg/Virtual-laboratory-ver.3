@@ -26,6 +26,7 @@ import { Laser, OpticScreen, SlitPlate } from './optics';
 import { DCPowerSupply, Microammeter, Phototube } from './electrical';
 import { Textbook } from './textbook';
 import { ForceSensor, Photogate } from './dynamicsSensors';
+import { BeamSplitter, HalfDisk, OpticalDisc, PlaneMirror, Prism, ThinLens, WhiteLightBox } from './opticalElements';
 import { BoardEraser, Chalk } from '../world/chalkboard';
 import { CHALK_TRAY } from '../world/buildFurniture';
 import { CHEM_BOOK, PHYSICS_BOOK } from '../content/books';
@@ -53,6 +54,8 @@ export interface Stock {
   motionSensors: MotionSensor[];
   phSensors: PHSensor[];
   forceSensors: ForceSensor[];
+  /** 백색 광원 (전원선) */
+  lightBoxes: WhiteLightBox[];
   photogates: Photogate[];
   /** 용액을 담는 그릇 전부 (시약병 포함) */
   containers: Container[];
@@ -78,6 +81,7 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     new Spring({ k: 25, L0: 0.08, ms: 0.02, limit: 0.3 }, 0xc9a456, '용수철 k 25 N/m'),
   ];
   const lasers = [new Laser()];
+  const lightBoxes = [new WhiteLightBox()];
   const supplies = [new DCPowerSupply(), new DCPowerSupply()];
   const ammeters = [new Microammeter()];
   // 일함수: 세슘 2.14 eV (문턱 파장 579 nm), 나트륨 2.28 eV (544 nm) → 빨강 650 nm로는 둘 다 전자가 안 나옴
@@ -192,11 +196,21 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(new SlitPlate({ kind: 'double', d: 0.10e-3, a: 0.02e-3 }, '이중 슬릿 d 0.10 mm'), cab.slot(7, 2, 0.15)),
     at(new SlitPlate({ kind: 'double', d: 0.20e-3, a: 0.04e-3 }, '이중 슬릿 d 0.20 mm'), cab.slot(7, 2, 0.5)),
     at(new SlitPlate({ kind: 'single', d: 0, a: 0.10e-3 }, '단일 슬릿 a 0.10 mm'), cab.slot(7, 2, 0.85)),
+    // ---- 기하광학 (빈 칸들): 칸 5 위 = 거울 3, 칸 7 위 = 반투명 거울·프리즘, 칸 4 위 = 반원 블록·원판, 칸 5 둘째 = 렌즈 3, 칸 6 바닥 = 백색 광원
+    ...[0.15, 0.5, 0.85].map((t, i) => at(new PlaneMirror(`평면거울 ${i + 1}`), cab.slot(5, 3, t))),
+    at(new BeamSplitter(), cab.slot(7, 3, 0.25)),
+    at(new Prism(), cab.slot(7, 3, 0.75)),
+    at(new HalfDisk(), cab.slot(4, 3, 0.2)),
+    at(new OpticalDisc(), cab.slot(4, 3, 0.7)),
+    at(new ThinLens(0.1), cab.slot(5, 1, 0.15)),
+    at(new ThinLens(0.2), cab.slot(5, 1, 0.5)),
+    at(new ThinLens(-0.05), cab.slot(5, 1, 0.85)),
+    at(lightBoxes[0], cab.slot(6, 0, 0.5)),
     // ---- 광전 효과 (아래 선반, 높이 0.52 m) ----
     at(supplies[0], cab.slot(6, 1, 0.5)),
     at(ammeters[0], cab.slot(7, 1, 0.15)),
     at(tubes[0], cab.slot(7, 1, 0.55)),
     at(tubes[1], cab.slot(7, 1, 0.85)),
   ];
-  return { items, strings, springs, lasers, supplies, ammeters, tubes, circuitParts, textbooks, rails, carts, laptops, motionSensors, phSensors, forceSensors, photogates, containers };
+  return { items, strings, springs, lasers, lightBoxes, supplies, ammeters, tubes, circuitParts, textbooks, rails, carts, laptops, motionSensors, phSensors, forceSensors, photogates, containers };
 }

@@ -71,6 +71,8 @@ export class Laser extends Item implements Powered {
   /** main.ts가 넣어 줌 */
   powerActions: (l: Laser) => Action[] = () => [];
   onOpenPanel: (l: Laser) => void = () => {};
+  /** 광선 경로 패널 (main이 넣어 줌) */
+  onOpenRays: (l: Laser) => void = () => {};
   private led: THREE.MeshBasicMaterial;
 
   constructor() {
@@ -126,7 +128,10 @@ export class Laser extends Item implements Powered {
   }
 
   experimentActions(): Action[] {
-    return this.emitting && this.pattern?.ap ? [{ label: '간섭무늬 관찰', run: () => this.onOpenPanel(this) }] : [];
+    if (!this.emitting) return [];
+    const out: Action[] = [{ label: '광선 경로 (레이저)', run: () => this.onOpenRays(this) }];
+    if (this.pattern?.ap) out.unshift({ label: '간섭무늬 관찰', run: () => this.onOpenPanel(this) });
+    return out;
   }
 }
 

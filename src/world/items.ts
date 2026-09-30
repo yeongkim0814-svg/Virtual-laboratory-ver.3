@@ -24,7 +24,8 @@ export type PlugType =
   | 'sensorMount' // 레일 끝 센서 받침에 끼우는 센서 뒷면
   | 'probe' // 그릇에 꽂는 pH 전극
   | 'railEnd' // 레일 끝 받침에 끼우는 도르래
-  | 'railGate'; // 레일을 넘어가게 거는 포토게이트
+  | 'railGate' // 레일을 넘어가게 거는 포토게이트
+  | 'opticMount'; // 광학 원판 가운데에 끼우는 광학 기구 받침
 
 export interface Plug {
   type: PlugType;

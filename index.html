@@ -335,6 +335,41 @@
         </dl>
       </section>
 
+      <!-- 광학 패널: 광선 경로 · 미세 조정 -->
+      <section id="op-panel" class="exp-panel" hidden>
+        <header>
+          <h2 id="op-title">광학</h2>
+          <button id="op-close">닫기</button>
+        </header>
+        <p id="op-status" class="status"></p>
+        <div id="op-fine" hidden>
+          <h3>미세 조정 나사 · <span id="op-fine-name"></span></h3>
+          <div class="field">기울기 <span id="op-tilt-val"></span>
+            <div class="segmented fine">
+              <button data-tilt="-0.01">−0.01°</button><button data-tilt="-0.001">−0.001°</button>
+              <button data-tilt="0.001">+0.001°</button><button data-tilt="0.01">+0.01°</button>
+            </div>
+          </div>
+          <label>이동 (면에 수직, 0 ~ 50 μm) <span id="op-shift-val"></span>
+            <input id="op-shift" type="range" min="0" max="50" step="0.01" />
+          </label>
+          <div class="segmented fine">
+            <button data-shift="-0.1">−0.1 μm</button><button data-shift="-0.01">−0.01 μm</button>
+            <button data-shift="0.01">+0.01 μm</button><button data-shift="0.1">+0.1 μm</button>
+          </div>
+          <div class="segmented"><button id="op-fine-reset">나사 원래대로</button></div>
+          <p class="legend">거울을 d만큼 밀면 그 팔의 왕복 경로가 2d 늘어난다 → 무늬가 λ/2 (빨강 0.325 μm)마다 하나씩 지나간다. 기울기를 주면 곧은 무늬, 오목 렌즈로 빔을 넓히면 동심원 무늬.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="op-log" class="log">
+            <thead><tr><th>#</th><th>기구</th><th>일</th><th>입사 → 나감</th><th>계산</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <dl class="readout" id="op-sum"></dl>
+        <p class="legend">각은 면의 법선에서 잰 값. 굴절이면 n = sin(입사각) / sin(굴절각) (공기 n = 1). 광학 원판 위에 기구를 끼우면 원판 눈금(1°)으로 같은 각을 직접 읽을 수 있다.</p>
+      </section>
+
       <!-- 직류 회로 실험 패널 (옴의 법칙 · 전구의 I–V) -->
       <section id="dc-panel" class="exp-panel" hidden>
         <header>
@@ -588,6 +623,13 @@
           <li>전원 장치(또는 부품)를 두 번 탭 → <b>직류 회로 실험</b>: 전압 조절, 계기 값, 측정값 기록·자동 측정(0 → 5 V), I–V 그래프와 R·n 맞춤, CSV</li>
           <li>전원 장치는 1 A를 넘으면 전류 제한(CC)으로 바뀐다 — 화면에 CC가 뜨면 단락을 의심</li>
           <li>LED 3색(칸 6): 빨강 단자(+)를 전원 + 쪽으로. 직렬 저항 없이 문턱을 크게 넘기면 과열로 탄다 → 두 번 탭해 새 LED로 교체</li>
+        </ul>
+        <h3>기하광학 · 간섭계</h3>
+        <ul>
+          <li>오른쪽 벽 보관장 위 선반: 광학 원판·반원 블록(칸 4), 거울 3개·렌즈 3개(칸 5), 반투명 거울·프리즘(칸 7), 백색 광원(칸 6 아래)</li>
+          <li>기구를 들고 <b>광학 원판</b>을 두 번 탭 → 가운데에 끼움, 두 번 탭 → 회전(1°)으로 입사각 조절. 원판 눈금으로 각을 읽는다</li>
+          <li>레이저·백색 광원 두 번 탭 → <b>광선 경로</b>: 면마다 입사각·굴절각, n 계산, 프리즘 꺾인 각, 렌즈 상, 간섭 경로차</li>
+          <li>백색 광원 앞판(두 번 탭): 한 줄 · 평행 세 줄 · 화살표 물체. 거울·반투명 거울 두 번 탭 → <b>미세 조정 나사</b>(마이컬슨 간섭계)</li>
         </ul>
         <h3>센서 · 노트북</h3>
         <ul>
