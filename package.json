@@ -8,7 +8,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "build:single": "vite build --mode single",
-    "build:docs": "tsc --noEmit && vite build --mode docs"
+    "build:docs": "tsc --noEmit && vite build --mode docs",
+    "test": "node tests/run.cjs",
+    "test:quick": "node tests/run.cjs 01 02"
   },
   "dependencies": {
     "three": "^0.186.1"
