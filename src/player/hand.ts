@@ -12,7 +12,7 @@
  * → 벽에 가까이 가도 파묻혀 보이지 않고, 광선 판정(레이어 0만 봄)에서도 자동으로 빠진다.
  */
 import * as THREE from 'three';
-import type { Item } from '../world/items';
+import { HITBOX_MAT, type Item } from '../world/items';
 import { INTERACT_RANGE } from '../world/interactable';
 
 const MIN_UP = 0.7; // 법선의 y성분이 이보다 커야 놓을 수 있다
@@ -114,6 +114,23 @@ export class Hand {
       if (d < other.radius + item.radius && Math.abs(p.y - hit.point.y) < 0.05) valid = false;
     }
     return { point: hit.point.clone(), valid };
+  }
+
+  /**
+   * item(장면에 놓인 조립체)을 p로 옮겨도 받쳐지는가: p 위에서 아래로 쏜 광선이 자기 자신·보이지 않는 판정 영역을
+   * 지나 처음 맞는 것이 같은 높이(±3 mm)의 위를 향한 면이고 다른 기구가 아니어야 한다
+   */
+  canStand(item: Item, p: THREE.Vector3): boolean {
+    const own = new Set<THREE.Object3D>();
+    item.object.traverse((o) => own.add(o));
+    this.raycaster.set(p.clone().add(new THREE.Vector3(0, 0.5, 0)), new THREE.Vector3(0, -1, 0));
+    this.raycaster.far = 1;
+    const hit = this.raycaster
+      .intersectObjects(this.scene.children, true)
+      .find((h) => isPickable(h.object) && !own.has(h.object) && (h.object as THREE.Mesh).material !== HITBOX_MAT);
+    if (!hit?.face || itemOf(hit.object)) return false;
+    const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+    return n.y > MIN_UP && Math.abs(hit.point.y - p.y) < 0.003;
   }
 
   /** 매 프레임: 조준점 기준 놓을 자리 표시 (aimX = 조준점의 화면 x 좌표, ndc) */

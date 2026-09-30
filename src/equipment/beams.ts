@@ -339,6 +339,8 @@ export class BeamSystem {
   private lastTrace = 0;
   private hits: Hit[] = [];
   private segs = 0;
+  /** 공기 중 광선 조각 (시작·끝, 월드) — 정렬 안내(beamOffset)가 읽는다 */
+  private airSegs: { a: THREE.Vector3; b: THREE.Vector3 }[] = [];
 
   constructor(private scene: THREE.Scene, private items: Item[]) {
     this.lines = new BeamLines(scene);
@@ -370,6 +372,37 @@ export class BeamSystem {
       if (!skip) return h;
     }
     return null;
+  }
+
+  /**
+   * 광학 기구(el)로 들어오는 빛줄기와 기구 중심(frame().c)의 옆 거리.
+   * 기구 앞(중심에서 1 cm 넘게 떨어진 곳)에서 출발해 중심 근처까지 오는 공기 중 조각 가운데
+   * 중심과 가장 가까운 것 (수평 5 cm · 높이 2 cm 안). 없으면 null
+   *   off  : 빛줄기에서 중심까지 부호 있는 거리 (m, 진행 방향 기준 왼쪽 +)
+   *   move : 중심을 빛줄기 위로 옮기는 수평 이동 (m)
+   *   dir  : 빛의 수평 진행 방향 (단위)
+   */
+  beamOffset(el: OpticalElement): { off: number; move: THREE.Vector3; dir: THREE.Vector3 } | null {
+    const c = el.frame().c;
+    let best: { off: number; move: THREE.Vector3; dir: THREE.Vector3 } | null = null;
+    let bestD = 0.05;
+    for (const { a, b } of this.airSegs) {
+      const d = new THREE.Vector3(b.x - a.x, 0, b.z - a.z);
+      const len = d.length();
+      if (len < 1e-4) continue;
+      d.divideScalar(len);
+      const w = new THREE.Vector3(c.x - a.x, 0, c.z - a.z);
+      const t = w.dot(d);
+      if (t < 0.01 || t > len + 0.03) continue;
+      if (Math.abs(a.y + (b.y - a.y) * Math.min(t / len, 1) - c.y) > 0.02) continue;
+      const perp = w.clone().addScaledVector(d, -t);
+      const dist = perp.length();
+      if (dist >= bestD) continue;
+      bestD = dist;
+      const left = new THREE.Vector3(d.z, 0, -d.x); // 위에서 볼 때 진행 방향의 왼쪽
+      best = { off: perp.dot(left), move: perp.negate(), dir: d };
+    }
+    return best;
   }
 
   /** 바뀐 것이 있는가: 장면에 놓인 기구들의 위치·방향 + 광원·기구 설정 */
@@ -408,6 +441,7 @@ export class BeamSystem {
     this.spots.clear();
     this.hits = [];
     this.segs = 0;
+    this.airSegs = [];
     this.tubeLight.clear();
     this.traces.clear();
     for (const d of [...this.interf, ...this.images]) d.mesh.visible = false;
@@ -482,6 +516,7 @@ export class BeamSystem {
     const len = r.o.distanceTo(p);
     this.lines.add(r.o, p, color, r.p);
     this.segs++;
+    if (!r.inside && r.p > 0.02) this.airSegs.push({ a: r.o.clone(), b: p.clone() });
     const n = r.inside ? refractiveIndex(r.inside.glass, r.nm || 550) : 1;
     r.opl += n * len;
     r.path += len;

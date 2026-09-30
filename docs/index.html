@@ -7,8 +7,8 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#0a0b08" />
     <title>가상 실험실</title>
-    <script type="module" crossorigin src="./assets/index-BLWXt-_A.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DYOIiM-P.css">
+    <script type="module" crossorigin src="./assets/index-DtVMKQBv.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BOeS5Y9J.css">
   </head>
   <body>
     <!-- 16:9 무대: 화면비가 다르면 위아래(또는 좌우)에 검은 띠가 생긴다 -->
@@ -35,16 +35,30 @@
         <!-- 탭한 물체에 동작이 여러 개일 때 그 자리에 뜨는 선택 메뉴 -->
         <div id="action-menu" hidden></div>
         <div id="held" hidden></div>
-        <!-- 회전 막대: 두 번 탭 메뉴의 "회전"으로 열림 -->
+        <!-- 위치·방향 막대: 두 번 탭 메뉴의 "위치·방향"으로 열림 (0.1° 회전 · 1 mm 이동 · 빛에 맞추기) -->
         <div id="rotate-bar" hidden>
-          <span id="rb-name"></span>
-          <button data-d="-15">−15°</button>
-          <button data-d="-1">−1°</button>
-          <input id="rb-slider" type="range" min="0" max="359" step="1" aria-label="방향" />
-          <button data-d="1">+1°</button>
-          <button data-d="15">+15°</button>
-          <span id="rb-val"></span>
-          <button id="rb-done" class="primary">완료</button>
+          <div class="rb-row">
+            <span id="rb-name"></span>
+            <button data-d="-15">−15°</button>
+            <button data-d="-1">−1°</button>
+            <button data-d="-0.1">−0.1°</button>
+            <input id="rb-slider" type="range" min="0" max="359" step="1" aria-label="방향" />
+            <button data-d="0.1">+0.1°</button>
+            <button data-d="1">+1°</button>
+            <button data-d="15">+15°</button>
+            <span id="rb-val"></span>
+          </div>
+          <div class="rb-row">
+            <button data-m="L" aria-label="왼쪽으로">◀</button>
+            <button data-m="F" aria-label="멀리">▲</button>
+            <button data-m="B" aria-label="가까이">▼</button>
+            <button data-m="R" aria-label="오른쪽으로">▶</button>
+            <button data-step="0.01">1 cm</button>
+            <button data-step="0.001">1 mm</button>
+            <span id="rb-beam"></span>
+            <button id="rb-align" hidden>빛에 맞추기</button>
+            <button id="rb-done" class="primary">완료</button>
+          </div>
         </div>
         <!-- 따르기: 옮길 부피를 슬라이더로 (눈금실린더 0.5 mL, 뷰렛 0.05 mL 단위) -->
         <div id="pour-bar" hidden>
@@ -603,7 +617,7 @@
         </ul>
         <h3>두 번 탭 (또는 길게 누르기)</h3>
         <ul>
-          <li>놓인 기구 → <b>조작 메뉴</b>: 실험 패널 열기, 전원 연결·뽑기, 켜기·끄기, 전압 조절, 파장·세기, 회전(1° 단위), 높이 ±1 cm, 범퍼 바꾸기, 밀기, 도선 연결·빼기</li>
+          <li>놓인 기구 → <b>조작 메뉴</b>: 실험 패널 열기, 전원 연결·뽑기, 켜기·끄기, 전압 조절, 파장·세기, 위치·방향(0.1° 회전·1 mm 이동), 높이 ±1 cm, 범퍼 바꾸기, 밀기, 도선 연결·빼기</li>
           <li>들고 있을 때 다른 기구 → <b>끼우기·매달기</b>: 클램프 → 스탠드 막대, 실·용수철·레이저·슬릿 → 클램프 집게, 추 → 실·용수철 고리, 수레 → 레일, 질량 막대 → 수레</li>
         </ul>
         <h3>도선</h3>
@@ -629,7 +643,8 @@
         <h3>기하광학 · 간섭계</h3>
         <ul>
           <li>오른쪽 벽 보관장 위 선반: 광학 원판·반원 블록(칸 4), 거울 3개·렌즈 3개(칸 5), 반투명 거울·프리즘(칸 7), 백색 광원(칸 6 아래)</li>
-          <li>기구를 들고 <b>광학 원판</b>을 두 번 탭 → 가운데에 끼움, 두 번 탭 → 회전(1°)으로 입사각 조절. 원판 눈금으로 각을 읽는다</li>
+          <li>기구를 들고 <b>광학 원판</b>을 두 번 탭 → 가운데에 끼움, 두 번 탭 → 위치·방향(0.1°)으로 입사각 조절. 원판 눈금으로 각을 읽는다</li>
+          <li><b>정렬</b>: 렌즈·거울 등을 두 번 탭 → 위치·방향 막대에 <b>빛–중심 거리(mm)</b>가 뜬다. ◀▲▼▶(1 cm / 1 mm)로 옮기거나 <b>빛에 맞추기</b> → 중심을 빛 위로 (렌즈는 광축도 나란히)</li>
           <li>레이저·백색 광원 두 번 탭 → <b>광선 경로</b>: 면마다 입사각·굴절각, n 계산, 프리즘 꺾인 각, 렌즈 상, 간섭 경로차</li>
           <li>백색 광원 앞판(두 번 탭): 한 줄 · 평행 세 줄 · 화살표 물체. 거울·반투명 거울 두 번 탭 → <b>미세 조정 나사</b>(마이컬슨 간섭계)</li>
         </ul>
@@ -691,7 +706,7 @@
             <li><b>이동</b> 화면 왼쪽을 누른 채 밀기 (PC: WASD)</li>
             <li><b>둘러보기</b> 화면 오른쪽 드래그 (PC: 마우스 드래그)</li>
             <li><b>집기·놓기</b> 기구를 한 번 탭 / 들고 있을 때 책상을 한 번 탭 (PC: 클릭 / E)</li>
-            <li><b>조작</b> 놓인 기구를 <b>두 번 탭</b> → 실험 열기·전원·회전·높이·파장·도선 메뉴</li>
+            <li><b>조작</b> 놓인 기구를 <b>두 번 탭</b> → 실험 열기·전원·위치·방향·높이·파장·도선 메뉴</li>
             <li><b>끼우기·매달기</b> 들고 있을 때 다른 기구를 두 번 탭</li>
             <li><b>도선</b> 기구를 두 번 탭 → "도선 연결 시작" → 이을 기구(또는 단자)를 탭</li>
             <li><b>기구</b> 오른쪽 벽 보관장의 문을 열어 꺼내기</li>

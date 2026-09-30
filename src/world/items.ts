@@ -69,8 +69,10 @@ export class Item implements Interactable {
   /** 책상 위에 놓일 때의 방향 (y축 회전, rad) — "회전"으로 바꾼다 */
   yaw = 0;
   onPick: (item: Item) => void = () => {};
-  /** 회전 막대(UI)를 여는 함수 — main.ts가 넣어 준다 */
+  /** 위치·방향 막대(UI)를 여는 함수 — main.ts가 넣어 준다 */
   onRotate: (item: Item) => void = () => {};
+  /** p에 내려놓아도 받쳐지는가 (미세 이동이 책상 밖·다른 물체 위로 나가지 않게) — main.ts가 넣어 준다 */
+  static canStand: (item: Item, p: THREE.Vector3) => boolean = () => true;
 
   constructor(readonly object: THREE.Group, o: ItemOptions) {
     this.name = o.name;
@@ -130,11 +132,12 @@ export class Item implements Interactable {
     return this.object.parent?.type === 'Scene' ? this.object : null;
   }
 
-  /** 현재 방향 (도, 0 ~ 359) */
+  /** 현재 방향 (도, 0 ~ 359.9, 0.1° 단위로 반올림) */
   get yawDeg(): number {
     const t = this.rotationTarget();
     const rad = t ? t.rotation.y : this.yaw;
-    return ((Math.round(THREE.MathUtils.radToDeg(rad)) % 360) + 360) % 360;
+    const d = Math.round(THREE.MathUtils.radToDeg(rad) * 10) / 10;
+    return ((d % 360) + 360) % 360;
   }
 
   setYawDeg(deg: number): void {
@@ -144,10 +147,33 @@ export class Item implements Interactable {
     if (!this.attachedTo) this.yaw = t.rotation.y;
   }
 
-  /** 보조 동작 "회전" (길게 누르면 나오는 메뉴에) → 1° 단위로 돌리는 막대가 열린다 */
+  /** 지금 방향에서 deg만큼 더 돌린다 (반올림 없이 — "빛에 맞추기"용) */
+  turnByDeg(deg: number): void {
+    const t = this.rotationTarget();
+    if (!t) return;
+    this.setYawDeg(THREE.MathUtils.radToDeg(t.rotation.y) + deg);
+  }
+
+  /**
+   * 책상 위에서 미세 이동 (월드 x·z, m). 끼워져 있으면 받침째(맨 위 조립체) 옮긴다.
+   * 받쳐지지 않는 자리(책상 밖·다른 물체 위)면 움직이지 않고 false
+   */
+  nudge(dx: number, dz: number): boolean {
+    const o = this.root().object;
+    if (o.parent?.type !== 'Scene') return false;
+    const p = o.position.clone();
+    p.x += dx;
+    p.z += dz;
+    if (!Item.canStand(this.root(), p)) return false;
+    o.position.copy(p);
+    o.updateMatrixWorld(true);
+    return true;
+  }
+
+  /** 보조 동작 "위치·방향" (두 번 탭 메뉴) → 0.1° 회전 · 1 mm 이동 막대가 열린다 */
   rotateAction(): Action[] {
     if (!this.rotationTarget()) return [];
-    return [{ label: `회전 · ${this.name}`, secondary: true, local: true, run: () => this.onRotate(this) }];
+    return [{ label: `위치·방향 · ${this.name}`, secondary: true, local: true, run: () => this.onRotate(this) }];
   }
 
   /** 이 물체를 들고 다른 기구(target)를 두 번 탭했을 때 할 수 있는 동작 (예: 따르기, 지시약 떨어뜨리기) */

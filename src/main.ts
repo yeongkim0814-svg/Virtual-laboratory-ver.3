@@ -46,7 +46,7 @@ import { CircuitPanel } from './ui/circuitPanel';
 import { BookReader } from './ui/bookReader';
 import { BoardEditor } from './ui/boardEditor';
 import { Led, solveDCCircuits, type DCCircuitState } from './equipment/circuitParts';
-import { RotateBar } from './ui/rotateBar';
+import { PlaceBar } from './ui/placeBar';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -107,7 +107,8 @@ for (const d of doors) d.object.userData.interactable = d;
 // ---------- 플레이어·손 ----------
 const player = new Player(camera, door, SPAWN);
 const hand = new Hand(scene, camera, items);
-const rotateBar = new RotateBar();
+const rotateBar = new PlaceBar(camera);
+Item.canStand = (item, p) => hand.canStand(item, p);
 for (const it of items) {
   it.onPick = (item) => hand.pickUp(item);
   it.onRotate = (item) => rotateBar.open(item);
@@ -380,6 +381,7 @@ function updateGlowLights(): void {
 
 // 레이저 광선 추적
 const beams = new BeamSystem(scene, items);
+rotateBar.beams = beams;
 // 광학 패널: 광선 경로 (레이저·백색 광원), 거울 미세 조정
 const opticsPanel = new OpticsPanel((open) => panelToggled(opticsPanel, open), beams);
 panels.push(opticsPanel);

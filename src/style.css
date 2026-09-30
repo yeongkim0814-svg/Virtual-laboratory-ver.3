@@ -117,7 +117,7 @@ button.primary { border-color: var(--amber); }
 
 #action-menu {
   position: absolute;
-  display: flex; flex-direction: column; gap: 6px;
+  display: flex; flex-direction: column; gap: 6px; width: max-content;
   padding: 8px;
   background: var(--panel);
   border: 2px solid var(--amber);
@@ -291,17 +291,20 @@ canvas.plot {
 .exp-panel .segmented.fine { margin: 0 0 8px; }
 .exp-panel .fit { white-space: pre-line; color: var(--text); font-size: 13px; margin: 6px 0 0; }
 
-/* 회전 막대 (아래 가운데) */
+/* 위치·방향 막대 (아래 가운데, 두 줄) */
 #rotate-bar {
   position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 8px;
+  display: flex; flex-direction: column; gap: 6px; width: max-content;
   padding: 10px 12px;
   background: var(--panel); border: 2px solid var(--amber);
   pointer-events: auto;
   max-width: calc(100% - 32px);
 }
-#rotate-bar button { padding: 8px 10px; font-size: 14px; }
-#rotate-bar input { width: min(260px, 26vw); accent-color: var(--amber); height: 28px; }
+#rotate-bar .rb-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; }
+#rotate-bar button { padding: 8px 10px; font-size: 14px; min-width: 40px; }
+#rotate-bar button.on { background: var(--amber); color: #000; }
+#rb-beam { min-width: 9.5em; color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums; }
+#rotate-bar input { width: min(200px, 18vw); accent-color: var(--amber); height: 28px; }
 #rb-name { color: var(--text); font-size: 13px; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #rb-val { min-width: 3.2em; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
 
