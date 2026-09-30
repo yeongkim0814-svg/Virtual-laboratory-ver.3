@@ -725,11 +725,14 @@ function collectEquipmentBoxes(): void {
 
 // 테스트용: 주소 끝이 #debug일 때만 내부 객체를 노출 (자동 테스트가 조립을 빠르게 재현하는 데 씀)
 if (location.hash === '#debug') {
-  (window as unknown as Record<string, unknown>).lab = { THREE, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans };
+  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans };
 }
 
+renderer.info.autoReset = false; // 한 프레임의 그리기 호출을 모두 더한다 (진단 표시용)
+let jsMs = 0;
 renderer.setAnimationLoop(() => {
   const now = performance.now();
+  renderer.info.reset();
   // 탭 전환 등으로 오래 멈췄다 돌아오면 dt가 커져 벽을 뚫을 수 있으므로 0.1초로 제한
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
@@ -814,6 +817,8 @@ renderer.setAnimationLoop(() => {
   updateDock();
   roomLabel.textContent = roomNameAt(player.pos.x, player.pos.z);
 
+  // 이 프레임의 JS 시간 (GPU가 실제로 그리는 시간은 빠짐 → JS가 작은데 FPS가 낮으면 GPU·발열 쪽)
+  jsMs += (performance.now() - now - jsMs) * 0.1;
   fpsFrames++;
   fpsTime += dt;
   if (fpsTime >= 0.5) {
@@ -823,7 +828,7 @@ renderer.setAnimationLoop(() => {
   }
   if (settings.showDebug) {
     const deg = (((player.yaw * 180) / Math.PI) % 360 + 360) % 360;
-    debugEl.textContent = `${fps} FPS · x ${player.pos.x.toFixed(2)} m, z ${player.pos.z.toFixed(2)} m · 방향 ${deg.toFixed(0)}°`;
+    debugEl.textContent = `${fps} FPS · JS ${jsMs.toFixed(1)} ms · 그리기 ${renderer.info.render.calls} · x ${player.pos.x.toFixed(2)} m, z ${player.pos.z.toFixed(2)} m · 방향 ${deg.toFixed(0)}°`;
   }
 
   controls.consume();
