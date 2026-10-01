@@ -29,11 +29,13 @@ const OPEN = Math.PI / 2; // 문이 열리는 각도 (90° — 더 열면 옆 �
  */
 export class CabinetDoor implements Interactable {
   readonly object = new THREE.Group();
+  /** 조준할 때 보이는 이름 (칸 코드가 붙으면 "보관장 a-3") */
+  name = '';
   private pivot = new THREE.Group(); // 경첩 축
   private angle = 0;
   private target = 0;
 
-  constructor(width: number, y1: number, y2: number, private hingeLeft: boolean, glass: boolean, m: CabinetMaterials, private dropDown = false) {
+  constructor(private width: number, private y1: number, private y2: number, private hingeLeft: boolean, glass: boolean, m: CabinetMaterials, private dropDown = false) {
     // 젖히는 문은 양옆을 3 cm씩 줄인다 — 열어 눕혔을 때 옆 칸 문(칸막이 자리에 경첩)과 닿지 않게
     const leaf = new THREE.Mesh(new THREE.BoxGeometry(width - (dropDown ? 0.06 : 0.006), y2 - y1, 0.018), glass ? m.glass : m.door);
     this.object.add(this.pivot);
@@ -55,6 +57,19 @@ export class CabinetDoor implements Interactable {
 
   get isOpen(): boolean {
     return this.target !== 0;
+  }
+
+  /** 문짝 윗끝 높이 */
+  get top(): number {
+    return this.y2;
+  }
+
+  /** 문짝 바깥면 위쪽(경첩 쪽)에 작은 판을 붙인다 — 문과 함께 돈다 */
+  addPlate(plate: THREE.Mesh): void {
+    const s = this.hingeLeft ? 1 : -1;
+    if (this.dropDown) plate.position.set(0.1, this.y2 - this.y1 - 0.05, 0.0095);
+    else plate.position.set(s * Math.min(0.1, this.width / 2), this.y2 - 0.05, 0.0095);
+    this.pivot.add(plate);
   }
 
   actions(): Action[] {
@@ -99,7 +114,10 @@ export interface CabinetOptions {
 export class StorageCabinet {
   readonly group = new THREE.Group();
   readonly doors: CabinetDoor[] = [];
-  private sections: { x0: number; x1: number; ys: number[] }[] = [];
+  private sections: { x0: number; x1: number; ys: number[]; doors: CabinetDoor[] }[] = [];
+  /** 구역 문자 (a, b, …) — setZone으로 정한다. 칸 코드 = 구역-칸 번호(1부터), 예: a-3 */
+  zone = '';
+  private hd = 0;
   private shelves: number[];
 
   /**
@@ -124,6 +142,7 @@ export class StorageCabinet {
     };
     const hw = W / 2;
     const hd = D / 2;
+    this.hd = hd;
     const base = this.shelves[0];
     add(-hw, hw, 0, H, -hd, -hd + T); // 뒤판
     add(-hw, -hw + T, 0, H, -hd, hd); // 옆판
@@ -145,7 +164,8 @@ export class StorageCabinet {
       const long = o.longSections?.includes(i) ?? false;
       // 긴 칸(키 큰 칸: 스탠드 / 가로로 긴 칸: 레일)은 선반을 줄이거나 없앤다
       const ys = tall ? TALL_SHELVES : long ? [base] : this.shelves;
-      this.sections.push({ x0, x1, ys });
+      const section = { x0, x1, ys, doors: [] as CabinetDoor[] };
+      this.sections.push(section);
       if (i > 0) add(x0 - T / 2, x0 + T / 2, base, H - T, -hd + T, hd); // 칸막이
       for (const y of ys.slice(1)) add(x0, x1, y - T, y, -hd + T, hd - 0.01); // 선반
 
@@ -172,10 +192,49 @@ export class StorageCabinet {
           door.object.position.set(right ? x1 - inset : x0 + k * lw + inset, 0, hd + 0.011);
           this.group.add(door.object);
           this.doors.push(door);
+          section.doors.push(door);
         }
       }
       x0 = x1;
     });
+  }
+
+  get sectionCount(): number {
+    return this.sections.length;
+  }
+
+  /** 칸 i(0부터)의 코드, 예: "a-3" */
+  code(i: number): string {
+    return `${this.zone}-${i + 1}`;
+  }
+
+  /**
+   * 구역 문자를 정하고 칸마다 코드 판(예: a-3)을 맨 위 문짝에 붙인다. 문을 조준하면 "보관장 a-3"
+   * 배치 교재(content/placementBook.ts)가 같은 코드로 기구를 찾게 한다
+   */
+  setZone(zone: string, title: string): void {
+    this.zone = zone;
+    this.sections.forEach((sec, i) => {
+      const code = this.code(i);
+      for (const d of sec.doors) d.name = `${title} ${code}`;
+      // 맨 위 문짝 = 가장 높이 있는 문 (y2가 가장 큰 것) 중 첫 짝
+      const top = sec.doors.reduce((a, d) => (d.top > a.top ? d : a), sec.doors[0]);
+      if (top) top.addPlate(codePlate(code));
+    });
+  }
+
+  /** 세계 좌표 p가 어느 칸·선반에 있나 (없으면 null). 선반 번호 0 = 바닥 */
+  locate(p: THREE.Vector3): { code: string; section: number; shelf: number } | null {
+    this.group.updateMatrixWorld(true);
+    const l = this.group.worldToLocal(p.clone());
+    if (Math.abs(l.z) > this.hd + 0.01) return null;
+    const i = this.sections.findIndex((s) => l.x >= s.x0 - 0.005 && l.x <= s.x1 + 0.005);
+    if (i < 0) return null;
+    const ys = this.sections[i].ys;
+    let shelf = -1;
+    ys.forEach((y, k) => { if (l.y >= y - 0.02) shelf = k; });
+    if (shelf < 0 || l.y > ys[shelf] + 0.6) return null;
+    return { code: this.code(i), section: i, shelf };
   }
 
   /**
@@ -191,4 +250,26 @@ export class StorageCabinet {
     this.group.updateMatrixWorld(true);
     return this.group.localToWorld(new THREE.Vector3(x, ys[shelf], 0.02));
   }
+}
+
+/** 칸 코드 판: 크림색 바탕에 검은 글씨 (13 × 6.5 cm — 480×270 화면에서 2 m 앞에서도 읽히게) */
+function codePlate(code: string): THREE.Mesh {
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 32;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#efe6c8';
+  g.fillRect(0, 0, 64, 32);
+  g.strokeStyle = '#222';
+  g.lineWidth = 2;
+  g.strokeRect(1, 1, 62, 30);
+  g.fillStyle = '#111';
+  g.font = 'bold 26px monospace';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(code, 32, 17);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.NearestFilter;
+  return new THREE.Mesh(new THREE.PlaneGeometry(0.13, 0.065), new THREE.MeshBasicMaterial({ map: tex }));
 }

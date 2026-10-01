@@ -33,10 +33,12 @@ module.exports = {
     await t.ev(() => window.lab.bus.call(window.lab.stock.rails[0], 'release'));
     await t.wait(2200);
     const a = await t.ev(() => {
-      // 출발(처음 2 mm 움직인 시점)부터 가장 멀리 간 시점(센서와 가장 가까운 x의 최댓값 = 도르래 쪽 끝) 전까지, 추가 바닥에 닿기 전 구간만
+      // 출발(처음 2 mm 움직인 시점)부터 처음으로 가장 멀리 간 시점(도르래 쪽 끝) 전까지, 추가 바닥에 닿기 전 구간만
       const s = window.lab.stock.motionSensors[0].samples.filter((p) => p.x !== null);
       const t0 = s.find((p) => p.x > s[0].x + 0.002);
-      const top = s.reduce((m, p, i) => (p.x > s[m].x ? i : m), 0);
+      // 첫 번째 최고점 (도르래 쪽 끝에서 튕겨 돌아오기 직전). 전체 최댓값을 쓰면 되튄 뒤 다시 지나간 점을 잡을 수 있다
+      let top = s.findIndex((p, i) => i > 0 && i + 1 < s.length && p.x > s[0].x + 0.05 && s[i + 1].x < p.x - 0.001);
+      if (top < 0) top = s.length - 1;
       const L = window.lab.stock.rails[0].sim.load;
       const d = s.filter((p, i) => t0 && p.t >= t0.t && i <= top && p.x < s[0].x + 0.40);
       const n = d.length;

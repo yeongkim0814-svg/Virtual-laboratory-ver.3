@@ -20,7 +20,7 @@
 | 폴더 | 내용 |
 |---|---|
 | `main.ts` | 입력·탭 판정(한 번/두 번), 명령 버스 처리기, 패널 연결, 메인 루프. `#debug` 해시에서 `window.lab` 공개 |
-| `net/commands.ts` | **명령 버스**. 세계를 바꾸는 조작은 모두 명령 (act/use/place/attach/wire/unwire/pour/set/call). 멀티플레이어 대비 |
+| `net/commands.ts` | **명령 버스**. 세계를 바꾸는 조작은 모두 명령 (act/use/place/attach/wire/unwire/pour/set/call/undo). 멀티플레이어 대비. `undo.ts` = 실행 전후 상태 비교로 마지막 조작 하나 되돌리기 |
 | `world/` | 방·가구·보관장(`cabinet.ts`·`buildFurniture.ts`·`layout.ts` 도면 좌표), 문, 기구 기반 클래스(`items.ts`: Item/Socket/Plug), 전원(`power.ts`), 도선(`wires.ts`·`cable.ts`·`routing.ts`), 칠판 |
 | `equipment/` | 기구: 진자·스프링(`mechanics`·`pendulumString`·`spring`), 레일·수레·도르래(`track`), 센서·노트북(`sensors`), 힘 센서·포토게이트(`dynamicsSensors`), 전기(`electrical`·`circuitParts`), 화학(`glassware`), 광학(`optics`·`opticalElements`·`beams`), 보관장 배치(`stock.ts`) |
 | `sim/` | 순수 계산(DOM·Three 최소): 적분기, 진자, 스프링, 궤도(충돌·힘 센서 접촉), 회로(마디 전압법·필라멘트·다이오드), 화학 평형, 광선 광학, 광전 효과, 로거 분석 |
@@ -36,6 +36,8 @@
 6. 한 번 탭은 두 번 탭 동작이 있는 기구에서 **0.3 s + 1프레임 뒤** 실행된다 (`handleTap`/`flushFirstTap`). 테스트 대기도 그만큼.
 7. CSV는 ASCII 머리글·BOM 없음. 글꼴은 Galmuri11 (도트). 한글 깨짐 방지로 교재 도식은 SVG.
 8. 전원 기기(레이저·직류 전원·백색 광원)는 콘센트(실험대 짧은 옆면 x 5.38 / 8.95, z 1.4 / 4.96)에 전원선 2 m 안이어야 켜진다. 멀어지면 자동으로 뽑힌다.
+9. 보관장 칸 코드(a-3)와 배치 교재는 기구의 **처음 자리**에서 자동 생성 (`placementBook.ts`). 구역 문자는 stock.ts에서 정한다.
+10. 되돌리기는 기구의 **단순 값 필드**(숫자·참거짓·글자)와 배치만 기록한다. 되돌릴 설정을 하위 객체에 두면 안 잡히므로 기구 자신의 필드에 둔다.
 
 ## 테스트 (tests/)
 - `npm run build && npm test` — 전 시나리오(약 2분). playwright가 전역 설치뿐이면 `NODE_PATH=$(npm root -g)`를 앞에 붙인다. `node tests/run.cjs optics` 처럼 이름 조각으로 일부만. `npm run test:quick` = 뉴턴 + 회로.
@@ -49,6 +51,5 @@
 
 ## 남은 일 (PLAN.md 참고)
 - 다음 세션 (설계부터, Opus): 
-  1. **되돌리기(실수 복구)** — 명령 버스(net/commands.ts)의 로그를 이용한 되돌리기 설계: 명령마다 역명령 기록 vs 상태 스냅숏, 떨어뜨린·잃어버린 기구 되찾기, 멀티플레이어와의 충돌.
-  2. 터치 피드백 강화 (그다음).
+  1. 터치 피드백 강화.
 - 광학 B(광센서·편광판·브루스터각), 화학 3.2 중화열, 멀티플레이어(방장 권한 + WebRTC), 대형 실험 기구(보류).

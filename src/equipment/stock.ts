@@ -30,6 +30,7 @@ import { BeamSplitter, HalfDisk, OpticalDisc, PlaneMirror, Prism, ThinLens, Whit
 import { BoardEraser, Chalk } from '../world/chalkboard';
 import { CHALK_TRAY } from '../world/buildFurniture';
 import { CHEM_BOOK, PHYSICS_BOOK } from '../content/books';
+import { buildPlacementBook } from '../content/placementBook';
 import { Ammeter, Bulb, KnifeSwitch, Led, Resistor, Voltmeter, type CircuitPart } from './circuitParts';
 import { Cart, Pulley, Rail, massBar } from './track';
 import { Laptop, MotionSensor, PHSensor } from './sensors';
@@ -212,5 +213,15 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(tubes[0], cab.slot(7, 1, 0.55)),
     at(tubes[1], cab.slot(7, 1, 0.85)),
   ];
+  // 실험 장비 배치 교재: 보관장 구역 a ~ d, 칸 코드(a-3)는 처음 놓인 자리에서 만든다.
+  // 이름표는 등록 순서로 정해지므로 새 기구는 목록 끝에 붙인다
+  const placement = new Textbook(buildPlacementBook([
+    { cab, zone: 'a', title: '실험 기구 보관장', where: '주 실험실 오른쪽 벽 (키 큰 장) — 역학·광학·광전 효과' },
+    { cab: low, zone: 'b', title: '실험 기구 수납장', where: '주 실험실 뒤쪽 벽 (낮은 장) — 레일·수레·센서·직류 회로' },
+    { cab: chem, zone: 'c', title: '시약장', where: '준비실 왼쪽 벽 (유리문) — 시약·지시약' },
+    { cab: glass, zone: 'd', title: '유리 기구 보관장', where: '준비실 오른쪽 벽 — 뷰렛·비커·플라스크·pH 센서' },
+  ], items), 0x9a6a2a);
+  items.push(desk(placement, 2.25, 1.65, Math.PI / 2));
+  textbooks.push(placement);
   return { items, strings, springs, lasers, lightBoxes, supplies, ammeters, tubes, circuitParts, textbooks, rails, carts, laptops, motionSensors, phSensors, forceSensors, photogates, containers };
 }

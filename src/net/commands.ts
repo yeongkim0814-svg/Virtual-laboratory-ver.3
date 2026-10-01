@@ -17,6 +17,7 @@
  *   pour   그릇 → 그릇으로 부피만큼 옮기기
  *   set    대상의 속성 바꾸기 (패널 슬라이더: 전압, 기울기 …) — key는 "sim.airDrag"처럼 점 경로 가능
  *   call   대상의 메서드 부르기 (패널 버튼: 놓기, 기록 시작 …) — 인자에 물체가 있으면 { ref } 로
+ *   undo   그 사람이 마지막으로 한 조작 하나 되돌리기 (net/undo.ts — 실행 전후 상태 비교로 기록)
  * 이름(label)으로 동작을 다시 찾는 것은 일부러다: 실행하는 순간 상태가 달라져 그 동작이 없어졌다면
  * (예: 다른 사람이 먼저 문을 닫음) 명령은 거절된다 — 여럿이 동시에 조작할 때의 충돌 처리.
  */
@@ -42,6 +43,7 @@ export type Command = Base &
     | { t: 'pour'; src: Ref; dst: Ref; mL: number }
     | { t: 'set'; target: Ref; key: string; value: Arg }
     | { t: 'call'; target: Ref; method: string; args: Arg[] }
+    | { t: 'undo' }
   );
 
 type Of<T extends Command['t']> = Extract<Command, { t: T }>;
@@ -83,6 +85,8 @@ export class CommandBus {
   /** 지금 실행 중인 명령을 낸 사람 — 폐액통처럼 "누가 들고 있는가"를 묻는 동작용 */
   actor = 'p0';
   private handlers: { [K in Command['t']]?: Handler<K> } = {};
+  /** 실행 전후를 지켜보는 기록기 (되돌리기) — 방장 쪽 execute 안에서 불린다 */
+  recorder: { begin(c: Command): void; end(c: Command, ok: boolean): void } | null = null;
 
   on<T extends Command['t']>(t: T, h: Handler<T>): void {
     (this.handlers as Record<string, unknown>)[t] = h;
@@ -109,9 +113,13 @@ export class CommandBus {
       return false;
     }
     this.actor = c.by;
+    this.recorder?.begin(c);
+    let ok = false;
     try {
-      return h(c as never);
+      ok = h(c as never);
+      return ok;
     } finally {
+      this.recorder?.end(c, ok);
       this.actor = this.me;
     }
   }

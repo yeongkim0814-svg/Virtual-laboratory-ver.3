@@ -47,6 +47,7 @@ import { BookReader } from './ui/bookReader';
 import { BoardEditor } from './ui/boardEditor';
 import { Led, solveDCCircuits, type DCCircuitState } from './equipment/circuitParts';
 import { PlaceBar } from './ui/placeBar';
+import { UndoKeeper } from './net/undo';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -244,6 +245,18 @@ for (const l of stock.lasers) l.onOpenPanel = (laser) => slitPanel.open(laser);
 
 // 전원: 실험 테이블 옆면의 콘센트 ↔ 전원이 필요한 기기(레이저)
 const power = new PowerSystem(scene, furniture.outlets, [...stock.lasers, ...stock.supplies, ...stock.lightBoxes]);
+// 되돌리기: 사람마다 마지막 조작 하나 (명령 실행 전후 상태 비교, 화학 조작은 되돌리지 않음)
+const undo = new UndoKeeper({ bus, items, hand, wires, power, containers: stock.containers });
+bus.recorder = undo;
+bus.on('undo', (c) => undo.undo(c.by));
+const undoBtn = $('btn-undo') as HTMLButtonElement;
+undoBtn.addEventListener('click', () => {
+  bus.dispatch({ t: 'undo', by: bus.me });
+  toast(undo.message);
+});
+window.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) undoBtn.click();
+});
 for (const b of stock.lightBoxes) b.powerActions = (box) => power.deviceActions(box);
 for (const l of stock.lasers) l.powerActions = (laser) => power.deviceActions(laser);
 for (const s of stock.supplies) {
@@ -771,6 +784,11 @@ renderer.setAnimationLoop(() => {
   for (const a of stock.ammeters) a.update();
   beams.update();
   rotateBar.update();
+  const undoLabel = undo.pending(bus.me);
+  const undoBlocked = undo.blocked(bus.me);
+  undoBtn.disabled = !undoLabel && !undoBlocked;
+  undoBtn.classList.toggle('blocked', !!undoBlocked);
+  undoBtn.title = undoLabel ? `되돌리기: ${undoLabel}` : (undoBlocked ?? '되돌릴 조작 없음');
   hand.update(aimX);
 
   // 조준점 아래: 조준한 장비의 이름만 (단자는 "기구 +"처럼). 조작 방법은 ? 버튼의 도움말 페이지에

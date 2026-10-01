@@ -318,6 +318,8 @@ canvas.plot {
 /* 확대 버튼: 설정 버튼 왼쪽. 패널이 열려 있어도 패널 왼쪽에 남아 있다 (측정하면서 무늬를 확대해 보도록) */
 #btn-zoom { right: calc(16px + min(280px, 24%) + 10px + 54px); }
 #btn-help { right: calc(16px + min(280px, 24%) + 10px + 108px); font-weight: 700; }
+#btn-undo { right: calc(16px + min(280px, 24%) + 10px + 162px); font-size: 22px; }
+#btn-undo:disabled, #btn-undo.blocked { opacity: 0.35; }
 #stage.panel-open #btn-zoom { display: block; right: calc(var(--panel-w) + 24px); }
 #btn-zoom[aria-pressed='true'] { background: var(--amber); color: var(--bg); }
 
@@ -459,3 +461,18 @@ canvas.plot.tall { height: 130px; }
 #be-close { margin-left: auto; }
 #be-wrap { flex: 1; min-height: 0; display: grid; place-items: center; padding: 10px; }
 #be-canvas { border: 10px solid #4a3522; box-sizing: content-box; touch-action: none; cursor: crosshair; background: #1f3527; }
+
+/* 배치 교재: 칸 코드 표 · 도면 */
+#book-body table.place { border-collapse: collapse; width: 100%; margin: 8px 0; }
+#book-body table.place th, #book-body table.place td { border: 1px solid rgba(0, 0, 0, 0.3); padding: 4px 8px; text-align: left; vertical-align: top; }
+#book-body table.place th { background: rgba(0, 0, 0, 0.08); }
+#book-body .code { font-weight: bold; color: #7a2a10; white-space: nowrap; }
+#book-body .dim { color: rgba(0, 0, 0, 0.45); }
+#book-body svg.plan { display: block; width: 100%; margin: 8px 0; font-family: var(--font); }
+#book-body svg.plan .room { fill: rgba(255, 255, 255, 0.5); stroke: var(--ink); stroke-width: 3; }
+#book-body svg.plan .furn { fill: rgba(0, 0, 0, 0.1); stroke: rgba(0, 0, 0, 0.4); }
+#book-body svg.plan .zone { fill: rgba(200, 120, 30, 0.45); stroke: #7a2a10; stroke-width: 2; }
+#book-body svg.plan .door { fill: #efe6cf; }
+#book-body svg.plan text { text-anchor: middle; fill: var(--ink); }
+#book-body svg.plan text.s { font-size: 13px; }
+#book-body svg.plan text.z { font-size: 26px; font-weight: bold; fill: #7a2a10; }
