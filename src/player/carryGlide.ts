@@ -13,6 +13,8 @@ interface Glide {
   parent: THREE.Object3D;
   fromP: THREE.Vector3;
   fromQ: THREE.Quaternion;
+  /** 시작 시각 (performance.now, ms) — 손 뻗기와 같은 실제 시계 (프레임 dt 누적은 느린 프레임에서 dt 상한 때문에 뒤처짐) */
+  t0: number;
   age: number;
   wait: number;
   dur: number;
@@ -38,7 +40,7 @@ export function worldPose(item: Item): { p: THREE.Vector3; q: THREE.Quaternion }
 export function startGlide(item: Item, from: { p: THREE.Vector3; q: THREE.Quaternion }, wait: number, dur: number): void {
   const parent = item.object.parent;
   if (!parent) return;
-  glides.set(item, { parent, fromP: from.p, fromQ: from.q, age: 0, wait, dur });
+  glides.set(item, { parent, fromP: from.p, fromQ: from.q, t0: performance.now(), age: 0, wait, dur });
 }
 
 export const pickGlide = (item: Item, from: { p: THREE.Vector3; q: THREE.Quaternion }) => startGlide(item, from, (REACH_OUT + REACH_HOLD) / PICK_SPEED, REACH_BACK / PICK_SPEED);
@@ -49,9 +51,10 @@ export function settleGlide(item: Item): void {
   glides.delete(item);
 }
 
-export function stepGlides(dt: number): void {
+export function stepGlides(): void {
+  const now = performance.now();
   for (const [item, g] of glides) {
-    g.age += dt;
+    g.age = (now - g.t0) / 1000;
     if (g.age >= g.wait + g.dur || item.object.parent !== g.parent) glides.delete(item);
   }
 }
@@ -61,7 +64,9 @@ export function applyGlides(): void {
   for (const [item, g] of glides) {
     const o = item.object;
     g.saved = { p: o.position.clone(), q: o.quaternion.clone() };
-    const e = ease(Math.max(0, (g.age - g.wait) / g.dur));
+    // 그리는 순간의 실제 시계로 (stepGlides 이후 시간이 지났어도 손 뻗기와 맞음)
+    const age = (performance.now() - g.t0) / 1000;
+    const e = ease(Math.min(1, Math.max(0, (age - g.wait) / g.dur)));
     g.parent.updateWorldMatrix(true, false);
     g.parent.matrixWorld.decompose(_p, _pq, _ts);
     _toW.copy(g.saved.p).applyMatrix4(g.parent.matrixWorld);

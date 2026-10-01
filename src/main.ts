@@ -53,6 +53,7 @@ import { updateScopes } from './equipment/scope';
 import { ScopePanel } from './ui/scopePanel';
 import { Transient, waveform } from './sim/transient';
 import { PlaceBar } from './ui/placeBar';
+import { TouchFeedback } from './ui/touchFeedback';
 import { UndoKeeper } from './net/undo';
 import { Session, COLORS, type Hooks, type PlayerInfo } from './net/session';
 import { Avatars } from './net/avatars';
@@ -112,9 +113,10 @@ scene.add(door.object);
 
 // 기구: 테이블 위의 비커 등 + 보관장 속 역학·광학 기구
 const stock = stockEquipment(furniture.cabinets);
-// 탁상시계·온습도계: 실험 테이블 1 뒤쪽 모서리. 맨 끝에 붙여 기존 기구의 명령 이름표가 바뀌지 않게
-const deskClock = at(new DeskClock(), new THREE.Vector3(4.45, 0.85, 4.8));
-const hygrometer = at(new Hygrometer(), new THREE.Vector3(4.45, 0.85, 4.55));
+// 탁상시계·온습도계: 유리 기구 보관장(d) 윗면, 문자판이 방 쪽(-x)을 본다. 맨 끝에 붙여 기존 기구의 명령 이름표가 바뀌지 않게
+const deskClock = at(new DeskClock(), new THREE.Vector3(16.7, 2.1, 2.6));
+const hygrometer = at(new Hygrometer(), new THREE.Vector3(16.7, 2.1, 3.0));
+for (const it of [deskClock, hygrometer]) it.yaw = it.object.rotation.y = -Math.PI / 2; // 문자판 +z → -x
 const items: Item[] = [...createBenchItems(), ...stock.items, deskClock, hygrometer];
 for (const it of items) scene.add(it.object);
 
@@ -146,6 +148,8 @@ function reachPointOf(c: Command): THREE.Vector3 | null {
     default: return null;
   }
 }
+const fx = new TouchFeedback(document.getElementById('hud')!, settings); // 터치 피드백 (탭 물결 · 진동)
+const FINE_CALLS = ['setYawDeg', 'nudge', 'turnByDeg'];
 bus.listeners.push((c, ok) => {
   if (ok && ['act', 'use', 'place', 'attach', 'wire', 'unwire', 'pour'].includes(c.t)) {
     const point = reachPre ?? reachPointOf(c) ?? undefined;
@@ -154,7 +158,22 @@ bus.listeners.push((c, ok) => {
     if (c.by === bus.me) fpHands.reach(point, speed);
     else avatars.reach(c.by, point, speed);
   }
+  // 위치·방향 막대의 미세 조정(연달아 호출됨): 대상 쪽으로 빠르게 손을 뻗고 계속 뻗은 채 둔다 (keep)
+  if (ok && c.t === 'call' && FINE_CALLS.includes(c.method)) {
+    const point = centreOf(bus.registry.get<Item>(c.target)?.object) ?? undefined;
+    if (c.by === bus.me) fpHands.reach(point, PICK_SPEED, true);
+    else avatars.reach(c.by, point, PICK_SPEED, true);
+  }
   reachPre = null;
+});
+// 내 명령의 결과를 손끝으로: 성공 짧게, 집기·놓기·끼우기는 조금 길게, 거부(실패)는 두 번 + 붉은 고리
+// (call·set은 슬라이더처럼 연달아 오므로 성공 진동은 생략)
+bus.listeners.push((c, ok) => {
+  if (c.by !== bus.me) return;
+  if (!ok) fx.rejected();
+  else if (c.t === 'call' || c.t === 'set') return;
+  else if (c.t === 'place' || c.t === 'attach' || (c.t === 'act' && holdings.heldOf(c.by) === bus.registry.get(c.target))) fx.haptic(15);
+  else fx.haptic(10);
 });
 const infoOf = (id: string): PlayerInfo => session.players.get(id) ?? { id, name: id, color: 0x888888 };
 const holdings: Holdings & { heldOf(who: string): Item | null } = {
@@ -345,6 +364,7 @@ function tapButton(el: HTMLElement, run: () => void): void {
     e.preventDefault();
     e.stopPropagation();
     if ((el as HTMLButtonElement).disabled) return;
+    fx.press(el);
     run();
   });
 }
@@ -518,6 +538,7 @@ for (const it of items) if (it instanceof OpticalElement) it.onFine = (e) => opt
 
 // ---------- 입력·UI ----------
 const controls = new Controls(canvas);
+controls.fx = fx;
 const minimap = new Minimap($<HTMLCanvasElement>('minimap'), player, door, items);
 bindSettingsPanel(settings, {
   resetPosition: () => player.reset(),
@@ -784,6 +805,7 @@ function handleTap(px: number, py: number, t: number): void {
   const y = -(py / stage.clientHeight) * 2 + 1;
   if (firstTap && t - firstTap.t < DOUBLE_MS && Math.hypot(px - firstTap.x, py - firstTap.y) < 60) {
     firstTap = null;
+    fx.double(px, py);
     runActions(doubleActionsAt(x, y), px, py);
     return;
   }
@@ -915,7 +937,7 @@ renderer.setAnimationLoop(() => {
   beams.update();
   rotateBar.update();
   avatars.update(dt, camera);
-  stepGlides(dt);
+  stepGlides();
   const undoLabel = undo.pending(bus.me);
   const undoBlocked = undo.blocked(bus.me);
   undoBtn.disabled = !undoLabel && !undoBlocked;

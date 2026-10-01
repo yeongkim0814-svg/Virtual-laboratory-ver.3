@@ -9,6 +9,8 @@
  *   - WASD / 방향키: 이동,  마우스 드래그: 시점,  클릭: 상호작용,  E: 조준한 물체와 상호작용
  */
 
+import type { TouchFeedback } from '../ui/touchFeedback';
+
 export interface InputState {
   /** 이동 입력 (-1~1). x: 오른쪽 +, y: 앞 + */
   moveX: number;
@@ -29,6 +31,7 @@ const JOYSTICK_RADIUS = 60; // px
 const TAP_MAX_MOVE = 10; // px — 이보다 많이 움직이면 드래그로 본다
 const TAP_MAX_TIME = 300; // ms
 const HOLD_TIME = 500; // ms — 움직이지 않고 이만큼 누르고 있으면 "길게 누르기"
+const HOLD_RING_AT = 120; // ms — 이때부터 진행 고리를 보인다 (짧은 탭에는 안 뜨게)
 
 interface Pointer {
   role: 'joystick' | 'look';
@@ -39,6 +42,7 @@ interface Pointer {
   startTime: number;
   moved: boolean;
   held: boolean; // 길게 누르기로 이미 처리됨
+  ring?: boolean; // 진행 고리를 켰음
 }
 
 export class Controls {
@@ -50,6 +54,8 @@ export class Controls {
   private keys = new Set<string>();
   private joyBase: HTMLElement;
   private joyKnob: HTMLElement;
+  /** 터치 표시 (main.ts가 단다) */
+  fx: TouchFeedback | null = null;
 
   constructor(private target: HTMLElement) {
     this.joyBase = document.getElementById('joy-base')!;
@@ -75,9 +81,15 @@ export class Controls {
     const now = performance.now();
     for (const p of this.pointers.values()) {
       // (조이스틱에 엄지를 가만히 대고 있는 건 길게 누르기가 아님)
-      if (p.role === 'look' && !p.held && !p.moved && now - p.startTime >= HOLD_TIME) {
-        p.held = true;
-        this.state.holds.push({ x: p.startX, y: p.startY });
+      if (p.role === 'look' && !p.held && !p.moved) {
+        if (now - p.startTime >= HOLD_TIME) {
+          p.held = true;
+          this.state.holds.push({ x: p.startX, y: p.startY });
+          this.fx?.holdFire();
+        } else if (!p.ring && now - p.startTime >= HOLD_RING_AT) {
+          p.ring = true;
+          this.fx?.holdStart(p.startX, p.startY, HOLD_TIME - HOLD_RING_AT);
+        }
       }
     }
     const k = (code: string) => (this.keys.has(code) ? 1 : 0);
@@ -135,7 +147,10 @@ export class Controls {
     const p = this.pointers.get(e.pointerId);
     if (!p) return;
     const { x, y } = this.local(e);
-    if (Math.hypot(x - p.startX, y - p.startY) > TAP_MAX_MOVE) p.moved = true;
+    if (Math.hypot(x - p.startX, y - p.startY) > TAP_MAX_MOVE && !p.moved) {
+      p.moved = true;
+      if (p.ring && !p.held) this.fx?.holdCancel(); // 움직이면 길게 누르기가 아님
+    }
 
     if (p.role === 'joystick') {
       let dx = x - p.startX;
@@ -160,13 +175,16 @@ export class Controls {
     const p = this.pointers.get(e.pointerId);
     if (!p) return;
     this.pointers.delete(e.pointerId);
+    if (p.ring && !p.held) this.fx?.holdCancel();
     if (p.role === 'joystick') {
       this.joyX = this.joyY = 0;
       this.joyBase.classList.remove('active');
     }
     // 거의 움직이지 않고 짧게 뗐으면 탭 (조이스틱 영역에서도 — 화면 왼쪽의 물체도 탭할 수 있게)
     if (e.type === 'pointerup' && !p.moved && !p.held && performance.now() - p.startTime < TAP_MAX_TIME) {
-      this.state.taps.push(this.local(e));
+      const pt = this.local(e);
+      this.state.taps.push(pt);
+      this.fx?.tap(pt.x, pt.y);
     }
   }
 

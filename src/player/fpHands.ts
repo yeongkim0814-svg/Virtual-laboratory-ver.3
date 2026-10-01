@@ -8,7 +8,7 @@
  */
 import * as THREE from 'three';
 import { buildArm, type ArmRig } from '../net/avatars';
-import { ik2, reachBlend, reachWorldTarget, UPPER, FORE } from '../net/avatarMotion';
+import { ik2, reachBlend, REACH_OUT, REACH_HOLD, reachWorldTarget, UPPER, FORE } from '../net/avatarMotion';
 import { HELD_LAYER } from './hand';
 import { HITBOX_MAT, type Item } from '../world/items';
 
@@ -80,10 +80,18 @@ export class FpHands {
   }
 
   /** 내가 방금 무언가를 조작했다 → 오른손을 그 자리로 뻗는다 (아바타와 같은 시간표) */
-  reach(point?: THREE.Vector3 | null, speed = 1): void {
-    this.reachAt = performance.now();
+  reach(point?: THREE.Vector3 | null, speed = 1, keep = false): void {
+    const now = performance.now();
+    // keep: 미세 조정처럼 연달아 오는 호출 — 뻗는 중이면 다시 처음부터 하지 않는다 (뻗는 도중이면 그대로 이어서, 멈춤 구간이면 완전히 뻗은 시점으로 되돌려 멈춤을 다시 시작)
+    const age = ((now - this.reachAt) / 1000) * this.reachSpeed;
+    this.reachAt = keep && age < REACH_OUT + REACH_HOLD ? now - (Math.min(age, REACH_OUT) / speed) * 1000 : now;
     this.reachSpeed = speed;
     this.reachPoint = point ?? null;
+  }
+
+  /** 지금 뻗은 정도 0 ~ 1 (테스트·디버그) */
+  reachK(): number {
+    return reachBlend(((performance.now() - this.reachAt) / 1000) * this.reachSpeed);
   }
 
   update(dt: number, held: Item | null, visible: boolean, color: number): void {

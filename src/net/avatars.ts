@@ -13,7 +13,7 @@ import type { Item } from '../world/items';
 import type { PlayerInfo, Pose } from './session';
 import { isPickable, itemOf } from '../player/hand';
 import { pickGlide, placeGlide, settleGlide, worldPose } from '../player/carryGlide';
-import { newMotion, stepMotion, wrapAngle, HIP_DROP, HIP_X, NECK_Y, SHOULDER_X, SHOULDER_Y, THIGH, SHIN, UPPER, FORE, ANKLE_H, type MotionState } from './avatarMotion';
+import { newMotion, reachBlend, REACH_OUT, REACH_HOLD, stepMotion, wrapAngle, HIP_DROP, HIP_X, NECK_Y, SHOULDER_X, SHOULDER_Y, THIGH, SHIN, UPPER, FORE, ANKLE_H, type MotionState } from './avatarMotion';
 
 const H = 1.72;
 const _qe = new THREE.Quaternion();
@@ -307,12 +307,21 @@ export class Avatars {
   }
 
   /** 이 사람이 방금 무언가를 조작했다 → 오른손을 세계 좌표 point(없으면 몸 앞 0.5 m 가슴 높이)로 뻗는다 (0.25 s 뻗기 · 0.15 s 멈춤 · 0.3 s 돌아옴) */
-  reach(id: string, point?: THREE.Vector3, speed = 1): void {
+  reach(id: string, point?: THREE.Vector3, speed = 1, keep = false): void {
     const a = this.map.get(id);
     if (!a) return;
-    a.reachAt = performance.now();
+    const now = performance.now();
+    // keep: 미세 조정처럼 연달아 오는 호출 — 뻗는 중이면 다시 처음부터 하지 않는다 (뻗는 도중이면 그대로 이어서, 멈춤 구간이면 완전히 뻗은 시점으로 되돌려 멈춤을 다시 시작)
+    const age = ((now - a.reachAt) / 1000) * a.reachSpeed;
+    a.reachAt = keep && age < REACH_OUT + REACH_HOLD ? now - (Math.min(age, REACH_OUT) / speed) * 1000 : now;
     a.reachSpeed = speed;
     a.reachPoint = point ? (a.reachPoint ?? new THREE.Vector3()).copy(point) : null;
+  }
+
+  /** 테스트·디버그: 지금 뻗은 정도 0 ~ 1 (프레임과 무관하게 시간표에서 바로 계산) */
+  reachK(id: string): number {
+    const a = this.map.get(id);
+    return a ? reachBlend(((performance.now() - a.reachAt) / 1000) * a.reachSpeed) : 0;
   }
 
   /** 테스트·디버그: 모션 상태 (걸음 위상 등) */

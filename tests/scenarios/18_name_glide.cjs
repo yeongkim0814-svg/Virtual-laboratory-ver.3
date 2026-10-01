@@ -62,7 +62,7 @@ module.exports = {
 
     // 남이 집기 (방장 화면)
     const w1 = await run(A, pickCmd, B);
-    const e1 = near(w1.out, 0.08);
+    const e1 = w1.out[0]; // 부모가 바뀐 첫 프레임 (헤드리스는 한 프레임 ~0.15 s라 시각을 정해 고르면 기다림 0.2 s를 넘기 쉽다)
     t.check(dist(e1.p, w1.home) < 0.02, `남이 집을 때 ${e1.t.toFixed(2)} s: 물체는 제자리 (이동 ${(dist(e1.p, w1.home) * 100).toFixed(1)} cm)`);
     const l1 = w1.out[w1.out.length - 1];
     // 빨라진 집기 (시간표 ×2): 0.2 s 멈춤 + 0.15 s → 0.4 s면 손에 들어와 있다
@@ -81,11 +81,18 @@ module.exports = {
 
     // 내 손(1인칭)으로 집기
     await A.ev(() => { window.lab.player.pos.x = 3.5; window.lab.player.pos.z = 5.2; });
-    const w3 = await run(A, pickCmd, A);
-    const e3 = near(w3.out, 0.08);
-    t.check(dist(e3.p, w3.home) < 0.03, `내가 집을 때 ${e3.t.toFixed(2)} s: 물체는 제자리 (이동 ${(dist(e3.p, w3.home) * 100).toFixed(1)} cm)`);
-    const in3 = w3.out.find((o) => o.t >= 0.4);
-    t.check(in3 && dist(in3.p, in3.logic) < 0.01, `내가 집기 ${in3 && in3.t.toFixed(2)} s 뒤 이미 들림 위치 (차이 ${in3 && (dist(in3.p, in3.logic) * 100).toFixed(2)} cm)`);
+    // (두 페이지가 뜨면 헤드리스 프레임이 ~1 s까지 늘어 rAF 표본으로는 0.35 s 보간을 못 잡는다 → 명령 직후 같은 호출 안에서, 그리고 실제 시간 0.5 s 뒤에 그려질 자리를 읽는다)
+    const my = await A.ev((R) => new Promise((res) => {
+      const { items, bus, THREE } = window.lab; const it = items.find((i) => i.name.startsWith(R));
+      const pos = (shown) => { if (shown) window.lab.glide.applyGlides(); const p = it.object.getWorldPosition(new THREE.Vector3()); if (shown) window.lab.glide.restoreGlides(); return p; };
+      const home = pos(false);
+      bus.dispatch({ t: 'act', by: bus.me, target: bus.registry.ref(it), label: '집기 · ' + it.name });
+      const t0 = performance.now();
+      const early = pos(true).distanceTo(home);
+      setTimeout(() => res({ early, lateGap: pos(true).distanceTo(pos(false)), late: (performance.now() - t0) / 1000 }), 500);
+    }), R);
+    t.check(my.early < 0.01, `내가 집은 직후: 물체는 제자리 (이동 ${(my.early * 100).toFixed(1)} cm)`);
+    t.check(my.lateGap < 0.01, `내가 집기 ${my.late.toFixed(2)} s 뒤 이미 들림 위치 (차이 ${(my.lateGap * 100).toFixed(2)} cm)`);
     const inCam = await A.ev((R) => { const { items, camera } = window.lab; const it = items.find((i) => i.name.startsWith(R)); return it.object.parent === camera && it.object.position.length() > 0.3; }, R);
     t.check(inCam, '1.2 s 뒤에는 카메라 앞 손 자리에 들림');
     await B.end();

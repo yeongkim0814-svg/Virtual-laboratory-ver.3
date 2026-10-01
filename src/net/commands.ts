@@ -110,7 +110,7 @@ export class CommandBus {
     return this.apply(c);
   }
 
-  /** 실행 + 기록 + 알림 (혼자·방장). 방장은 손님이 보낸 명령도 여기로 실행한다 → 리스너가 모두에게 퍼뜨린다 */
+  /** 실행 + 기록 + 알림 (혼자·방장). 방장은 손님이 보낸 명령도 여기로 실행한다 → 리스너가 모두에게 퍼뜨린다 (손 뻗기 모션도 리스너) */
   apply(c: Command): boolean {
     const ok = this.execute(c);
     this.record(c);
@@ -118,10 +118,11 @@ export class CommandBus {
     return ok;
   }
 
-  /** 손님 쪽: 방장이 순서를 정해 보낸 명령을 실행 (다시 보내지 않는다) */
+  /** 손님 쪽: 방장이 순서를 정해 보낸 명령을 실행 (다시 보내지 않는다 — session 리스너는 방장일 때만 퍼뜨린다). 리스너는 불러야 손님 화면에도 손 뻗기 모션이 나온다 */
   applyRemote(c: Command): boolean {
     const ok = this.execute(c);
     this.record(c);
+    for (const l of this.listeners) l(c, ok);
     return ok;
   }
 
