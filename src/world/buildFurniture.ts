@@ -63,6 +63,97 @@ export function buildFurniture(scene: THREE.Scene): FurnitureResult {
     BUILDERS[f.kind](g, f);
     scene.add(g);
   }
+
+  // 벽시계 (칠판 위)
+  const clockCanvas = document.createElement('canvas');
+  clockCanvas.width = clockCanvas.height = 128;
+  const clockTex = new THREE.CanvasTexture(clockCanvas);
+  clockTex.colorSpace = THREE.SRGBColorSpace;
+  clockTex.magFilter = THREE.NearestFilter;
+  const clockMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.32), new THREE.MeshBasicMaterial({ map: clockTex }));
+  clockMesh.position.set(0.09, 2.5, 3.9);
+  scene.add(clockMesh);
+  tickers.push((t) => {
+    const ctx = clockCanvas.getContext('2d')!;
+    ctx.fillStyle = '#222';
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(64, 64, 60, 0, Math.PI * 2);
+    ctx.stroke();
+    const now = new Date();
+    const h = now.getHours() % 12;
+    const m = now.getMinutes();
+    const s = now.getSeconds();
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+      const x1 = 64 + Math.cos(a) * 55;
+      const y1 = 64 + Math.sin(a) * 55;
+      const x2 = 64 + Math.cos(a) * 60;
+      const y2 = 64 + Math.sin(a) * 60;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+    // 시침
+    const hAngle = ((h + m / 60) / 12) * Math.PI * 2 - Math.PI / 2;
+    ctx.strokeStyle = '#aaa';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(64, 64);
+    ctx.lineTo(64 + Math.cos(hAngle) * 30, 64 + Math.sin(hAngle) * 30);
+    ctx.stroke();
+    // 분침
+    const mAngle = ((m + s / 60) / 60) * Math.PI * 2 - Math.PI / 2;
+    ctx.strokeStyle = '#bbb';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(64, 64);
+    ctx.lineTo(64 + Math.cos(mAngle) * 45, 64 + Math.sin(mAngle) * 45);
+    ctx.stroke();
+    // 초침
+    const sAngle = (s / 60) * Math.PI * 2 - Math.PI / 2;
+    ctx.strokeStyle = '#f00';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(64, 64);
+    ctx.lineTo(64 + Math.cos(sAngle) * 50, 64 + Math.sin(sAngle) * 50);
+    ctx.stroke();
+    clockTex.needsUpdate = true;
+  });
+
+  // 온습도계 (칸막이 벽 문 옆)
+  const thCanvas = document.createElement('canvas');
+  thCanvas.width = 128;
+  thCanvas.height = 48;
+  const thTex = new THREE.CanvasTexture(thCanvas);
+  thTex.colorSpace = THREE.SRGBColorSpace;
+  thTex.magFilter = THREE.NearestFilter;
+  const thMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.075), new THREE.MeshBasicMaterial({ map: thTex }));
+  thMesh.position.set(11.99, 1.6, 4.6);
+  scene.add(thMesh);
+  tickers.push((t) => {
+    const ctx = thCanvas.getContext('2d')!;
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, 128, 48);
+    const baseTemp = 22.5;
+    const baseHumidity = 45;
+    const periodT = 300; // 5분 주기
+    const tempVar = Math.sin((t / periodT) * Math.PI * 2) * 0.3;
+    const humidVar = Math.cos((t / periodT) * Math.PI * 2) * 2;
+    const temp = baseTemp + tempVar;
+    const humidity = baseHumidity + humidVar;
+    ctx.fillStyle = '#00ff00';
+    ctx.font = '12px monospace';
+    ctx.fillText(`T: ${temp.toFixed(1)}°C`, 4, 16);
+    ctx.fillText(`H: ${humidity.toFixed(0)}%`, 4, 32);
+    thTex.needsUpdate = true;
+  });
+
   return { cabinets, doors: [...cabinets.values()].flatMap((c) => c.doors), outlets: [...outlets], wasteCans: [...wasteCans], tickers: [...tickers], boards: [...boards] };
 }
 

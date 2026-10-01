@@ -37,8 +37,7 @@ export class Chalkboard implements Interactable {
     this.object.name = '칠판';
     this.object.userData.interactable = this;
     this.blank();
-    this.writeIntro();
-    document.fonts?.load('30px Galmuri11').then(() => { if (this.version === 0) { this.blank(); this.writeIntro(); } }, () => {});
+    document.fonts?.load('30px Galmuri11').then(() => { if (this.version === 0) { this.blank(); } }, () => {});
   }
 
   get name(): string {
@@ -52,6 +51,7 @@ export class Chalkboard implements Interactable {
   }
 
   /** 처음 칠판에 적혀 있는 글 */
+  /* 칠판 처음 글씨 (2.14.1에서 제거)
   private writeIntro(): void {
     const g = this.g;
     const k = RES / 320; // 320 px 칠판 기준 좌표를 키움 — 글씨는 왼쪽 위 구석에 작게 (나머지는 직접 쓰는 자리)
@@ -65,6 +65,7 @@ export class Chalkboard implements Interactable {
     g.fillText('sin θ ≈ θ 는 어디까지 맞을까?', 8 * k, 29 * k);
     this.tex.needsUpdate = true;
   }
+  */
 
   /**
    * 획 하나 그리기 (명령 call로 불린다)
