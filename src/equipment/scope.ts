@@ -25,8 +25,8 @@ import { Transient, waveform, type TC, type TD, type TElement, type TL, type Wav
 import { findTrigger, measure, phaseLag, type ChMeasure } from '../sim/scopeAnalysis';
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-const CASE = new THREE.MeshLambertMaterial({ color: 0x8b8f86 });
-const DARK = new THREE.MeshLambertMaterial({ color: 0x2e302c });
+const CASE = new THREE.MeshLambertMaterial({ color: 0x59603f });
+const DARK = new THREE.MeshLambertMaterial({ color: 0x242523 });
 const FRONT = v(0, 0, 1);
 
 function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
@@ -220,8 +220,8 @@ export class Oscilloscope extends Item implements Powered {
   }
 }
 
-const COL1 = '#ffd84a';
-const COL2 = '#4adfff';
+const COL1 = '#e0b040';
+const COL2 = '#6fc4c0';
 
 export interface Cursors {
   /** 화면 가로·세로에 대한 비율 (0 ~ 1), 없으면 null */

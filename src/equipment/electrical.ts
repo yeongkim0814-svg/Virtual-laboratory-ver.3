@@ -17,8 +17,8 @@ import { Terminal, type WireSystem } from '../world/wires';
 import { photoCurrent } from '../sim/photoelectric';
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-const CASE = new THREE.MeshLambertMaterial({ color: 0x8b8f86 });
-const DARK = new THREE.MeshLambertMaterial({ color: 0x2e302c });
+const CASE = new THREE.MeshLambertMaterial({ color: 0x59603f });
+const DARK = new THREE.MeshLambertMaterial({ color: 0x242523 });
 const FRONT = v(0, 0, 1);
 
 function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh {

@@ -18,10 +18,10 @@ import { Lcd, type DCPowerSupply, type Microammeter, type Phototube } from './el
 import { Filament, junctionCurrent, solveDC, type Conductor, type Junction, type Source } from '../sim/circuit';
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-const BOARD = new THREE.MeshLambertMaterial({ color: 0xd9d2bc });
-const DARK = new THREE.MeshLambertMaterial({ color: 0x2e302c });
-const CASE = new THREE.MeshLambertMaterial({ color: 0x8b8f86 });
-const METAL = new THREE.MeshLambertMaterial({ color: 0xb8bcc0 });
+const BOARD = new THREE.MeshLambertMaterial({ color: 0x8a8567 });
+const DARK = new THREE.MeshLambertMaterial({ color: 0x242523 });
+const CASE = new THREE.MeshLambertMaterial({ color: 0x59603f });
+const METAL = new THREE.MeshLambertMaterial({ color: 0x8c8f82 });
 const FRONT = v(0, 0, 1);
 
 function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh {

@@ -25,10 +25,10 @@ function mesh(geo: THREE.BufferGeometry, mat: THREE.Material | THREE.Material[],
   m.position.set(x, y, z);
   return m;
 }
-const DARK = new THREE.MeshLambertMaterial({ color: 0x2e302c });
-const BLACK = new THREE.MeshLambertMaterial({ color: 0x1c1d1b });
+const DARK = new THREE.MeshLambertMaterial({ color: 0x242523 });
+const BLACK = new THREE.MeshLambertMaterial({ color: 0x1a1b19 });
 const SILVER = new THREE.MeshBasicMaterial({ color: 0xd8dde2 });
-const GLASS = new THREE.MeshLambertMaterial({ color: 0xa8d4e4, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide });
+const GLASS = new THREE.MeshLambertMaterial({ color: 0x7f9a98, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide });
 const ACRYL = new THREE.MeshLambertMaterial({ color: 0x9fd8e6, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide });
 
 /** 광학 면과 만난 점 */

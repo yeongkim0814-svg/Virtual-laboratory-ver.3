@@ -17,8 +17,8 @@ import { INDICATORS, REAGENTS, Solution, reagentSolution, universalColor, type R
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
-const GLASS = new THREE.MeshLambertMaterial({ color: 0xd6ecef, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide });
-const DARK = new THREE.MeshLambertMaterial({ color: 0x2a2c2e });
+const GLASS = new THREE.MeshLambertMaterial({ color: 0x7f9a98, transparent: true, opacity: 0.38, depthWrite: false, side: THREE.DoubleSide });
+const DARK = new THREE.MeshLambertMaterial({ color: 0x242523 });
 const WHITE = new THREE.MeshLambertMaterial({ color: 0xe8e8e0 });
 
 export type ContainerKind = 'beaker' | 'flask' | 'cylinder' | 'burette' | 'bottle';

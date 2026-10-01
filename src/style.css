@@ -1,4 +1,4 @@
-/* 레트로 호러 HUD: 호박색 단색 + 픽셀 글꼴 + 주사선, 모서리 둥글림 없음
+/* 야전 단말기 HUD: 숯 올리브 패널 · 카키 글자 · 탁한 호박색 강조 + 픽셀 글꼴 + 주사선, 모서리 둥글림 없음
    글꼴: Galmuri11 Bold (SIL Open Font License 1.1, assets/fonts/Galmuri-OFL.md) */
 @font-face {
   font-family: 'Galmuri11';
@@ -8,14 +8,14 @@
 }
 
 :root {
-  --bg: #0a0b08;
+  --bg: #0d0f0a;
   --letterbox: #000;          /* 16:9 무대 바깥 여백 색 */
-  --panel: rgba(8, 9, 6, 0.88);
-  --amber: #ff9a2e;           /* 주 HUD 색 */
-  --amber-dim: rgba(255, 154, 46, 0.55);
-  --amber-faint: rgba(255, 154, 46, 0.18);
-  --text: #ffd9a8;
-  --bad: #ff5a3c;
+  --panel: rgba(22, 26, 18, 0.9);
+  --amber: #d89a2e;           /* 주 HUD 색 */
+  --amber-dim: rgba(216, 154, 46, 0.55);
+  --amber-faint: rgba(216, 154, 46, 0.18);
+  --text: #cfc89a;
+  --bad: #c0452e;
   --font: 'Galmuri11', ui-monospace, monospace;
   --aim-shift: 0px;           /* 실험 패널이 열리면 조준점이 왼쪽으로 이동하는 거리 */
   --panel-w: min(44%, 520px); /* 실험 패널 폭 */

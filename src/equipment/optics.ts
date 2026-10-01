@@ -16,8 +16,8 @@ import type { Aperture } from '../sim/optics';
 import { wavelengthToRGB } from '../sim/optics';
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-const BLACK = new THREE.MeshLambertMaterial({ color: 0x1c1d1b });
-const DARK = new THREE.MeshLambertMaterial({ color: 0x2e302c });
+const BLACK = new THREE.MeshLambertMaterial({ color: 0x1a1b19 });
+const DARK = new THREE.MeshLambertMaterial({ color: 0x242523 });
 
 function mesh(geo: THREE.BufferGeometry, mat: THREE.Material | THREE.Material[], x: number, y: number, z: number): THREE.Mesh {
   const m = new THREE.Mesh(geo, mat);

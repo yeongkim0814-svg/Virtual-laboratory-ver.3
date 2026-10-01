@@ -22,7 +22,7 @@ export const COL = {
   // ---- 작업대·바닥·벽 ----
   laminate: 0xa59c79, // 긁힌 베이지 라미네이트
   laminateDark: 0x857a5a,
-  benchTop: 0x34372b, // 어두운 올리브 회색 금속 (레이저 빛 대비 유지)
+  benchTop: 0x555a45, // 어두운 올리브 회색 금속 (레이저 빛 대비 유지)
   woodDark: 0x4a3b2a, // 낡은 짙은 나무 포인트
   wallStain: 0xa59d82, // 니코틴 베이지
   floorTile: 0x7b816b, // 회녹색 타일

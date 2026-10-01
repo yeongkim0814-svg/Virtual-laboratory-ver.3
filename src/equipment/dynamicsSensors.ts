@@ -20,8 +20,8 @@ function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: numb
   return m;
 }
 const BODY = new THREE.MeshLambertMaterial({ color: 0x3f7a5a });
-const BLACK = new THREE.MeshLambertMaterial({ color: 0x1e1f20 });
-const METAL = new THREE.MeshLambertMaterial({ color: 0xb8bcc0 });
+const BLACK = new THREE.MeshLambertMaterial({ color: 0x1a1b19 });
+const METAL = new THREE.MeshLambertMaterial({ color: 0x8c8f82 });
 const BUMPER_COLOR: Record<ForceBumper, number> = { spring: 0xd8d8d0, rubber: 0x1c1c1a };
 const LED_RED = new THREE.MeshBasicMaterial({ color: 0xff3a2a });
 const LED_DIM = new THREE.MeshLambertMaterial({ color: 0x3a1a18 });

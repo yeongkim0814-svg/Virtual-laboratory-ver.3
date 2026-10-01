@@ -24,7 +24,7 @@ function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: numb
 }
 
 const ALU = new THREE.MeshLambertMaterial({ color: 0xa9aeb2 });
-const DARK = new THREE.MeshLambertMaterial({ color: 0x2a2c2e });
+const DARK = new THREE.MeshLambertMaterial({ color: 0x242523 });
 const RUBBER = new THREE.MeshLambertMaterial({ color: 0x1c1c1a });
 const BAR = new THREE.MeshLambertMaterial({ color: 0x3a3d40 });
 const BUMPER_MAT: Record<Bumper, THREE.Material> = {

@@ -25,7 +25,7 @@ function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: numb
 
 const HOUSING = new THREE.MeshLambertMaterial({ color: 0x3f5f7a });
 const GRILLE = new THREE.MeshLambertMaterial({ color: 0x9a8c6a });
-const BLACK = new THREE.MeshLambertMaterial({ color: 0x1e1f20 });
+const BLACK = new THREE.MeshLambertMaterial({ color: 0x1a1b19 });
 const SHELL = new THREE.MeshLambertMaterial({ color: 0x55585c });
 const LED_ON = new THREE.MeshBasicMaterial({ color: 0x5cff6a });
 const LED_OFF = new THREE.MeshLambertMaterial({ color: 0x224422 });

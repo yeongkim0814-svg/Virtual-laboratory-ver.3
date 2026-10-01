@@ -11,10 +11,10 @@ import * as THREE from 'three';
 import { Item, Socket } from '../world/items';
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-const METAL = new THREE.MeshLambertMaterial({ color: 0x6f7470 });
-const DARK = new THREE.MeshLambertMaterial({ color: 0x2e302c });
-const BRASS = new THREE.MeshLambertMaterial({ color: 0xc9a54a });
-const STEEL = new THREE.MeshLambertMaterial({ color: 0xb4b8b6 });
+const METAL = new THREE.MeshLambertMaterial({ color: 0x4b4f44 });
+const DARK = new THREE.MeshLambertMaterial({ color: 0x242523 });
+const BRASS = new THREE.MeshLambertMaterial({ color: 0xa68a45 });
+const STEEL = new THREE.MeshLambertMaterial({ color: 0x8c8f82 });
 
 function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
   const m = new THREE.Mesh(geo, mat);
