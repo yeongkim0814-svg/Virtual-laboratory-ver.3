@@ -53,6 +53,7 @@ import { PlaceBar } from './ui/placeBar';
 import { UndoKeeper } from './net/undo';
 import { Session, type Hooks, type PlayerInfo } from './net/session';
 import { Avatars } from './net/avatars';
+import * as avatarMotion from './net/avatarMotion';
 import { WorldSync, type Holdings } from './net/worldSync';
 import { PhysicsSync, type PhysState } from './net/physicsSync';
 import { NetPanel } from './ui/netPanel';
@@ -832,7 +833,7 @@ function collectEquipmentBoxes(): void {
 
 // 테스트용: 주소 끝이 #debug일 때만 내부 객체를 노출 (자동 테스트가 조립을 빠르게 재현하는 데 씀)
 if (location.hash === '#debug') {
-  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans, session, avatars, sync, holdings, LocalTransport, PeerTransport, physics, scopePanel, sim: { Transient, waveform } };
+  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans, session, avatars, sync, holdings, LocalTransport, PeerTransport, physics, scopePanel, sim: { Transient, waveform }, motion: avatarMotion };
 }
 
 renderer.info.autoReset = false; // 한 프레임의 그리기 호출을 모두 더한다 (진단 표시용)
