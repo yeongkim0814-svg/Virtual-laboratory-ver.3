@@ -84,5 +84,20 @@ module.exports = {
     }
     // 0, λ/8, λ/4, 3λ/8, λ/2 이동 (λ = 650 nm, 거울 이동 d → 경로차 2d): 0 → 밝음, λ/4 → 어두움, λ/2 → 밝음
     t.check(centers[2] < 60 && centers[0] > 150 && centers[4] > 150, `거울 λ/4 이동마다 밝기 교대 (${centers.join(' ')})`);
+    // 6) 오목 렌즈로 넓힌 빔: 레이저로 되돌아온 빛이 방을 덮지 않고(빛 조각 ≤ 10 cm), 팔 길이 4 mm 차이면 동심원이 보인다
+    await ev(`
+      const B = new THREE.Vector3(9.0, 0.85, 3.0);
+      find('평면거울 2').setFine(0, 0); put(find('평면거울 1'), B.x + 0.154, B.z, Math.PI); put(find('오목 렌즈'), B.x - 0.2, B.z, 0);`);
+    await t.wait(900);
+    const wide = await t.ev(() => {
+      const { beams, THREE } = window.lab; const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+      let maxSpot = 0; for (let i = 0; i < beams.spots.n; i++) { beams.spots.mesh.getMatrixAt(i, m); m.decompose(p, q, s); maxSpot = Math.max(maxSpot, s.x); }
+      const decs = beams.interf.filter((x) => x.mesh.visible);
+      const d = decs[0]; let peaks = 0;
+      if (d) { const row = d.ctx.getImageData(0, d.N / 2, d.N, 1).data; for (let x = 1; x < d.N - 1; x++) if (row[x * 4] > row[x * 4 - 4] && row[x * 4] >= row[x * 4 + 4] && row[x * 4] > 100) peaks++; }
+      return { maxSpot, maxDecal: Math.max(0, ...decs.map((x) => x.mesh.scale.x)), n: decs.length, peaks };
+    });
+    t.check(wide.maxSpot <= 0.1001 && wide.maxDecal <= 0.1001, `퍼진 빛 조각이 10 cm 이하 (점 ${wide.maxSpot.toFixed(3)}, 무늬 ${wide.maxDecal.toFixed(3)} m)`);
+    t.check(wide.n === 1 && wide.peaks >= 3, `팔 길이 4 mm 차이: 동심원 무늬 (지름 방향 밝은 고리 ${wide.peaks}개)`);
   },
 };

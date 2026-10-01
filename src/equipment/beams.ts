@@ -183,6 +183,8 @@ const MAX_SEGS = 600;
 const MIN_P = 0.004;
 /** 레이저 결맞음 길이 (m) */
 const COHERENCE = 0.05;
+/** 한 면에 그리는 빛 점·무늬의 최대 크기 (m) — 퍼진 빔이 방 전체를 덮지 않게 (스크린 짧은 변 0.2 m의 절반) */
+const MAX_PATCH = 0.1;
 
 /** 광선 선들 (모든 광원 합쳐 한 덩어리, 세기에 따라 밝기) */
 class BeamLines {
@@ -668,7 +670,8 @@ export class BeamSystem {
   private drawHits(): void {
     const rest: Hit[] = [];
     // 1) 간섭: 같은 레이저 · 같은 물체 · 가까이 (빔 반지름 3배 안)
-    const coherent = this.hits.filter((h) => h.ray.src instanceof Laser);
+    // 광원으로 되돌아온 빛은 간섭무늬 없이 작은 빛 점으로만 (레이저 몸체에 크게 번지지 않게)
+    const coherent = this.hits.filter((h) => h.ray.src instanceof Laser && itemOf(h.target) !== h.ray.src);
     const done = new Set<Hit>();
     let di = 0;
     for (const a of coherent) {
@@ -692,8 +695,10 @@ export class BeamSystem {
         continue;
       }
       const w = Math.max(Math.abs(h.ray.w), 0.0012);
-      const c = colorOf(h.ray.nm).multiplyScalar(Math.min(1.4, 0.35 + 1.4 * Math.sqrt(h.ray.p * (h.ray.nm ? WHITE_LINES.length / 3 : 1))));
-      this.spots.add(h.point, h.normal, 2.4 * w * (h.ray.nm ? 1.6 : 1), c);
+      // 퍼진 빛은 같은 세기가 넓은 면에 흩어지므로 어둡게 (w 3 cm 넘으면 1/w로)
+      const spread = Math.max(0.15, Math.min(1, 0.03 / w));
+      const c = colorOf(h.ray.nm).multiplyScalar(spread * Math.min(1.4, 0.35 + 1.4 * Math.sqrt(h.ray.p * (h.ray.nm ? WHITE_LINES.length / 3 : 1))));
+      this.spots.add(h.point, h.normal, Math.min(MAX_PATCH, 2.4 * w * (h.ray.nm ? 1.6 : 1)), c);
     }
   }
 
@@ -702,7 +707,7 @@ export class BeamSystem {
     const src = group[0].ray.src as Laser;
     const k = (2 * Math.PI) / src.lambda;
     const wMax = Math.max(...group.map((g) => Math.abs(g.ray.w)), 0.0015);
-    const size = 3 * wMax;
+    const size = Math.min(3 * wMax, MAX_PATCH);
     const center = group.reduce((c, g) => c.add(g.point), new THREE.Vector3()).multiplyScalar(1 / group.length);
     const n = group[0].normal;
     dec.place(center, n, size);
