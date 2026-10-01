@@ -1,8 +1,8 @@
 /**
- * 다른 참가자의 아바타: 가운 입은 연구자(미색 가운 · 숯색 바지 · 보안경 · 사람 색 장갑과 셔츠) 저폴리 인형(마디 관절) + 머리 위 이름표
+ * 다른 참가자의 아바타: 낡은 안전 작업복 현장 기술자(올리브·카키 옷, 검은 바이저 헬멧, 사각 장비 배낭, 큰 검은 장갑·장화) 저폴리 인형(마디 관절) + 머리 위 이름표
  *   - 자세(x, z, 방향, 고개, 앉기)는 방장 경유로 초당 10번 온다 → 여기서 부드럽게 따라가고, 움직임(발 디딤 걸음·돌기·숨쉬기·앉기·들기·손 뻗기)은
  *     위치 변화에서 net/avatarMotion.ts가 계산한다 (모델 파일·뼈대 메시 없음)
- *   - 몸 전체가 정점 색 기둥 13개(+ 이름표 1) = 그리기 호출 14, 재질 하나
+ *   - 몸 전체가 정점 색 기둥·상자 11개(+ 이름표 1) = 그리기 호출 12, 재질 하나
  *   - 손에 든 기구는 오른손에 붙는다 (다른 사람이 못 집도록 광선 판정에서 제외)
  *   - 광선에 맞지 않는다 (noPick): 뒤에 있는 기구를 탭할 수 있다
  *   - group.rotation.y = 받은 고개 방향. 몸 방향(걸음·따라 돌기)은 골반이 그 차이만큼 돌아 있다
@@ -20,14 +20,19 @@ const _qy = new THREE.Quaternion();
 const _up = new THREE.Vector3(0, 1, 0);
 /** 위치를 따라가는 속도 (1/s) */
 const FOLLOW = 14;
-const COAT = 0xb8b49a; // 바랜 미색 가운
-const COAT_D = 0x9c9880; // 주머니 (짙은 미색)
-const TROUSER = 0x3a3c40; // 숯색 바지
-const SHOE = 0x3b2c22; // 짙은 갈색 신발
-const SKIN = 0xb59a86; // 무채 살색
-const HAIR = 0x2a2420;
-const STRAP = 0x6a7f86; // 보안경 띠 (회청)
-const LENS = 0x4f8a85; // 보안경 렌즈 (탁한 청록)
+const GREEN = 0x4f5d36; // 올리브 초록: 가슴 판·아래팔·정강이·어깨 판
+const DGREEN = 0x37432b; // 어두운 초록: 무릎 보호대
+const KHAKI = 0x938d62; // 카키: 몸통·위팔·허벅지
+const HELM = 0x6b7340; // 헬멧
+const BLACK = 0x1f201e; // 멜빵·벨트·장갑·장화·배낭 덮개
+const PACK = 0x2e312c; // 배낭
+const VISOR = 0x05090a; // 불투명 검은 바이저
+const TEAL = 0x123a3a; // 바이저 청록 반사
+const SIDEPLATE = 0x4a5a56; // 헬멧 옆 판
+const LABEL = 0xb59b24; // 작은 경고 라벨
+const LIGHT = 0xd0862a; // 배낭 상태 표시등 (어둡게)
+/** 식별 색 (띠·가슴 패치·소매 끝·장화 줄): 사람 색을 칙칙하게 */
+const accentOf = (color: number) => new THREE.Color(color).lerp(new THREE.Color(0x6a6048), 0.1).getHex();
 
 /** 관절 그룹 (모션이 quaternion을 정한다) */
 export interface Rig {
@@ -44,8 +49,6 @@ export interface Rig {
   shoulderR: THREE.Group;
   elbowL: THREE.Group;
   elbowR: THREE.Group;
-  flapL: THREE.Group;
-  flapR: THREE.Group;
   /** 오른손 끝 (든 기구가 붙는 자리) */
   anchor: THREE.Group;
 }
@@ -73,9 +76,15 @@ interface Avatar {
   reachPoint: THREE.Vector3 | null;
 }
 
-// ---- 도형 도우미: 저폴리 기둥·상자 (평평한 면 + 마디마다 위 밝고 아래 어두운 2단 정점 색) ----
+// ---- 도형 도우미: 저폴리 기둥·상자 (평평한 면 + 위 밝고 아래 어두운 2단 + 바랜 얼룩 정점 색) ----
 
-/** 정점 색: 기본 색 × (위쪽 절반 1.0 · 아래쪽 절반 0.72). uv·인덱스는 지운다 */
+/** 위치로 정하는 0 ~ 1 값 (얼룩) */
+const wear = (x: number, y: number, z: number) => {
+  const n = Math.sin(x * 37.1 + y * 53.7 + z * 29.3) * 43758.5453;
+  return n - Math.floor(n);
+};
+
+/** 정점 색: 기본 색 × (위쪽 절반 1.0 · 아래쪽 절반 0.78) × 얼룩 0.86 ~ 1.06. uv·인덱스는 지운다 */
 function shade(g0: THREE.BufferGeometry, color: number): THREE.BufferGeometry {
   const g = g0.index ? g0.toNonIndexed() : g0;
   g.deleteAttribute('uv');
@@ -87,7 +96,7 @@ function shade(g0: THREE.BufferGeometry, color: number): THREE.BufferGeometry {
   const arr = new Float32Array(pos.count * 3);
   const mid = (min.y + max.y) / 2;
   for (let i = 0; i < pos.count; i++) {
-    const k = pos.getY(i) >= mid - 1e-6 ? 1 : 0.72;
+    const k = (pos.getY(i) >= mid - 1e-6 ? 1 : 0.78) * (0.86 + 0.2 * wear(pos.getX(i), pos.getY(i), pos.getZ(i)));
     arr[i * 3] = base.r * k;
     arr[i * 3 + 1] = base.g * k;
     arr[i * 3 + 2] = base.b * k;
@@ -100,23 +109,9 @@ function shade(g0: THREE.BufferGeometry, color: number): THREE.BufferGeometry {
 const prism = (rb: number, rt: number, h: number, n: number, y0: number, color: number, sx = 1, sz = 1, x = 0, z = 0) =>
   shade(new THREE.CylinderGeometry(rt, rb, h, n, 1, false).rotateY(Math.PI / n).scale(sx, 1, sz).translate(x, y0, z), color);
 
-const box = (w: number, h: number, d: number, x: number, y: number, z: number, color: number) => shade(new THREE.BoxGeometry(w, h, d).translate(x, y, z), color);
-
-/** 위쪽 반지름 rt · 아래 rb의 반쪽 기둥 (가운 자락: 왼쪽 반 = side −1). 안쪽 면은 안 그린다 → 앞이 열린 모습 */
-function halfPrism(side: number, rb: number, rt: number, h: number, y0: number, color: number, sz: number, x: number): THREE.BufferGeometry {
-  const g = new THREE.CylinderGeometry(rt, rb, h, 8, 1, true, side < 0 ? Math.PI : 0, Math.PI).scale(1, 1, sz).translate(x, y0, 0);
-  return shade(g, color);
-}
-
-/** 앞(−z)을 보는 삼각형 (셔츠 V) */
-function tri(a: number[], b: number[], c: number[], color: number): THREE.BufferGeometry {
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute([...a, ...c, ...b], 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 0, -1, 0, 0, -1, 0, 0, -1], 3));
-  const col = new THREE.Color(color);
-  g.setAttribute('color', new THREE.Float32BufferAttribute([col.r, col.g, col.b, col.r, col.g, col.b, col.r, col.g, col.b], 3));
-  return g;
-}
+/** 상자 (seg > 1이면 면을 나눠 얼룩 무늬가 보인다) */
+const box = (w: number, h: number, d: number, x: number, y: number, z: number, color: number, seg = 1) =>
+  shade(new THREE.BoxGeometry(w, h, d, seg, seg, seg).translate(x, y, z), color);
 
 const merge = (...g: THREE.BufferGeometry[]): THREE.BufferGeometry => mergeGeometries(g)!;
 
@@ -135,75 +130,96 @@ export interface ArmRig {
 }
 
 /**
- * 팔 하나 (가운 소매 + 사람 색 니트릴 장갑): 위팔 메시 1 + 아래팔·장갑 메시 1. 어깨 관절은 parent 안 (side·0.19, 0.45)
- * 1인칭 두 손이 같은 팔을 다시 쓴다 (위팔을 안 그리려면 shoulder의 첫 메시를 숨긴다)
+ * 팔 하나 (굵은 카키 위팔 + 올리브 어깨 판, 올리브 아래팔 + 식별 색 소매 끝 띠, 큰 검은 장갑): 위팔 메시 1 + 아래팔·장갑 메시 1.
+ * 어깨 관절은 parent 안 (side·0.19, 0.45). 1인칭 두 손이 같은 팔을 다시 쓴다 (위팔을 안 그리려면 shoulder의 첫 메시를 숨긴다)
  */
 export function buildArm(side: number, color: number, mat: THREE.Material, parent: THREE.Object3D, x = side * SHOULDER_X, y = SHOULDER_Y): ArmRig {
+  const accent = accentOf(color);
   const shoulder = joint(parent, x, y);
-  shoulder.add(new THREE.Mesh(merge(prism(0.042, 0.052, UPPER, 6, -UPPER / 2, COAT)), mat));
+  shoulder.add(new THREE.Mesh(merge(
+    prism(0.09, 0.115, UPPER, 6, -UPPER / 2, KHAKI),
+    box(0.2, 0.1, 0.25, side * 0.02, 0.0, 0, GREEN), // 어깨 판
+  ), mat));
   const elbow = joint(shoulder, 0, -UPPER);
   elbow.add(new THREE.Mesh(merge(
-    prism(0.038, 0.046, 0.2, 6, -0.1, COAT), // 소매
-    prism(0.03, 0.04, FORE - 0.2, 6, -0.2 - (FORE - 0.2) / 2, color), // 장갑 (손)
+    prism(0.085, 0.1, 0.2, 6, -0.1, GREEN), // 올리브 아래팔
+    prism(0.104, 0.104, 0.035, 6, -0.19, accent), // 소매 끝 식별 띠
+    box(0.19, 0.17, 0.2, 0, -FORE + 0.085, -0.01, BLACK), // 두꺼운 장갑
   ), mat));
   const anchor = joint(elbow, 0, -FORE);
   return { shoulder, elbow, anchor };
 }
 
 /**
- * 인형 만들기 (가운 연구자, 약 6.5등신): 앞(−z). 서 있을 때 키 약 1.72 m, 발바닥 y = 0. 마디 13개 = 그리기 13.
- * 사람 색은 장갑과 가운 앞 V 셔츠 (앞·뒤 어디서나 식별)
+ * 인형 만들기 (작업복 기술자, 굵고 다부진 비율): 앞(−z), 뒤(+z)에 배낭. 서 있을 때 키 약 1.77 m, 발바닥 y = 0. 마디 11개 = 그리기 11.
+ * 식별 색은 헬멧 띠 · 가슴 패치 · 소매 끝 띠 · 장화 줄 (앞·뒤 어디서나)
  */
 function buildRig(color: number, mat: THREE.Material, group: THREE.Group): Rig {
+  const accent = accentOf(color);
   const mesh = (geo: THREE.BufferGeometry, parent: THREE.Object3D) => {
     const m = new THREE.Mesh(geo, mat);
     parent.add(m);
     return m;
   };
+  const hose = shade(new THREE.TubeGeometry(
+    new THREE.CatmullRomCurve3([new THREE.Vector3(0.1, 0.1, 0.33), new THREE.Vector3(0.17, 0.0, 0.35), new THREE.Vector3(0.12, -0.06, 0.3), new THREE.Vector3(0.06, -0.02, 0.27)]),
+    8, 0.02, 4,
+  ), BLACK);
   const pelvis = joint(group, 0, 0.93);
-  mesh(merge(prism(0.13, 0.14, 0.16, 6, -0.02, TROUSER, 1.15, 0.85)), pelvis); // 바지 허리
+  mesh(box(0.5, 0.18, 0.3, 0, -0.02, 0, KHAKI, 2), pelvis); // 허리·엉덩이
   const torso = joint(pelvis, 0, 0);
   const torsoMesh = mesh(merge(
-    prism(0.205, 0.185, 0.48, 8, 0.22, COAT, 1, 0.72), // 가운 몸통
-    tri([-0.075, 0.46, -0.126], [0, 0.2, -0.131], [0.075, 0.46, -0.126], color), // 앞 V: 사람 색 셔츠
-    box(0.075, 0.09, 0.02, -0.095, 0.07, -0.135, COAT_D), // 가운 주머니
-    box(0.075, 0.09, 0.02, 0.095, 0.07, -0.135, COAT_D),
+    box(0.56, 0.36, 0.34, 0, 0.2, 0, KHAKI, 2), // 굵은 몸통
+    box(0.74, 0.1, 0.37, 0, 0.42, 0, GREEN), // 어깨 판
+    box(0.4, 0.26, 0.06, 0, 0.26, -0.185, GREEN), // 올리브 가슴 판
+    box(0.1, 0.1, 0.014, 0.08, 0.29, -0.222, accent), // 가슴 식별 패치
+    box(0.07, 0.045, 0.014, -0.11, 0.19, -0.222, LABEL), // 작은 경고 라벨
+    box(0.07, 0.4, 0.05, -0.19, 0.24, -0.2, BLACK), // 멜빵
+    box(0.07, 0.4, 0.05, 0.19, 0.24, -0.2, BLACK),
+    box(0.62, 0.07, 0.38, 0, 0.03, 0, BLACK), // 벨트
+    box(0.09, 0.11, 0.08, -0.24, 0.03, -0.21, BLACK), // 벨트 주머니
+    box(0.09, 0.11, 0.08, 0.24, 0.03, -0.21, BLACK),
+    box(0.4, 0.4, 0.17, 0, 0.24, 0.255, PACK), // 사각 장비 배낭
+    box(0.41, 0.06, 0.18, 0, 0.45, 0.255, BLACK), // 배낭 윗덮개
+    box(0.05, 0.05, 0.014, 0.1, 0.34, 0.345, LIGHT), // 상태 표시등
+    box(0.16, 0.014, 0.012, -0.04, 0.14, 0.345, BLACK), // 환기구 홈
+    box(0.16, 0.014, 0.012, -0.04, 0.18, 0.345, BLACK),
+    box(0.16, 0.014, 0.012, -0.04, 0.22, 0.345, BLACK),
+    hose, // 늘어진 케이블
   ), torso);
   const head = joint(torso, 0, NECK_Y);
   mesh(merge(
-    prism(0.04, 0.04, 0.06, 6, 0.03, SKIN), // 목
-    prism(0.085, 0.09, 0.22, 8, 0.15, SKIN), // 머리 (눈 = 목 위 0.15)
-    prism(0.097, 0.097, 0.09, 8, 0.215, HAIR), // 머리칼
-    box(0.17, 0.15, 0.05, 0, 0.17, 0.075, HAIR),
-    prism(0.099, 0.099, 0.05, 8, 0.15, STRAP), // 보안경 띠
-    box(0.13, 0.035, 0.012, 0, 0.15, -0.098, LENS), // 렌즈
+    prism(0.07, 0.075, 0.08, 6, 0.02, BLACK), // 목 보호대
+    prism(0.26, 0.245, 0.22, 8, 0.15, HELM, 1.1, 1.0), // 낮고 넓은 각진 헬멧
+    prism(0.22, 0.14, 0.1, 8, 0.31, HELM, 1.1, 1.0), // 윗면
+    prism(0.266, 0.266, 0.04, 8, 0.24, accent, 1.1, 1.0), // 식별 띠
+    box(0.4, 0.2, 0.08, 0, 0.17, -0.22, HELM), // 바이저 틀
+    box(0.35, 0.16, 0.06, 0, 0.17, -0.255, VISOR), // 불투명 검은 바이저 (얼굴 없음)
+    box(0.2, 0.02, 0.01, -0.04, 0.23, -0.287, TEAL), // 어두운 청록 반사
+    box(0.32, 0.07, 0.09, 0, 0.05, -0.2, BLACK), // 턱 보호대
+    box(0.06, 0.1, 0.11, 0.285, 0.17, -0.03, SIDEPLATE), // 옆 판
+    box(0.06, 0.1, 0.11, -0.285, 0.17, -0.03, SIDEPLATE),
   ), head);
-  // 가운 자락: 골반 자식, 허리 → 무릎 0.50 m (엉덩이 앞뒤 각의 0.6배로 흔들림)
-  const flap = (side: number) => {
-    const f = joint(pelvis, side * HIP_X, -HIP_DROP);
-    mesh(merge(halfPrism(side, 0.27, 0.19, 0.5, -0.15, COAT, 0.75, -side * HIP_X)), f);
-    return f;
-  };
-  const flapL = flap(-1);
-  const flapR = flap(1);
   const aL = buildArm(-1, color, mat, torso);
   const aR = buildArm(1, color, mat, torso);
   const leg = (side: number) => {
     const hip = joint(pelvis, side * HIP_X, -HIP_DROP);
-    mesh(merge(prism(0.06, 0.075, THIGH, 6, -THIGH / 2, TROUSER)), hip);
+    mesh(merge(
+      prism(0.115, 0.14, THIGH, 6, -THIGH / 2, KHAKI),
+      box(0.05, 0.14, 0.11, side * 0.145, -0.16, 0, BLACK), // 허벅지 옆 주머니
+    ), hip);
     const knee = joint(hip, 0, -THIGH);
     mesh(merge(
-      prism(0.045, 0.058, SHIN, 6, -SHIN / 2, TROUSER), // 정강이 (무릎 ~ 발목)
-      box(0.1, ANKLE_H, 0.26, 0, -SHIN - ANKLE_H / 2, -0.06, SHOE), // 신발
+      prism(0.09, 0.12, SHIN, 6, -SHIN / 2, GREEN), // 올리브 정강이 (무릎 ~ 발목)
+      box(0.22, 0.14, 0.15, 0, -0.03, -0.08, DGREEN), // 무릎 보호대
+      box(0.22, 0.24, 0.38, 0, -SHIN - ANKLE_H + 0.12, -0.08, BLACK), // 큰 장화
+      box(0.228, 0.03, 0.1, 0, -SHIN - ANKLE_H + 0.18, -0.15, accent), // 장화 식별 줄
     ), knee);
     return { hip, knee };
   };
   const lL = leg(-1);
   const lR = leg(1);
-  return {
-    pelvis, torso, torsoMesh, head, hipL: lL.hip, hipR: lR.hip, kneeL: lL.knee, kneeR: lR.knee, shoulderL: aL.shoulder, shoulderR: aR.shoulder, elbowL: aL.elbow, elbowR: aR.elbow,
-    flapL, flapR, anchor: aR.anchor,
-  };
+  return { pelvis, torso, torsoMesh, head, hipL: lL.hip, hipR: lR.hip, kneeL: lL.knee, kneeR: lR.knee, shoulderL: aL.shoulder, shoulderR: aR.shoulder, elbowL: aL.elbow, elbowR: aR.elbow, anchor: aR.anchor };
 }
 
 export class Avatars {
@@ -225,7 +241,7 @@ export class Avatars {
     let a = this.map.get(info.id);
     if (a) return a;
     const group = new THREE.Group();
-    const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, color: 0xdddddd }) // 색은 정점 색이 정한다 (재질 색 순백이면 팔레트 검사에 걸림);
     const rig = buildRig(info.color, mat, group);
     group.add(nameTag(info.name));
     // 든 기구: 오른손 끝 (rig.anchor). 팔이 돌아도 기구는 몸 방향으로 똑바로 서게 update에서 반대로 돌려 준다
@@ -343,8 +359,6 @@ export class Avatars {
       r.shoulderR.quaternion.copy(o.shoulder[1]);
       r.elbowL.quaternion.copy(o.elbow[0]);
       r.elbowR.quaternion.copy(o.elbow[1]);
-      r.flapL.rotation.x = o.flap[0];
-      r.flapR.rotation.x = o.flap[1];
       g.updateMatrixWorld(true);
       // 든 기구는 팔이 돌아도 몸 방향으로 똑바로: 앵커의 세계 회전 = 몸 방향 yaw
       r.elbowR.getWorldQuaternion(_qe);

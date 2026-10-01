@@ -14,12 +14,12 @@ import * as THREE from 'three';
 export const THIGH = 0.4;
 export const SHIN = 0.4; // 무릎 ~ 발목
 export const ANKLE_H = 0.07; // 발목 높이 (발바닥 ~ 발목)
-export const HIP_X = 0.1; // 엉덩이 관절 좌우
+export const HIP_X = 0.13; // 엉덩이 관절 좌우 (굵은 다리가 맞닿을 만큼)
 export const HIP_DROP = 0.06; // 골반 ~ 엉덩이 관절 (아래)
 export const LEG = 0.8; // 다리 길이 L (넓적다리 + 정강이)
 export const L_E = 0.98 * LEG; // 곧은 다리의 유효 길이 (IK가 d를 0.98(L₁+L₂)로 자르는 값과 같다)
 export const NECK_Y = 0.48; // 골반 ~ 목
-export const SHOULDER_X = 0.19;
+export const SHOULDER_X = 0.31; // 넓은 어깨 (굵은 팔이 몸통 옆에 늘어지도록)
 export const SHOULDER_Y = 0.45;
 export const UPPER = 0.29; // 위팔
 export const FORE = 0.35; // 팔꿈치 ~ 손끝 (아래팔 0.26 + 손 0.09)
@@ -169,7 +169,6 @@ export interface MotionOut {
   shoulder: THREE.Quaternion[];
   elbow: THREE.Quaternion[];
   /** 가운 자락 앞뒤 각 (rad) · 몸통 숨쉬기 비율 */
-  flap: number[];
   breath: number;
   /** 지금 디딘 발 · 두 발 다 뜬 구간(뛰기) */
   stance: boolean[];
@@ -204,7 +203,7 @@ export const newMotion = (): MotionState => ({
   init: false, gait: false, phase: 0, cycles: 0, bodyYaw: 0, catchUp: false, hold: 0, feet: [newFoot(), newFoot()], yStance: STAND_Y, flightT: 0,
   out: {
     pelvisY: STAND_Y, bodyYaw: 0, torso: new THREE.Quaternion(), head: new THREE.Quaternion(), hip: quats(), knee: quats(), shoulder: quats(), elbow: quats(),
-    flap: [0, 0], breath: 0, stance: [true, true], flight: false, beta: 0.6, freq: 0, fr: 0, reachK: 0,
+    breath: 0, stance: [true, true], flight: false, beta: 0.6, freq: 0, fr: 0, reachK: 0,
   },
 });
 
@@ -425,7 +424,6 @@ export function stepMotion(s: MotionState, m: MotionIn, dt: number): MotionOut {
     _t.set(cs * dx - sn * dz, dy, sn * dx + cs * dz);
     ik2(_t, THIGH, SHIN, POLE_KNEE, o.hip[i], o.knee[i], _m);
     hipAng[i] = Math.atan2(-_m.z, -_m.y);
-    o.flap[i] = (0.6 + 0.2 * c) * hipAng[i];
   }
 
   // ---- 6) 몸통 · 머리 · 손 뻗기 (몸통 기울기·돌림이 정해진 뒤 팔 IK) ----

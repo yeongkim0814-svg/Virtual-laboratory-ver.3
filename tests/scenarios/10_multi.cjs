@@ -27,7 +27,7 @@ module.exports = {
     }, id);
     const a1 = await av(A, 'p1');
     const b0 = await av(B, 'p0');
-    t.check(a1 && a1.vis && a1.boxes === 13 && a1.noPick, '방장 화면에 손님 아바타: 가운 연구자 인형(마디 메시 13개), 광선 판정 제외');
+    t.check(a1 && a1.vis && a1.boxes === 11 && a1.noPick, '방장 화면에 손님 아바타: 작업복 기술자 인형(마디 메시 11개), 광선 판정 제외');
     t.near(a1.x, 9.0, 0.05, '손님 아바타 x'); t.near(a1.z, 6.0, 0.05, '손님 아바타 z'); t.near(a1.yaw, 0.5, 0.05, '손님 아바타 방향');
     t.check(b0 && b0.vis, '손님 화면에 방장 아바타');
     t.near(b0.x, 5.0, 0.05, '방장 아바타 x');

@@ -218,7 +218,7 @@ module.exports = {
       avatars.remove('t1'); avatars.remove('t2');
       return { one, three, ms: ms / N };
     });
-    t.check(cost.one > 5 && cost.one <= 14, `아바타 하나 그리기 호출 ${cost.one} (5 < n ≤ 14: 마디 13 + 이름표)`);
+    t.check(cost.one > 5 && cost.one <= 14, `아바타 하나 그리기 호출 ${cost.one} (5 < n ≤ 14: 마디 11 + 이름표)`);
     t.check(cost.three <= 45, `아바타 셋 그리기 호출 ${cost.three} (≤ 45)`);
     t.check(cost.ms <= 0.3, `avatars.update 아바타 3개 ${cost.ms.toFixed(3)} ms/프레임 (≤ 0.3)`);
     t.check(t.errors.length === 0, `페이지 오류 없음${t.errors.length ? ': ' + t.errors[0].slice(0, 120) : ''}`);
