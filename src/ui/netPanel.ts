@@ -37,6 +37,9 @@ export class NetPanel {
       this.setStatus('');
     }));
     byId('net-leave').addEventListener('click', () => { session.leave(); this.setStatus(''); });
+    // 방 안에서 이름을 고치면 (입력 칸을 벗어나거나 엔터) 바로 모두에게 알린다
+    this.name.addEventListener('change', () => { const n = this.nick(); if (session.connected) session.setName(n); });
+    this.name.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.name.blur(); });
     this.code.addEventListener('input', () => { this.code.value = normalizeCode(this.code.value); });
   }
 

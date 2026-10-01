@@ -12,6 +12,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { Item } from '../world/items';
 import type { PlayerInfo, Pose } from './session';
 import { isPickable, itemOf } from '../player/hand';
+import { pickGlide, placeGlide, settleGlide, worldPose } from '../player/carryGlide';
 import { newMotion, stepMotion, wrapAngle, HIP_DROP, HIP_X, NECK_Y, SHOULDER_X, SHOULDER_Y, THIGH, SHIN, UPPER, FORE, ANKLE_H, type MotionState } from './avatarMotion';
 
 const H = 1.72;
@@ -284,6 +285,26 @@ export class Avatars {
     }
   }
 
+  /** 이름이 바뀜: 머리 위 이름표를 다시 만든다 */
+  rename(id: string, name: string): void {
+    const a = this.map.get(id);
+    if (!a) return;
+    a.info.name = name;
+    const old = a.group.children.find((c) => c.userData.nameTag) as THREE.Mesh | undefined;
+    const y = old?.position.y;
+    if (old) {
+      old.removeFromParent();
+      old.geometry.dispose();
+      const m = old.material as THREE.MeshBasicMaterial;
+      m.map?.dispose();
+      m.dispose();
+    }
+    const tag = nameTag(name);
+    if (y !== undefined) tag.position.y = y;
+    this.retro(tag);
+    a.group.add(tag);
+  }
+
   /** 이 사람이 방금 무언가를 조작했다 → 오른손을 세계 좌표 point(없으면 몸 앞 0.5 m 가슴 높이)로 뻗는다 (0.25 s 뻗기 · 0.15 s 멈춤 · 0.3 s 돌아옴) */
   reach(id: string, point?: THREE.Vector3): void {
     const a = this.map.get(id);
@@ -388,11 +409,14 @@ export class Avatars {
     const a = this.ensure(info);
     if (a.held) return;
     a.held = item;
+    settleGlide(item);
+    const from = worldPose(item); // 손이 닿을 때까지 제자리에 보이게 (carryGlide)
     item.detachFromParent();
     a.anchor.add(item.object);
     item.object.position.set(0, 0, 0);
     item.object.rotation.set(0, 0, 0);
     item.object.updateMatrixWorld(true);
+    pickGlide(item, from);
   }
 
   /** 든 기구를 point에 내려놓는다 */
@@ -400,11 +424,14 @@ export class Avatars {
     const a = this.map.get(id);
     const item = a?.held;
     if (!a || !item) return false;
+    settleGlide(item);
+    const from = worldPose(item);
     item.object.removeFromParent();
     item.object.position.copy(point);
     item.object.rotation.set(0, item.yaw, 0);
     this.scene.add(item.object);
     item.object.updateMatrixWorld(true);
+    placeGlide(item, from);
     a.held = null;
     return true;
   }
@@ -414,6 +441,7 @@ export class Avatars {
     const a = this.map.get(id);
     const item = a?.held ?? null;
     if (!a || !item) return null;
+    settleGlide(item);
     item.object.removeFromParent();
     item.object.rotation.set(0, 0, 0);
     a.held = null;

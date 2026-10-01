@@ -18,7 +18,7 @@ import type { Command, CommandBus } from './commands';
 import type { Channel, HostHandle, Link, Transport } from './transport';
 
 export const MAX_PLAYERS = 4;
-export const PROTOCOL = 3; // 2: 큰 메시지 조각내기 (transport.ts framedSender), 3: 자세에 pitch · c
+export const PROTOCOL = 4; // 4: 이름 바꾸기(name), 2: 큰 메시지 조각내기 (transport.ts framedSender), 3: 자세에 pitch · c
 export const COLORS = [0xe8923a, 0x3a8fe8, 0x5cc15c, 0xd04c8c];
 
 export interface PlayerInfo {
@@ -45,6 +45,8 @@ export interface Hooks {
   pose(): Pose;
   /** 참가자 목록·역할이 바뀜 */
   changed(): void;
+  /** 누군가(나 제외) 이름을 바꿈 (아바타 이름표 다시 그리기) */
+  renamed?(id: string, name: string): void;
   /** 다른 사람들의 자세가 왔다 (나 제외) */
   poses(list: { id: string; pose: Pose }[]): void;
   /** 사람이 나감 (아바타 지우기, 손에 든 것 내려놓기) */
@@ -151,6 +153,17 @@ export class Session {
     this.hooks.changed();
   }
 
+  /** 방에 들어온 뒤 이름을 바꿨다 → 방장이 받아 모두에게 알린다 */
+  setName(raw: string): void {
+    const name = raw.trim().slice(0, 12);
+    const me = this.players.get(this.me);
+    if (!me || !name || me.name === name) return;
+    me.name = name;
+    if (this.role === 'host') this.broadcast('cmd', { k: 'name', id: this.me, name });
+    else if (this.role === 'client') this.up?.send('cmd', { k: 'name', name });
+    this.hooks.changed();
+  }
+
   private broadcast(ch: Channel, msg: Msg): void {
     for (const l of this.links.values()) l.send(ch, msg);
   }
@@ -202,6 +215,15 @@ export class Session {
       if (p) p.focus = label;
       this.broadcast('cmd', { k: 'focus', id, label });
       this.hooks.changed();
+    } else if (m.k === 'name') {
+      const name = String(m.name ?? '').trim().slice(0, 12);
+      const p = this.players.get(id);
+      if (p && name) {
+        p.name = name;
+        this.broadcast('cmd', { k: 'name', id, name });
+        this.hooks.renamed?.(id, name);
+        this.hooks.changed();
+      }
     } else if (m.k === 'resync') {
       link.send('cmd', { k: 'snap', seq: this.seq, world: this.hooks.snapshot() });
     } else if (m.k === 'bye') {
@@ -321,6 +343,15 @@ export class Session {
         const p = this.players.get(String(m.id));
         if (p) p.focus = String(m.label ?? '');
         this.hooks.changed();
+        break;
+      }
+      case 'name': {
+        const p = this.players.get(String(m.id));
+        if (p && m.name) {
+          p.name = String(m.name).slice(0, 12);
+          this.hooks.renamed?.(p.id, p.name);
+          this.hooks.changed();
+        }
         break;
       }
       case 'poses':

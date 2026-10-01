@@ -21,6 +21,7 @@ import { INTERACT_RANGE, type Action, type Interactable } from './world/interact
 import { Player } from './player/player';
 import { Hand, isPickable } from './player/hand';
 import { FpHands } from './player/fpHands';
+import { applyGlides, restoreGlides, stepGlides } from './player/carryGlide';
 import { Controls } from './input/controls';
 import { Minimap } from './ui/minimap';
 import { bindSettingsPanel, enterFullscreen, loadSettings } from './ui/settings';
@@ -314,6 +315,7 @@ const physics = new PhysicsSync(bus, stock);
 const netHooks: Hooks = {
   pose: () => ({ x: player.pos.x, y: 0, z: player.pos.z, yaw: player.yaw, pitch: Math.round(player.pitch * 100) / 100, c: Math.round(player.c * 100) / 100 }),
   changed: () => netPanel.refresh(),
+  renamed: (id, name) => avatars.rename(id, name),
   poses: (list) => { for (const { id, pose } of list) { const p = session.players.get(id); if (p) avatars.setPose(p, pose); } },
   left: (id) => avatars.remove(id),
   notice: (m) => toast(m),
@@ -839,7 +841,7 @@ function collectEquipmentBoxes(): void {
 
 // 테스트용: 주소 끝이 #debug일 때만 내부 객체를 노출 (자동 테스트가 조립을 빠르게 재현하는 데 씀)
 if (location.hash === '#debug') {
-  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans, session, avatars, sync, holdings, LocalTransport, PeerTransport, physics, scopePanel, fpHands, sim: { Transient, waveform }, motion: avatarMotion };
+  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans, session, avatars, sync, holdings, LocalTransport, PeerTransport, physics, scopePanel, fpHands, glide: { applyGlides, restoreGlides }, sim: { Transient, waveform }, motion: avatarMotion };
 }
 
 renderer.info.autoReset = false; // 한 프레임의 그리기 호출을 모두 더한다 (진단 표시용)
@@ -890,6 +892,7 @@ renderer.setAnimationLoop(() => {
   beams.update();
   rotateBar.update();
   avatars.update(dt, camera);
+  stepGlides(dt);
   const undoLabel = undo.pending(bus.me);
   const undoBlocked = undo.blocked(bus.me);
   undoBtn.disabled = !undoLabel && !undoBlocked;
@@ -926,7 +929,9 @@ renderer.setAnimationLoop(() => {
   const aimHit = wires.pending ? raycast(aimX, 0) : null;
   wires.updatePreview(wires.pending ? (aimHit?.point ?? camera.getWorldPosition(camPos).addScaledVector(camera.getWorldDirection(new THREE.Vector3()), 0.8)) : null);
 
+  applyGlides(); // 집기·놓기 물체만 그리는 동안 손 뻗기 중간 자리로 (논리는 최종 자리)
   retro.render();
+  restoreGlides();
   minimap.draw();
   pendulumPanel.update();
   springPanel.update();

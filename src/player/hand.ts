@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import { HITBOX_MAT, type Item } from '../world/items';
 import { INTERACT_RANGE } from '../world/interactable';
+import { pickGlide, placeGlide, settleGlide, worldPose } from './carryGlide';
 
 const MIN_UP = 0.7; // 법선의 y성분이 이보다 커야 놓을 수 있다
 export const HELD_LAYER = 1;
@@ -52,6 +53,8 @@ export class Hand {
   pickUp(item: Item): void {
     if (this.held) return;
     this.held = item;
+    settleGlide(item);
+    const from = worldPose(item); // 손이 닿을 때까지 제자리에 보이게 (carryGlide)
     item.detachFromParent(); // 책상 위든 다른 기구의 소켓이든 붙어 있던 곳에서 떼어 낸다 (자식은 함께 딸려 옴)
     this.camera.add(item.object);
     // 카메라 기준 오른쪽 아래 앞. 큰 물체(스탠드 등)일수록 더 멀리·아래에 들어 화면을 덜 가린다
@@ -61,17 +64,21 @@ export class Hand {
     setLayer(item.object, HELD_LAYER);
     // 다음 프레임을 기다리지 않고 바로 끼울 곳을 찾을 수 있게 (집자마자 두 번 탭해도 위치가 맞도록)
     item.object.updateWorldMatrix(true, true);
+    pickGlide(item, from);
   }
 
   /** 지정한 자리에 내려놓는다. 성공하면 true */
   place(target: PlaceTarget | null): boolean {
     const item = this.held;
     if (!item || !target?.valid) return false;
+    settleGlide(item);
+    const from = worldPose(item);
     this.camera.remove(item.object);
     setLayer(item.object, 0);
     item.object.position.copy(target.point);
     item.object.rotation.set(0, item.yaw, 0); // 돌려 둔 방향 유지
     this.scene.add(item.object);
+    placeGlide(item, from);
     this.held = null;
     this.marker.visible = false;
     return true;
@@ -81,6 +88,7 @@ export class Hand {
   handOver(): Item | null {
     const item = this.held;
     if (!item) return null;
+    settleGlide(item);
     this.camera.remove(item.object);
     setLayer(item.object, 0);
     item.object.rotation.set(0, 0, 0);
