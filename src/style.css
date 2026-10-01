@@ -488,3 +488,21 @@ canvas.plot.tall { height: 130px; }
 #book-body svg.plan text { text-anchor: middle; fill: var(--ink); }
 #book-body svg.plan text.s { font-size: 13px; }
 #book-body svg.plan text.z { font-size: 26px; font-weight: bold; fill: #7a2a10; }
+
+/* ---------- 오실로스코프 패널 ---------- */
+#sc-screen {
+  display: block; width: 100%; aspect-ratio: 5 / 4;
+  border: 1px solid var(--amber-dim);
+  image-rendering: pixelated;
+  touch-action: none;
+  cursor: crosshair;
+}
+.exp-panel .c1, .legend .c1 { color: #ffd84a; }
+.exp-panel .c2, .legend .c2 { color: #4adfff; }
+.stepper-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
+.stepper-row > span { margin-left: auto; color: var(--text); font-variant-numeric: tabular-nums; }
+.stepper-row label.row { margin: 0; }
+.stepper-row .stepper button { width: 40px; padding: 6px 0; font-size: 16px; }
+#sc-panel .segmented .segmented { margin: 0; }
+.fg-title { margin: 18px 0 0 !important; padding-top: 10px; border-top: 1px solid var(--amber-dim); }
+#fg-f-num { width: 6.5em; margin-left: auto; background: transparent; color: var(--text); border: 1px solid var(--amber-dim); padding: 4px 6px; font: inherit; }

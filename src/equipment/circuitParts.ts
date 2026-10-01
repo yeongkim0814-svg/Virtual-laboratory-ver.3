@@ -78,7 +78,7 @@ export class Resistor extends CircuitPart {
     const bands = colorBands(R);
     bands.forEach((c, i) => g.add(mesh(new THREE.CylinderGeometry(0.0063, 0.0063, 0.003, 8).rotateZ(Math.PI / 2), new THREE.MeshLambertMaterial({ color: c }), -0.009 + i * 0.006, 0.026, 0)));
     g.add(mesh(new THREE.BoxGeometry(0.07, 0.0015, 0.0015), METAL, 0, 0.026, 0)); // 다리
-    super(g, { name: `저항 ${R} Ω`, radius: 0.06, mass: 0.05, touchPad: false });
+    super(g, { name: R >= 1000 ? `저항 ${R / 1000} kΩ` : `저항 ${R} Ω`, radius: 0.06, mass: 0.05, touchPad: false });
     this.a = new Terminal(this, '왼쪽 단자', 'n', v(-0.038, 0.02, 0.012), FRONT);
     this.b = new Terminal(this, '오른쪽 단자', 'n', v(0.038, 0.02, 0.012), FRONT);
   }
@@ -155,6 +155,7 @@ export class Led extends CircuitPart {
   readonly a: Terminal;
   readonly b: Terminal;
   readonly junction: Junction;
+  readonly rs = Led.RS;
   burnt = false;
   /** 접합 온도 (°C) */
   Tj = 25;
@@ -244,6 +245,106 @@ export class Led extends CircuitPart {
     this.brightness = b;
   }
 }
+
+/**
+ * 축전기(콘덴서): 전하를 모아 두는 부품. i = C dv/dt — 직류에서는 충전이 끝나면 전류가 0(끊김), 교류는 통과시킨다.
+ * 시간에 따라 변하므로 직류 회로 해석에는 "끊김"으로만 들어가고, 오실로스코프가 연결된 회로에서 sim/transient.ts가 푼다.
+ * 상태(축전기 전압 vC, 전류 iC)는 여기에 두어 해석 걸음이 이어진다.
+ */
+export class Capacitor extends CircuitPart {
+  readonly a: Terminal;
+  readonly b: Terminal;
+  vC = 0;
+  iC = 0;
+
+  /** @param C 전기 용량 (F) */
+  constructor(readonly C: number) {
+    const g = new THREE.Group();
+    g.add(mesh(new THREE.BoxGeometry(0.1, 0.012, 0.05), BOARD, 0, 0.006, 0));
+    g.add(mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.034, 10).rotateZ(Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x2a58a8 }), 0, 0.03, 0));
+    g.add(mesh(new THREE.CylinderGeometry(0.0135, 0.0135, 0.004, 10).rotateZ(Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0xd8d8d0 }), -0.012, 0.03, 0)); // 띠
+    g.add(mesh(new THREE.BoxGeometry(0.07, 0.0015, 0.0015), METAL, 0, 0.03, 0)); // 다리
+    super(g, { name: `축전기 ${Math.round(C * 1e7) / 10} μF`, radius: 0.06, mass: 0.04, touchPad: false });
+    this.a = new Terminal(this, '왼쪽 단자', 'n', v(-0.038, 0.02, 0.012), FRONT);
+    this.b = new Terminal(this, '오른쪽 단자', 'n', v(0.038, 0.02, 0.012), FRONT);
+  }
+
+  resistance(): number | null {
+    return null;
+  }
+
+  discharge(): void {
+    this.vC = 0;
+    this.iC = 0;
+  }
+
+  extraActions(): Action[] {
+    return [{ label: '방전 (양쪽 단자를 잠깐 이음)', run: () => this.discharge() }, ...this.circuitActions()];
+  }
+}
+
+/**
+ * 코일(인덕터): 전류가 변하면 막으려는 전압이 생긴다. v = L di/dt — 직류에서는 감은 선의 저항 R_L만 남는다(도선처럼).
+ * 교류에서는 리액턴스 ωL로 전류를 막는다. 상태(코일 전류 iL, 전압 vL)는 여기에 둔다.
+ */
+export class Inductor extends CircuitPart {
+  readonly a: Terminal;
+  readonly b: Terminal;
+  iL = 0;
+  vL = 0;
+
+  /** @param L 인덕턴스 (H) @param Rl 감은 선의 저항 (Ω) */
+  constructor(readonly L: number, readonly Rl: number) {
+    const g = new THREE.Group();
+    g.add(mesh(new THREE.BoxGeometry(0.1, 0.012, 0.05), BOARD, 0, 0.006, 0));
+    g.add(mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.05, 8).rotateZ(Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x4a4a48 }), 0, 0.03, 0)); // 철심
+    const cu = new THREE.MeshLambertMaterial({ color: 0xb8702a });
+    for (let k = 0; k < 7; k++) g.add(mesh(new THREE.CylinderGeometry(0.0145, 0.0145, 0.004, 10).rotateZ(Math.PI / 2), cu, -0.018 + k * 0.006, 0.03, 0)); // 감은 선
+    super(g, { name: `코일 ${Math.round(L * 1e4) / 10} mH`, radius: 0.06, mass: 0.08, touchPad: false });
+    this.a = new Terminal(this, '왼쪽 단자', 'n', v(-0.038, 0.02, 0.012), FRONT);
+    this.b = new Terminal(this, '오른쪽 단자', 'n', v(0.038, 0.02, 0.012), FRONT);
+  }
+
+  resistance(): number {
+    return this.Rl;
+  }
+
+  extraActions(): Action[] {
+    return [{ label: '전류 0으로 (자기장 에너지 버리기)', run: () => { this.iL = 0; this.vL = 0; } }, ...this.circuitActions()];
+  }
+}
+
+/** 정류 다이오드(1N4148 급): 한쪽으로만 전류를 흘린다. 접합 + 직렬 저항 1 Ω, 20 mA에서 접합 전압 약 0.62 V. LED와 달리 타지 않는다(단순화) */
+export class RectDiode extends CircuitPart {
+  static readonly RS = 1;
+  static readonly N_VT = 1.5 * 0.02585;
+  readonly a: Terminal;
+  readonly b: Terminal;
+  readonly junction: Junction;
+  readonly burnt = false;
+  readonly rs = RectDiode.RS;
+
+  constructor() {
+    const g = new THREE.Group();
+    g.add(mesh(new THREE.BoxGeometry(0.1, 0.012, 0.05), BOARD, 0, 0.006, 0));
+    g.add(mesh(new THREE.BoxGeometry(0.07, 0.0015, 0.0015), METAL, 0, 0.026, 0)); // 다리
+    g.add(mesh(new THREE.CylinderGeometry(0.0055, 0.0055, 0.024, 8).rotateZ(Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0xd8a860 }), 0, 0.026, 0)); // 유리 몸통
+    g.add(mesh(new THREE.CylinderGeometry(0.0058, 0.0058, 0.004, 8).rotateZ(Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x1a1a1a }), 0.01, 0.026, 0)); // 캐소드 띠
+    super(g, { name: '정류 다이오드', radius: 0.06, mass: 0.02, touchPad: false });
+    this.junction = { a: 0, b: 0, Is: 2e-9, nVt: RectDiode.N_VT, vd: 0 };
+    this.a = new Terminal(this, '+ (애노드)', '+', v(-0.038, 0.02, 0.012), FRONT);
+    this.b = new Terminal(this, '− (캐소드, 띠 쪽)', '-', v(0.038, 0.02, 0.012), FRONT);
+  }
+
+  resistance(): number | null {
+    return null;
+  }
+
+  heat(_dt: number): void {}
+}
+
+/** 접합(다이오드)을 가진 부품 — LED와 정류 다이오드 (직류 해석이 같은 코드로 푼다) */
+export type JunctionPart = Led | RectDiode;
 
 /** 칼날 스위치: 두 번 탭 → 닫기·열기 */
 export class KnifeSwitch extends CircuitPart {
@@ -411,8 +512,8 @@ export function solveDCCircuits(
   for (const m of activeMeters) { lid(m.plus); lid(m.minus); }
   for (const s of liveSupplies) { lid(s.plus); lid(s.minus); }
   // LED마다 속 마디 하나 (애노드 ─ R_s ─ 속 마디 ─ 접합 ─ 캐소드)
-  const leds = activeParts.filter((p): p is Led => p instanceof Led);
-  const inner = new Map<Led, number>();
+  const leds = activeParts.filter((p): p is JunctionPart => p instanceof Led || p instanceof RectDiode);
+  const inner = new Map<JunctionPart, number>();
   for (const l of leds) inner.set(l, local.size + inner.size);
   const n = local.size + leds.length;
 
@@ -423,7 +524,7 @@ export function solveDCCircuits(
       if (R !== null) out.push({ a: lid(p.a), b: lid(p.b), R });
     }
     for (const m of activeMeters) out.push({ a: lid(m.plus), b: lid(m.minus), R: 0.01 });
-    for (const l of leds) if (!l.burnt) out.push({ a: lid(l.a), b: inner.get(l)!, R: Led.RS });
+    for (const l of leds) if (!l.burnt) out.push({ a: lid(l.a), b: inner.get(l)!, R: l.rs });
     return out;
   };
   const junctions = (): Junction[] => {
@@ -439,7 +540,7 @@ export function solveDCCircuits(
   const sources: Source[] = liveSupplies.map((s) => ({ a: lid(s.plus), b: lid(s.minus), E: s.output, r: SUPPLY_R, Imax: SUPPLY_IMAX }));
 
   const bulbs = activeParts.filter((p): p is Bulb => p instanceof Bulb);
-  const ledCurrent = (l: Led, V: Float64Array) => (l.burnt ? 0 : (V[lid(l.a)] - V[inner.get(l)!]) / Led.RS);
+  const ledCurrent = (l: JunctionPart, V: Float64Array) => (l.burnt ? 0 : (V[lid(l.a)] - V[inner.get(l)!]) / l.rs);
   // 필라멘트·LED가 있을 때만 시간을 잘게 나눠 (풀기 → 가열) 되풀이
   const steps = bulbs.length || leds.length ? Math.max(1, Math.min(12, Math.ceil(dt / 0.004))) : 0;
   let res = n ? solveDC(n, conductors(), sources, junctions()) : null;
@@ -457,11 +558,11 @@ export function solveDCCircuits(
     const R = p.resistance();
     const live = !!res && on(p.a);
     p.voltage = live ? res!.V[lid(p.a)] - res!.V[lid(p.b)] : 0;
-    p.current = !live ? 0 : p instanceof Led ? ledCurrent(p, res!.V) : R === null ? 0 : p.voltage / R;
+    p.current = !live ? 0 : p instanceof Led || p instanceof RectDiode ? ledCurrent(p, res!.V) : R === null ? 0 : p.voltage / R;
     p.inCircuit = false;
     // 전원이 없는 회로의 필라멘트·LED는 식는다
     if (!live && p instanceof Bulb) p.filament.heat(0, dt);
-    if (!live && p instanceof Led) p.heat(dt);
+    if (!live && (p instanceof Led || p instanceof RectDiode)) p.heat(dt);
   }
   // 광전관이 없는 회로의 마이크로전류계는 여기서 채운다 (광전 효과 해석이 먼저 null로 비워 둠)
   for (const m of microammeters) {

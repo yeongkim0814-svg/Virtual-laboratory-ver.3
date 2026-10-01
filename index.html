@@ -353,6 +353,86 @@
         </dl>
       </section>
 
+      <!-- 오실로스코프 · 함수 발생기 패널 (파형을 보면서 발생기를 조절) -->
+      <section id="sc-panel" class="exp-panel" hidden>
+        <header>
+          <h2>오실로스코프</h2>
+          <button id="sc-close">닫기</button>
+        </header>
+        <p id="sc-status" class="status"></p>
+        <div class="field">전원
+          <div class="segmented"><button id="sc-power"></button></div>
+        </div>
+        <canvas id="sc-screen" width="400" height="320"></canvas>
+        <p class="legend"><span class="c1">CH1</span> <span class="c2">CH2</span> · 화면을 탭해 커서를 놓으세요 (아래에서 시간/전압 커서 고르기)</p>
+        <div class="field">커서
+          <div id="sc-curmode" class="segmented">
+            <button data-v="t">시간 (세로선)</button>
+            <button data-v="v">전압 (가로선)</button>
+            <button id="sc-curclear">지우기</button>
+          </div>
+        </div>
+        <div class="field">표시
+          <div id="sc-mode" class="segmented">
+            <button data-v="yt">Y-T (시간)</button>
+            <button data-v="xy">X-Y (리사주)</button>
+            <button id="sc-hold">정지</button>
+          </div>
+        </div>
+        <div class="stepper-row">시간축 <span id="sc-tdiv-val"></span>
+          <div class="stepper"><button id="sc-t-minus" aria-label="더 빠르게">−</button><button id="sc-t-plus" aria-label="더 느리게">+</button></div>
+        </div>
+        <div class="stepper-row"><label class="row c1"><input id="sc-show1" type="checkbox" /> CH1</label><span id="sc-v1-val"></span>
+          <div class="stepper"><button id="sc-v1-minus">−</button><button id="sc-v1-plus">+</button></div>
+        </div>
+        <div class="stepper-row c1">CH1 위치 <span id="sc-p1-val"></span>
+          <div class="stepper"><button id="sc-p1-minus">▼</button><button id="sc-p1-plus">▲</button></div>
+        </div>
+        <div class="stepper-row"><label class="row c2"><input id="sc-show2" type="checkbox" /> CH2</label><span id="sc-v2-val"></span>
+          <div class="stepper"><button id="sc-v2-minus">−</button><button id="sc-v2-plus">+</button></div>
+        </div>
+        <div class="stepper-row c2">CH2 위치 <span id="sc-p2-val"></span>
+          <div class="stepper"><button id="sc-p2-minus">▼</button><button id="sc-p2-plus">▲</button></div>
+        </div>
+        <div class="field">트리거
+          <div class="segmented">
+            <div id="sc-trigch" class="segmented"><button data-v="1">CH1</button><button data-v="2">CH2</button></div>
+            <div id="sc-trigslope" class="segmented"><button data-v="rise">↗ 상승</button><button data-v="fall">↘ 하강</button></div>
+          </div>
+        </div>
+        <label>트리거 레벨 <span id="sc-tl-val"></span>
+          <input id="sc-tl" type="range" min="-10" max="10" step="0.05" />
+        </label>
+        <dl class="readout" id="sc-read"></dl>
+        <div class="buttons"><button id="sc-csv">CSV 내보내기 (보이는 파형)</button></div>
+
+        <h3 class="fg-title">함수 발생기</h3>
+        <p id="fg-status" class="status"></p>
+        <div id="fg-box">
+          <div class="field">전원
+            <div class="segmented"><button id="fg-power"></button></div>
+          </div>
+          <div class="field">파형
+            <div id="fg-wave" class="segmented">
+              <button data-v="sine">사인</button><button data-v="square">사각</button><button data-v="triangle">삼각</button>
+            </div>
+          </div>
+          <label>주파수 <span id="fg-f-val"></span>
+            <input id="fg-f" type="range" min="0" max="1000" step="1" />
+          </label>
+          <div class="segmented fine">
+            <button data-df="0.5">÷2</button><button data-df="0.99">−1 %</button><button data-df="1.01">+1 %</button><button data-df="2">×2</button>
+          </div>
+          <label class="row">정확한 값 (Hz) <input id="fg-f-num" type="number" min="1" max="20000" step="any" /></label>
+          <label>진폭 (최댓값) <span id="fg-a-val"></span>
+            <input id="fg-a" type="range" min="0" max="10" step="0.05" />
+          </label>
+          <label>직류 오프셋 <span id="fg-o-val"></span>
+            <input id="fg-o" type="range" min="-5" max="5" step="0.05" />
+          </label>
+        </div>
+      </section>
+
       <!-- 광학 패널: 광선 경로 · 미세 조정 -->
       <section id="op-panel" class="exp-panel" hidden>
         <header>
@@ -646,6 +726,14 @@
           <li>전원 장치(또는 부품)를 두 번 탭 → <b>직류 회로 실험</b>: 전압 조절, 계기 값, 측정값 기록·자동 측정(0 → 5 V), I–V 그래프와 R·n 맞춤, CSV</li>
           <li>전원 장치는 1 A를 넘으면 전류 제한(CC)으로 바뀐다 — 화면에 CC가 뜨면 단락을 의심</li>
           <li>LED 3색(칸 6): 빨강 단자(+)를 전원 + 쪽으로. 직렬 저항 없이 문턱을 크게 넘기면 과열로 탄다 → 두 번 탭해 새 LED로 교체</li>
+        </ul>
+        <h3>오실로스코프 · 함수 발생기 (RC · RLC · 정류)</h3>
+        <ul>
+          <li>뒤쪽 수납장 칸 8 ~ 11: 오실로스코프, 함수 발생기, 축전기 4종, 코일 2종, 정류 다이오드, 저항 1 kΩ · 10 kΩ. 발생기·오실로스코프는 각각 두 번 탭 → <b>전원 연결</b> → 켜기</li>
+          <li>발생기 <b>COM</b>과 오실로스코프 <b>GND</b>는 접지(0 V)에 이미 이어져 있다. 회로: OUT → 부품 … → COM, 프로브는 CH1(입력)·CH2(재려는 곳)에 도선으로 잇는다. GND를 엉뚱한 곳에 이으면 그 마디가 땅에 단락된다</li>
+          <li>오실로스코프 두 번 탭(또는 왼쪽 위 <b>오실로스코프 실험</b>) → 화면: 시간축·V/칸·위치·트리거·정지·X-Y, 커서(화면을 탭), 자동 측정(주파수·위상 등), CSV. 같은 패널 아래에서 발생기 파형·주파수(정확한 값 입력)·진폭을 조절</li>
+          <li>축전기·코일이 든 회로는 <b>오실로스코프가 이어져야</b> 풀린다. 회로 시간은 시간축을 따라 흐른다 (느린 시간축에서는 실제보다 빠르게)</li>
+          <li>축전기는 두 번 탭 → 방전. 정류 다이오드는 띠 쪽이 캐소드(−). 교재 16 ~ 18장(RC · RLC 공명 · 정류) 참고</li>
         </ul>
         <h3>기하광학 · 간섭계</h3>
         <ul>

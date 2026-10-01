@@ -23,8 +23,8 @@
 | `net/` (멀티플레이어) | `transport.ts`(PeerJS·BroadcastChannel) · `session.ts`(방장 권한, 명령 순서 번호, 재동기화) · `avatars.ts`(육면체) · `worldSync.ts`(스냅숏·digest) · `physicsSync.ts`(연속 상태 15 Hz 덮어쓰기). 설계·검증은 README "멀티플레이어" |
 | `net/commands.ts` | **명령 버스**. 세계를 바꾸는 조작은 모두 명령 (act/use/place/attach/wire/unwire/pour/set/call/undo). 멀티플레이어 대비. `undo.ts` = 실행 전후 상태 비교로 마지막 조작 하나 되돌리기 |
 | `world/` | 방·가구·보관장(`cabinet.ts`·`buildFurniture.ts`·`layout.ts` 도면 좌표), 문, 기구 기반 클래스(`items.ts`: Item/Socket/Plug), 전원(`power.ts`), 도선(`wires.ts`·`cable.ts`·`routing.ts`), 칠판 |
-| `equipment/` | 기구: 진자·스프링(`mechanics`·`pendulumString`·`spring`), 레일·수레·도르래(`track`), 센서·노트북(`sensors`), 힘 센서·포토게이트(`dynamicsSensors`), 전기(`electrical`·`circuitParts`), 화학(`glassware`), 광학(`optics`·`opticalElements`·`beams`), 보관장 배치(`stock.ts`) |
-| `sim/` | 순수 계산(DOM·Three 최소): 적분기, 진자, 스프링, 궤도(충돌·힘 센서 접촉), 회로(마디 전압법·필라멘트·다이오드), 화학 평형, 광선 광학, 광전 효과, 로거 분석 |
+| `equipment/` | 기구: 진자·스프링(`mechanics`·`pendulumString`·`spring`), 레일·수레·도르래(`track`), 센서·노트북(`sensors`), 힘 센서·포토게이트(`dynamicsSensors`), 전기(`electrical`·`circuitParts`), 함수 발생기·오실로스코프(`scope`), 화학(`glassware`), 광학(`optics`·`opticalElements`·`beams`), 보관장 배치(`stock.ts`) |
+| `sim/` | 순수 계산(DOM·Three 최소): 적분기, 진자, 스프링, 궤도(충돌·힘 센서 접촉), 회로(마디 전압법·필라멘트·다이오드), 과도 회로(`transient`: 축전기·코일, 사다리꼴), 오실로스코프 측정(`scopeAnalysis`), 화학 평형, 광선 광학, 광전 효과, 로거 분석 |
 | `ui/` | 실험 패널(오른쪽), 측정 프로그램, 그래프(`plotKit`), 교재 읽기, 칠판 쓰기 등 |
 | `content/books.ts` | 교탁 위 물리·화학 교재 본문 (HTML 조각) |
 
@@ -39,6 +39,7 @@
 8. 전원 기기(레이저·직류 전원·백색 광원)는 콘센트(실험대 짧은 옆면 x 5.38 / 8.95, z 1.4 / 4.96)에 전원선 2 m 안이어야 켜진다. 멀어지면 자동으로 뽑힌다.
 9. 보관장 칸 코드(a-3)와 배치 교재는 기구의 **처음 자리**에서 자동 생성 (`placementBook.ts`). 구역 문자는 stock.ts에서 정한다.
 11. **멀티플레이어**: 명령 버스만 쓰면 자동으로 복제된다. 명령 없이 한 기기에서만 상태를 바꾸면 digest가 어긋나 재동기화로 되돌려진다. "누가 들었나"는 `hand.held`가 아니라 `holdings`/`bus.actor`. 새 연속 상태(적분기 변수)는 `physicsSync.ts` out/apply에, 새 이산 구조(참조·배열)는 `worldSync.ts`에 넣는다 (숫자·참거짓·글자 필드는 자동 포함). 장면에 Sprite를 넣지 않는다 (`raycaster.set()`으로 쏘는 빛 추적·놓기 판정이 카메라 없이 오류).
+12. **오실로스코프 회로**: 축전기·코일은 `equipment/scope.ts updateScopes`가 오실로스코프에 이어진 회로만 푼다(회로 시간 = 시간축 × 10 × 2씩 전진, 120 ms마다). 발생기 COM · 오실로스코프 GND는 항상 땅(0 V)이다. 계산 결과(파형·측정값)는 기구의 `sim` 객체에 둔다 — 기구 필드에 숫자·글자로 두면 되돌리기·스냅숏이 계산값까지 기록한다. 직류 해석(`solveDCCircuits`)은 축전기를 끊김, 코일을 R_L로 본다.
 10. 되돌리기는 기구의 **단순 값 필드**(숫자·참거짓·글자)와 배치만 기록한다. 되돌릴 설정을 하위 객체에 두면 안 잡히므로 기구 자신의 필드에 둔다.
 
 ## 테스트 (tests/)
@@ -54,6 +55,5 @@
 ## 남은 일 (PLAN.md 참고)
 - 다음 세션 (설계부터, Opus): 
   1. 터치 피드백 강화.
-  2. 2.14.1 칠판 비우기·시계·온습도계, 2.15 오실로스코프 (설계: PLAN.md "2.15 설계").
 - 멀티플레이어 후속: 방장 넘기기, 아바타 디자인, 측정 기록을 방장 기준으로 통일(표본 전송), 플레이어 충돌, 미니맵에 아바타, TURN(다른 Wi-Fi).
 - 광학 B(광센서·편광판·브루스터각), 화학 3.2 중화열, 대형 실험 기구(보류, 회전 관성 실험대 후보).

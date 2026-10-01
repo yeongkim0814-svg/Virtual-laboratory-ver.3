@@ -12,6 +12,7 @@
  *   칸 6, 7 아래 선반 (불투명 문 안) : 직류 전원 장치, 마이크로전류계, 광전관 2개 (Cs · Na 음극)
  *
  * 뒤쪽 벽 낮은 수납장: 칸 0(가로로 긴 칸, 문을 아래로 젖혀 엶) 역학 레일 1.2 m, 칸 1 수레 2대 + 선반에 질량 막대 250 g × 4, 칸 2 운동 센서 2개
+ *   칸 8 오실로스코프, 칸 9 함수 발생기, 칸 10 축전기 4종(바닥) · 코일 2종(선반), 칸 11 저항 1 kΩ · 10 kΩ · 정류 다이오드 2개
  * 칠판 앞 교탁: 노트북 1·2, 스탠딩 테이블: 노트북 3 (측정 프로그램)
  * 준비실 (화학 실험용):
  *   시약장 유리문 칸: 0.1 M HCl · NaOH · CH₃COOH · NH₃, 증류수 2병, 지시약 3종(페놀프탈레인·메틸 오렌지·BTB), 만능 pH 시험지
@@ -31,7 +32,8 @@ import { BoardEraser, Chalk } from '../world/chalkboard';
 import { CHALK_TRAY } from '../world/buildFurniture';
 import { CHEM_BOOK, PHYSICS_BOOK } from '../content/books';
 import { buildPlacementBook } from '../content/placementBook';
-import { Ammeter, Bulb, KnifeSwitch, Led, Resistor, Voltmeter, type CircuitPart } from './circuitParts';
+import { Ammeter, Bulb, Capacitor, Inductor, KnifeSwitch, Led, RectDiode, Resistor, Voltmeter, type CircuitPart } from './circuitParts';
+import { FuncGen, Oscilloscope } from './scope';
 import { Cart, Pulley, Rail, massBar } from './track';
 import { Laptop, MotionSensor, PHSensor } from './sensors';
 import { Container, DropperBottle, PHPaper, REAGENTS, beaker, burette, cylinder, flask, reagentBottle } from './glassware';
@@ -45,8 +47,11 @@ export interface Stock {
   supplies: DCPowerSupply[];
   ammeters: Microammeter[];
   tubes: Phototube[];
-  /** 직류 회로 부품 (저항·전구·스위치·전압계·전류계) */
+  /** 회로 부품 (저항·전구·스위치·전압계·전류계·LED·축전기·코일·정류 다이오드) */
   circuitParts: CircuitPart[];
+  /** 함수 발생기 · 오실로스코프 */
+  funcGens: FuncGen[];
+  scopes: Oscilloscope[];
   /** 교탁 위 실험 교재 (물리 · 화학) */
   textbooks: Textbook[];
   rails: Rail[];
@@ -95,7 +100,14 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
   const dcAmmeters = [new Ammeter('전류계 1'), new Ammeter('전류계 2')];
   // LED: 20 mA에서 V_f = 접합 전압 + 10 Ω × 20 mA ≈ 빨강 2.0 · 초록 2.4 · 파랑 2.9 V
   const leds = [new Led('빨강', 620, 0xff3020, 1.8), new Led('초록', 525, 0x30e040, 2.2), new Led('파랑', 465, 0x3060ff, 2.7)];
-  const circuitParts: CircuitPart[] = [...resistors, ...bulbs, knife, ...voltmeters, ...dcAmmeters, ...leds];
+  // 교류·과도 회로 (오실로스코프 실험): 축전기 0.1 · 1 · 10 · 100 μF, 코일 10 mH(R_L 2 Ω) · 100 mH(R_L 20 Ω), 정류 다이오드 2개, 저항 1 kΩ · 10 kΩ
+  const funcGens = [new FuncGen()];
+  const scopes = [new Oscilloscope()];
+  const acResistors = [new Resistor(1000), new Resistor(10000)];
+  const caps = [0.1e-6, 1e-6, 10e-6, 100e-6].map((C) => new Capacitor(C));
+  const coils = [new Inductor(0.01, 2), new Inductor(0.1, 20)];
+  const diodes = [new RectDiode(), new RectDiode()];
+  const circuitParts: CircuitPart[] = [...resistors, ...bulbs, knife, ...voltmeters, ...dcAmmeters, ...leds, ...acResistors, ...caps, ...coils, ...diodes];
   const rails = [new Rail()];
   const carts = [new Cart('수레 A', 0x2f6fb0), new Cart('수레 B', 0xd07a2a)];
   // 교탁(높이 0.76 m): 화면이 실험실 쪽(+x)을 보게 90° 돌려 놓는다. 스탠딩 테이블(1.05 m): 교사 쪽(−x)을 보게
@@ -213,6 +225,15 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
     at(tubes[0], cab.slot(7, 1, 0.55)),
     at(tubes[1], cab.slot(7, 1, 0.85)),
   ];
+  // 오실로스코프 실험 기구: 낮은 수납장 칸 8 ~ 11 (이름표는 등록 순서이므로 목록 끝에 붙인다)
+  items.push(
+    at(scopes[0], low.slot(8, 0, 0.5)),
+    at(funcGens[0], low.slot(9, 0, 0.5)),
+    ...caps.map((c, i) => at(c, low.slot(10, 0, 0.08 + i * 0.28))),
+    ...coils.map((c, i) => at(c, low.slot(10, 1, 0.25 + i * 0.5))),
+    ...acResistors.map((r, i) => at(r, low.slot(11, 0, 0.08 + i * 0.28))),
+    ...diodes.map((d, i) => at(d, low.slot(11, 0, 0.64 + i * 0.28))),
+  );
   // 실험 장비 배치 교재: 보관장 구역 a ~ d, 칸 코드(a-3)는 처음 놓인 자리에서 만든다.
   // 이름표는 등록 순서로 정해지므로 새 기구는 목록 끝에 붙인다
   const placement = new Textbook(buildPlacementBook([
@@ -223,5 +244,5 @@ export function stockEquipment(cabs: Map<string, StorageCabinet>): Stock {
   ], items), 0x9a6a2a);
   items.push(desk(placement, 2.25, 1.65, Math.PI / 2));
   textbooks.push(placement);
-  return { items, strings, springs, lasers, lightBoxes, supplies, ammeters, tubes, circuitParts, textbooks, rails, carts, laptops, motionSensors, phSensors, forceSensors, photogates, containers };
+  return { items, strings, springs, lasers, lightBoxes, supplies, ammeters, tubes, circuitParts, funcGens, scopes, textbooks, rails, carts, laptops, motionSensors, phSensors, forceSensors, photogates, containers };
 }

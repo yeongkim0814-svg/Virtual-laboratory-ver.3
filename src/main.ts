@@ -46,6 +46,9 @@ import { CircuitPanel } from './ui/circuitPanel';
 import { BookReader } from './ui/bookReader';
 import { BoardEditor } from './ui/boardEditor';
 import { Led, solveDCCircuits, type DCCircuitState } from './equipment/circuitParts';
+import { updateScopes } from './equipment/scope';
+import { ScopePanel } from './ui/scopePanel';
+import { Transient, waveform } from './sim/transient';
 import { PlaceBar } from './ui/placeBar';
 import { UndoKeeper } from './net/undo';
 import { Session, type Hooks, type PlayerInfo } from './net/session';
@@ -162,7 +165,8 @@ let dcStates: DCCircuitState[] = [];
 const circuitPanel = new CircuitPanel((open) => panelToggled(circuitPanel, open), (s) => dcStates.find((c) => c.supply === s) ?? null);
 const trackPanel = new TrackPanel((open) => panelToggled(trackPanel, open));
 const loggerPanel = new LoggerPanel((open) => panelToggled(loggerPanel, open));
-const panels: { el: HTMLElement; isOpen: boolean; close(): void }[] = [pendulumPanel, springPanel, slitPanel, photoPanel, supplyPanel, circuitPanel, trackPanel, loggerPanel];
+const scopePanel = new ScopePanel((open) => panelToggled(scopePanel, open), stock.funcGens);
+const panels: { el: HTMLElement; isOpen: boolean; close(): void }[] = [pendulumPanel, springPanel, slitPanel, photoPanel, supplyPanel, circuitPanel, trackPanel, loggerPanel, scopePanel];
 // 센서 ↔ 노트북 (USB)
 const sensorNet = new SensorNetwork(scene, stock.laptops, [...stock.motionSensors, ...stock.phSensors, ...stock.forceSensors, ...stock.photogates]);
 for (const l of stock.laptops) l.onOpenPanel = (lap) => loggerPanel.open(lap);
@@ -270,7 +274,7 @@ for (const s of stock.springs) s.onOpenPanel = (sp) => springPanel.open(sp);
 for (const l of stock.lasers) l.onOpenPanel = (laser) => slitPanel.open(laser);
 
 // 전원: 실험 테이블 옆면의 콘센트 ↔ 전원이 필요한 기기(레이저)
-const power = new PowerSystem(scene, furniture.outlets, [...stock.lasers, ...stock.supplies, ...stock.lightBoxes]);
+const power = new PowerSystem(scene, furniture.outlets, [...stock.lasers, ...stock.supplies, ...stock.lightBoxes, ...stock.funcGens, ...stock.scopes]);
 // 되돌리기: 사람마다 마지막 조작 하나 (명령 실행 전후 상태 비교, 화학 조작은 되돌리지 않음)
 const undo = new UndoKeeper({ bus, items, holdings, wires, power, containers: stock.containers });
 
@@ -305,6 +309,12 @@ window.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) undoBtn.click();
 });
 for (const b of stock.lightBoxes) b.powerActions = (box) => power.deviceActions(box);
+for (const g of stock.funcGens) g.powerActions = (d) => power.deviceActions(d);
+for (const o of stock.scopes) {
+  o.powerActions = (d) => power.deviceActions(d);
+  o.onOpenPanel = (sc) => scopePanel.open(sc);
+}
+for (const g of stock.funcGens) g.onOpenPanel = (gen) => scopePanel.open(stock.scopes.find((s) => s.sim.gens.includes(gen)) ?? stock.scopes[0], gen);
 for (const l of stock.lasers) l.powerActions = (laser) => power.deviceActions(laser);
 for (const s of stock.supplies) {
   s.powerActions = (d) => power.deviceActions(d);
@@ -791,7 +801,7 @@ function collectEquipmentBoxes(): void {
 
 // 테스트용: 주소 끝이 #debug일 때만 내부 객체를 노출 (자동 테스트가 조립을 빠르게 재현하는 데 씀)
 if (location.hash === '#debug') {
-  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans, session, avatars, sync, holdings, LocalTransport, physics };
+  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans, session, avatars, sync, holdings, LocalTransport, physics, scopePanel, sim: { Transient, waveform } };
 }
 
 renderer.info.autoReset = false; // 한 프레임의 그리기 호출을 모두 더한다 (진단 표시용)
@@ -832,7 +842,10 @@ renderer.setAnimationLoop(() => {
     s.update();
     s.hasTube = circuits.some((c) => c.supply === s && c.tube);
   }
+  updateScopes({ wires, scopes: stock.scopes, gens: stock.funcGens, parts: stock.circuitParts, supplies: stock.supplies }, now);
   for (const p of stock.circuitParts) p.update(dt);
+  for (const g of stock.funcGens) g.update();
+  for (const o of stock.scopes) o.update();
   updateGlowLights();
   for (const a of stock.ammeters) a.update();
   beams.update();
@@ -884,6 +897,7 @@ renderer.setAnimationLoop(() => {
   opticsPanel.update();
   boardEditor.update();
   supplyPanel.update();
+  scopePanel.update();
   trackPanel.update();
   loggerPanel.update();
   updateDock();
