@@ -74,6 +74,7 @@ interface Avatar {
   pitch: number;
   t: number;
   reachAt: number;
+  reachSpeed: number;
   reachPoint: THREE.Vector3 | null;
 }
 
@@ -253,7 +254,7 @@ export class Avatars {
     this.scene.add(group);
     a = {
       info, group, anchor, rig, motion: newMotion(), target: { x: 0, y: 0, z: 0, yaw: 0 }, held: null, seen: false,
-      vx: 0, vz: 0, mvx: 0, mvz: 0, poseAt: 0, c: 0, pitch: 0, t: 0, reachAt: -Infinity, reachPoint: null,
+      vx: 0, vz: 0, mvx: 0, mvz: 0, poseAt: 0, c: 0, pitch: 0, t: 0, reachAt: -Infinity, reachSpeed: 1, reachPoint: null,
     };
     this.map.set(info.id, a);
     return a;
@@ -306,10 +307,11 @@ export class Avatars {
   }
 
   /** 이 사람이 방금 무언가를 조작했다 → 오른손을 세계 좌표 point(없으면 몸 앞 0.5 m 가슴 높이)로 뻗는다 (0.25 s 뻗기 · 0.15 s 멈춤 · 0.3 s 돌아옴) */
-  reach(id: string, point?: THREE.Vector3): void {
+  reach(id: string, point?: THREE.Vector3, speed = 1): void {
     const a = this.map.get(id);
     if (!a) return;
     a.reachAt = performance.now();
+    a.reachSpeed = speed;
     a.reachPoint = point ? (a.reachPoint ?? new THREE.Vector3()).copy(point) : null;
   }
 
@@ -364,7 +366,7 @@ export class Avatars {
       }
       const o = stepMotion(a.motion, {
         x: g.position.x, z: g.position.z, vx: a.mvx, vz: a.mvz, headYaw: g.rotation.y, pitch: a.pitch, c: a.c, holding: !!a.held,
-        reachAge: (now - a.reachAt) / 1000, reachPoint: a.reachPoint, t: a.t,
+        reachAge: ((now - a.reachAt) / 1000) * a.reachSpeed, reachPoint: a.reachPoint, t: a.t,
       }, dt);
       const r = a.rig;
       r.pelvis.position.set(0, o.pelvisY, 0);

@@ -62,9 +62,12 @@ module.exports = {
 
     // 남이 집기 (방장 화면)
     const w1 = await run(A, pickCmd, B);
-    const e1 = near(w1.out, 0.12);
+    const e1 = near(w1.out, 0.08);
     t.check(dist(e1.p, w1.home) < 0.02, `남이 집을 때 ${e1.t.toFixed(2)} s: 물체는 제자리 (이동 ${(dist(e1.p, w1.home) * 100).toFixed(1)} cm)`);
     const l1 = w1.out[w1.out.length - 1];
+    // 빨라진 집기 (시간표 ×2): 0.2 s 멈춤 + 0.15 s → 0.4 s면 손에 들어와 있다
+    const in1 = w1.out.find((o) => o.t >= 0.4);
+    t.check(in1 && dist(in1.p, in1.logic) < 0.01, `집기 ${in1 && in1.t.toFixed(2)} s 뒤 이미 손에 (그려진 자리–손 ${in1 && (dist(in1.p, in1.logic) * 100).toFixed(2)} cm, 예전 0.55 s)`);
     t.check(dist(w1.out[0].logic, w1.out[0].p) > 0.05 && dist(l1.logic, l1.p) < 0.001, `논리 위치는 처음부터 손에 있고(그려진 자리와 ${(dist(w1.out[0].logic, w1.out[0].p) * 100).toFixed(0)} cm 차) 끝나면 같음`);
     const handNow = await A.ev(() => { const { avatars, THREE } = window.lab; const it = avatars.heldBy('p1'); return [it.object.getWorldPosition(new THREE.Vector3()).distanceTo(avatars.handOf('p1'))]; });
     t.check(handNow[0] < 0.01, `${l1.t.toFixed(2)} s 뒤에는 손끝에 (차이 ${(handNow[0] * 100).toFixed(2)} cm)`);
@@ -79,8 +82,10 @@ module.exports = {
     // 내 손(1인칭)으로 집기
     await A.ev(() => { window.lab.player.pos.x = 3.5; window.lab.player.pos.z = 5.2; });
     const w3 = await run(A, pickCmd, A);
-    const e3 = near(w3.out, 0.12);
+    const e3 = near(w3.out, 0.08);
     t.check(dist(e3.p, w3.home) < 0.03, `내가 집을 때 ${e3.t.toFixed(2)} s: 물체는 제자리 (이동 ${(dist(e3.p, w3.home) * 100).toFixed(1)} cm)`);
+    const in3 = w3.out.find((o) => o.t >= 0.4);
+    t.check(in3 && dist(in3.p, in3.logic) < 0.01, `내가 집기 ${in3 && in3.t.toFixed(2)} s 뒤 이미 들림 위치 (차이 ${in3 && (dist(in3.p, in3.logic) * 100).toFixed(2)} cm)`);
     const inCam = await A.ev((R) => { const { items, camera } = window.lab; const it = items.find((i) => i.name.startsWith(R)); return it.object.parent === camera && it.object.position.length() > 0.3; }, R);
     t.check(inCam, '1.2 s 뒤에는 카메라 앞 손 자리에 들림');
     await B.end();

@@ -32,6 +32,8 @@ export const REACH_OUT = 0.25;
 export const REACH_HOLD = 0.15;
 export const REACH_BACK = 0.3;
 export const REACH_TIME = REACH_OUT + REACH_HOLD + REACH_BACK;
+/** 집기만 시간표를 이 배로 빨리 (0.7 s → 0.35 s): 물체가 빨리 손에 들어오게 */
+export const PICK_SPEED = 2;
 
 const GAIT_ON = 0.15; // 걸음 시계가 도는 속도 문턱 (m/s) · 멈춤 문턱 (겹침으로 떨림 방지)
 const GAIT_OFF = 0.08;

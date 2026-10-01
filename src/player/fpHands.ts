@@ -50,6 +50,7 @@ export class FpHands {
   /** 손이 기구를 잡은 정도 (왼 · 오른, 0 ~ 1) */
   private grab = [0, 0];
   private reachAt = -Infinity;
+  private reachSpeed = 1;
   private reachPoint: THREE.Vector3 | null = null;
   private lastX = NaN;
   private lastZ = NaN;
@@ -79,8 +80,9 @@ export class FpHands {
   }
 
   /** 내가 방금 무언가를 조작했다 → 오른손을 그 자리로 뻗는다 (아바타와 같은 시간표) */
-  reach(point?: THREE.Vector3 | null): void {
+  reach(point?: THREE.Vector3 | null, speed = 1): void {
     this.reachAt = performance.now();
+    this.reachSpeed = speed;
     this.reachPoint = point ?? null;
   }
 
@@ -122,7 +124,7 @@ export class FpHands {
     this.grab[1] += ((held ? 1 : 0) - this.grab[1]) * (1 - Math.exp(-dt / 0.15));
 
     // ---- 손 목표 → ik2 (어깨 기준) ----
-    const k = reachBlend((performance.now() - this.reachAt) / 1000);
+    const k = reachBlend(((performance.now() - this.reachAt) / 1000) * this.reachSpeed);
     for (let i = 0; i < 2; i++) {
       const side = i === 0 ? -1 : 1;
       // 쉼: 어깨 아래 · 약간 뒤 (화면 아래로 사라짐), 걸으면 살짝 흔들림

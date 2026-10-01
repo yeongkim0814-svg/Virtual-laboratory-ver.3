@@ -293,7 +293,7 @@ canvas.plot {
 
 /* 위치·방향 막대 (아래 가운데, 두 줄) */
 #rotate-bar {
-  position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%);
   display: flex; flex-direction: column; gap: 6px; width: max-content;
   padding: 10px 12px;
   background: var(--panel); border: 2px solid var(--amber);
@@ -316,13 +316,16 @@ canvas.plot {
 /* 패널이 열리면 미니맵·설정 버튼은 가리고, 조준점은 남은 왼쪽 영역 가운데로 */
 #stage.panel-open #minimap, #stage.panel-open .icon-btn, #stage.panel-open #hint { display: none; }
 /* 확대 버튼: 설정 버튼 왼쪽. 패널이 열려 있어도 패널 왼쪽에 남아 있다 (측정하면서 무늬를 확대해 보도록) */
-#btn-zoom { right: calc(16px + min(280px, 24%) + 10px + 54px); }
-#btn-help { right: calc(16px + min(280px, 24%) + 10px + 108px); font-weight: 700; }
-#btn-undo { right: calc(16px + min(280px, 24%) + 10px + 162px); font-size: 22px; }
-#btn-undo:disabled, #btn-undo.blocked { opacity: 0.35; }
-#btn-net { right: calc(16px + min(280px, 24%) + 10px + 216px); }
+#btn-help { right: calc(16px + min(280px, 24%) + 10px + 54px); font-weight: 700; }
+#btn-net { right: calc(16px + min(280px, 24%) + 10px + 108px); }
 #btn-net.on { background: var(--amber); color: var(--bg); }
-#btn-crouch { right: calc(16px + min(280px, 24%) + 10px + 270px); }
+/* 자주 누르는 버튼(앉기 · 되돌리기 · 확대)은 오른쪽 아래, 크게: 오른손 엄지로 둘러보면서 바로 누른다.
+   pointerdown으로 받아(main.ts tapButton) 왼손이 조이스틱을 누르고 있어도 눌린다 (click은 두 손가락일 때 안 생김) */
+#btn-crouch, #btn-undo, #btn-zoom { top: auto; bottom: 16px; width: 60px; height: 60px; font-size: 26px; touch-action: none; }
+#btn-crouch { right: 16px; }
+#btn-undo { right: 86px; }
+#btn-zoom { right: 156px; }
+#btn-undo:disabled, #btn-undo.blocked { opacity: 0.35; }
 #btn-crouch[aria-pressed='true'] { background: var(--amber); color: var(--bg); }
 #net-panel { z-index: 20; pointer-events: auto; }
 #net-panel input[type='text'] { flex: 1; min-width: 0; padding: 8px; font: inherit; background: #000; color: var(--text); border: 2px solid var(--amber-dim, var(--amber)); }
@@ -334,7 +337,7 @@ canvas.plot {
 #net-roster li { display: flex; align-items: center; gap: 8px; padding: 4px 0; color: var(--text); }
 #net-roster i { width: 14px; height: 14px; display: inline-block; border: 1px solid #000; }
 
-#stage.panel-open #btn-zoom { display: block; right: calc(var(--panel-w) + 24px); }
+#stage.panel-open #btn-zoom { display: block; right: calc(var(--panel-w) + 24px); bottom: 16px; }
 #btn-zoom[aria-pressed='true'] { background: var(--amber); color: var(--bg); }
 
 /* ---------- 시작 화면 ---------- */
@@ -386,7 +389,7 @@ canvas.plot.tall { height: 130px; }
 
 /* ---------- 따르기 막대 · 알림 ---------- */
 #pour-bar {
-  position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%);
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;
   padding: 10px 12px;
   background: var(--panel); border: 2px solid var(--amber);

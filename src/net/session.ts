@@ -18,7 +18,7 @@ import type { Command, CommandBus } from './commands';
 import type { Channel, HostHandle, Link, Transport } from './transport';
 
 export const MAX_PLAYERS = 4;
-export const PROTOCOL = 4; // 4: 이름 바꾸기(name), 2: 큰 메시지 조각내기 (transport.ts framedSender), 3: 자세에 pitch · c
+export const PROTOCOL = 5; // 5: 탁상시계·온습도계 기구 추가(이름표 목록), 4: 이름 바꾸기(name), 2: 큰 메시지 조각내기 (transport.ts framedSender), 3: 자세에 pitch · c
 export const COLORS = [0xe8923a, 0x3a8fe8, 0x5cc15c, 0xd04c8c];
 
 export interface PlayerInfo {

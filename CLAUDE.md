@@ -12,7 +12,7 @@
 ## 작업 규칙
 - 브랜치: 지시된 개발 브랜치에서만. 작업 단위로 커밋 → `git push -u origin <브랜치>`. PR은 요청할 때만.
 - 커밋 전: `npm run build:docs` (docs/ 갱신, GitHub Pages) → `npm test`. 커밋 메시지는 한국어, 시스템 지시의 트레일러를 붙인다.
-- 문서는 기능마다 **README(상세) · PLAN(표 한 줄) · index.html 도움말(#help)** 을 맞춘다. 교재(src/content/books.ts)는 실험 방법이 바뀔 때만.
+- 문서는 기능마다 **README(상세) · PLAN(표 한 줄)** 을 맞춘다. index.html 도움말(#help)은 **조작 방법과 실험실 작동 방식만** (실험별 방법은 교재에) — 조작이 바뀔 때만 고친다. 교재(src/content/books.ts)는 실험 방법이 바뀔 때만.
 - 큰 파일은 통째로 읽지 않는다: `grep -n`으로 위치를 찾고 해당 구간만 읽는다. 스크린샷은 모양이 중요한 것만 (숫자는 테스트로).
 - 토큰 절약: 탐색은 Explore 에이전트, 기계적 문서 작업은 저렴한 모델(haiku)로. 설계가 어려운 것만 opus.
 

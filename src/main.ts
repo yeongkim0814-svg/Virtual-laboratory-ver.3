@@ -14,7 +14,8 @@ import { applySet, bus, type Command, type Vec3 } from './net/commands';
 import { buildLab } from './world/buildLab';
 import { buildFurniture } from './world/buildFurniture';
 import { Door } from './world/door';
-import { createBenchItems, HITBOX_MAT, Item, type Plug, type Socket } from './world/items';
+import { at, createBenchItems, HITBOX_MAT, Item, type Plug, type Socket } from './world/items';
+import { DeskClock, Hygrometer } from './equipment/deskInstruments';
 import { equipmentBoxes } from './world/cable';
 import { SPAWN, roomNameAt } from './world/layout';
 import { INTERACT_RANGE, type Action, type Interactable } from './world/interactable';
@@ -56,6 +57,7 @@ import { UndoKeeper } from './net/undo';
 import { Session, COLORS, type Hooks, type PlayerInfo } from './net/session';
 import { Avatars } from './net/avatars';
 import * as avatarMotion from './net/avatarMotion';
+import { PICK_SPEED } from './net/avatarMotion';
 import { WorldSync, type Holdings } from './net/worldSync';
 import { PhysicsSync, type PhysState } from './net/physicsSync';
 import { NetPanel } from './ui/netPanel';
@@ -110,7 +112,10 @@ scene.add(door.object);
 
 // 기구: 테이블 위의 비커 등 + 보관장 속 역학·광학 기구
 const stock = stockEquipment(furniture.cabinets);
-const items: Item[] = [...createBenchItems(), ...stock.items];
+// 탁상시계·온습도계: 실험 테이블 1 뒤쪽 모서리. 맨 끝에 붙여 기존 기구의 명령 이름표가 바뀌지 않게
+const deskClock = at(new DeskClock(), new THREE.Vector3(4.45, 0.85, 4.8));
+const hygrometer = at(new Hygrometer(), new THREE.Vector3(4.45, 0.85, 4.55));
+const items: Item[] = [...createBenchItems(), ...stock.items, deskClock, hygrometer];
 for (const it of items) scene.add(it.object);
 
 // 문·보관장 문은 광선에 맞은 부분에서 주인을 찾을 수 있게 표시해 둔다 (기구는 userData.item)
@@ -144,8 +149,10 @@ function reachPointOf(c: Command): THREE.Vector3 | null {
 bus.listeners.push((c, ok) => {
   if (ok && ['act', 'use', 'place', 'attach', 'wire', 'unwire', 'pour'].includes(c.t)) {
     const point = reachPre ?? reachPointOf(c) ?? undefined;
-    if (c.by === bus.me) fpHands.reach(point);
-    else avatars.reach(c.by, point);
+    // 집기는 시간표를 빠르게 (물체가 빨리 손에 들어옴, carryGlide와 같은 배율)
+    const speed = c.t === 'act' && holdings.heldOf(c.by) === bus.registry.get(c.target) ? PICK_SPEED : 1;
+    if (c.by === bus.me) fpHands.reach(point, speed);
+    else avatars.reach(c.by, point, speed);
   }
   reachPre = null;
 });
@@ -329,13 +336,27 @@ const session = new Session(bus, netHooks);
 const netPanel = new NetPanel(session);
 bus.recorder = undo;
 bus.on('undo', (c) => undo.undo(c.by));
+/**
+ * 손가락이 닿는 순간(pointerdown) 누르는 버튼: click은 다른 손가락이 화면(조이스틱)을 누르고 있으면 안드로이드 크롬이 만들지 않아
+ * 걸으면서 앉기·되돌리기·확대가 안 됐다. pointerdown만 받는다 (click도 받으면 마우스에서 두 번 실행됨)
+ */
+function tapButton(el: HTMLElement, run: () => void): void {
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if ((el as HTMLButtonElement).disabled) return;
+    run();
+  });
+}
 const undoBtn = $('btn-undo') as HTMLButtonElement;
-undoBtn.addEventListener('click', () => {
+function doUndo(): void {
+  if (undoBtn.disabled) return;
   bus.dispatch({ t: 'undo', by: bus.me });
   toast(undo.message);
-});
+}
+tapButton(undoBtn, doUndo);
 window.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) undoBtn.click();
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) doUndo();
 });
 for (const b of stock.lightBoxes) b.powerActions = (box) => power.deviceActions(box);
 for (const g of stock.funcGens) g.powerActions = (d) => power.deviceActions(d);
@@ -554,12 +575,12 @@ function setCrouch(on: boolean): void {
   player.crouch = on;
   crouchBtn.setAttribute('aria-pressed', String(on));
 }
-crouchBtn.addEventListener('click', () => setCrouch(!player.crouch));
+tapButton(crouchBtn, () => setCrouch(!player.crouch));
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyC' && !e.repeat && !e.ctrlKey && !e.metaKey && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) setCrouch(!player.crouch);
 });
 const zoomBtn = $('btn-zoom');
-zoomBtn.addEventListener('click', () => {
+tapButton(zoomBtn, () => {
   const on = zoomBtn.getAttribute('aria-pressed') !== 'true';
   zoomBtn.setAttribute('aria-pressed', String(on));
   camera.fov = on ? 18 : 70;
@@ -866,6 +887,8 @@ renderer.setAnimationLoop(() => {
   for (const r of stock.rails) r.update(dt);
   updateBurettes(dt);
   for (const tick of furniture.tickers) tick(now / 1000);
+  deskClock.tick();
+  hygrometer.tick();
   sensorNet.update();
   for (const l of stock.laptops) l.update(dt, scene);
   updateLights(now / 1000);

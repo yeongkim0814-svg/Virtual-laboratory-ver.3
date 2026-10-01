@@ -1,13 +1,13 @@
 /**
  * 집기·놓기의 눈속임: 상태(누가 들었나·어디 놓였나)는 명령 순간에 바로 바뀌지만, 화면의 물체는 손 뻗기 시간표에 맞춰 옮겨 간다.
- *   집기: 손이 닿을 때까지(REACH_OUT) 제자리 → 손으로 돌아오는 동안(REACH_BACK) 따라온다
+ *   집기 (시간표 PICK_SPEED배 빠름): 손이 닿아 멈춘 동안(0.2 s) 제자리 → 손이 돌아오는 동안(0.15 s) 따라온다
  *   놓기: 손에서 떠나 REACH_OUT 동안 놓을 자리로 (손이 같은 시간에 같은 곡선으로 뻗는다)
  * 논리(판정·digest·스냅숏·물리)는 언제나 최종 자리를 본다: 중간 위치는 그리기 직전(applyGlides)에만 덮어쓰고 직후(restoreGlides)에 되돌린다.
  * 그래서 기기마다 손 뻗기 시각이 달라도 세계 상태는 어긋나지 않는다 (멀티플레이어 digest).
  */
 import * as THREE from 'three';
 import type { Item } from '../world/items';
-import { REACH_BACK, REACH_OUT } from '../net/avatarMotion';
+import { PICK_SPEED, REACH_BACK, REACH_HOLD, REACH_OUT } from '../net/avatarMotion';
 
 interface Glide {
   parent: THREE.Object3D;
@@ -41,7 +41,7 @@ export function startGlide(item: Item, from: { p: THREE.Vector3; q: THREE.Quater
   glides.set(item, { parent, fromP: from.p, fromQ: from.q, age: 0, wait, dur });
 }
 
-export const pickGlide = (item: Item, from: { p: THREE.Vector3; q: THREE.Quaternion }) => startGlide(item, from, REACH_OUT, REACH_BACK);
+export const pickGlide = (item: Item, from: { p: THREE.Vector3; q: THREE.Quaternion }) => startGlide(item, from, (REACH_OUT + REACH_HOLD) / PICK_SPEED, REACH_BACK / PICK_SPEED);
 export const placeGlide = (item: Item, from: { p: THREE.Vector3; q: THREE.Quaternion }) => startGlide(item, from, 0, REACH_OUT);
 
 /** 진행 중인 눈속임을 버린다 (다시 집기·놓기·끼우기 앞) */
