@@ -4,17 +4,18 @@
  * 각도 규칙 (관절 그룹의 rotation.x, 라디안): 아래로 늘어진 팔다리는 + 이면 앞(−z)으로 흔들린다.
  *   위로 뻗은 몸통·머리는 − 이면 앞으로 숙인다 (몸통 기울이기), 머리는 + 이면 위를 본다.
  *
- * 걷기: 걸음 위상 φ가 걸음 빈도 0.9·√(v/1.4) Hz로 돈다 (1.4 m/s에서 한 주기 = 두 걸음 = 약 1.1 s) → 제자리에서는 멈춘다.
- *   엉덩이 ±0.4 rad, 무릎은 다리가 앞으로 나올 때 굽힘, 팔은 반대 다리와 같은 박자.
+ * 걷기: 걸음 위상 φ가 걸음 빈도 1.15·√(v/1.4) Hz로 돈다 (1.4 m/s에서 한 주기 = 두 걸음 = 약 0.9 s) → 제자리에서는 멈춘다.
+ *   엉덩이 각은 발이 땅에서 미끄러지지 않게 정한다: 한 주기에 발이 가는 거리 4·L·sin θ = v / f. 무릎은 다리가 앞으로 나올 때 굽힘, 팔은 반대 다리와 같은 박자.
  *   골반 높이 = 땅을 딛은(더 낮은) 다리의 길이로 정해 발이 땅에 붙는다 → 걸을 때 몸이 저절로 조금 오르내린다.
  */
 
-export const THIGH = 0.4;
-export const SHIN = 0.4;
-export const FOOT = 0.07;
+export const THIGH = 0.3;
+export const SHIN = 0.3;
+export const FOOT = 0.1;
 export const HIP_DROP = 0.09; // 골반 중심 ~ 엉덩이 관절
-const HIP_AMP = 0.4;
-const KNEE_AMP = 0.6;
+/** 걸을 때 엉덩이 각 상한 (rad) · 무릎 굽힘 · 팔 흔들기 */
+const HIP_MAX = 0.55;
+const KNEE_AMP = 0.85;
 const ARM_AMP = 0.35;
 const CROUCH_HIP = 1.48; // 85°
 const CROUCH_KNEE = -2.27; // −130°
@@ -63,6 +64,9 @@ export interface Joints {
   elbowR: number;
   /** 몸통 위아래 크기 비율 (숨쉬기) */
   breath: number;
+  /** 걸을 때 골반 좌우 이동 (m) · 몸통 좌우 기울기 (rad) */
+  sway: number;
+  roll: number;
 }
 
 const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
@@ -73,20 +77,24 @@ export const legHeight = (hip: number, knee: number) => THIGH * Math.cos(hip) + 
 
 export function stepMotion(s: MotionState, m: MotionIn, dt: number): Joints {
   // ---- 걷기 세기: 속도 0.05 m/s 아래는 0 (제자리 걸음 방지), 제자리에서 돌면 작게 디딤 ----
-  const walk = m.speed < 0.05 ? 0 : clamp(m.speed / 1.2, 0, 1);
+  const v = m.speed < 0.05 ? 0 : m.speed;
+  const walk = clamp(v / 1.2, 0, 1);
   const spin = clamp(Math.abs(m.turn) / 1.5, 0, 1) * 0.3;
   const target = Math.max(walk, spin) * (1 - m.c);
   s.amp += (target - s.amp) * follow(dt, 0.1);
-  // 걸음 빈도(주기/초): 사람은 1.4 m/s에서 약 0.9 Hz(1.8걸음/초), 빨리 걸을수록 보폭이 늘어 빈도는 √v로만 는다
-  const cadence = 0.9 * Math.sqrt(Math.max(m.speed, 0) / 1.4);
+  // 걸음 빈도(주기/초): 1.4 m/s에서 1.15 Hz, 빨리 걸을수록 보폭이 늘어 √v로만 증가 (최대 2 Hz)
+  const cadence = Math.min(2, 1.15 * Math.sqrt(v / 1.4));
   s.phase += Math.max(2 * Math.PI * cadence, Math.abs(m.turn) * 1.0) * dt;
   const sin = Math.sin(s.phase);
   const cos = Math.cos(s.phase);
   const c = m.c;
+  // 발이 땅에서 미끄러지지 않게: 한 주기에 발이 가는 거리 = 4·L·sin(θ) = v / f → 엉덩이 각 θ (다리 길이 L = 0.6 m)
+  const hipAmp = cadence > 0.05 ? Math.min(HIP_MAX, Math.asin(clamp(v / (4 * (THIGH + SHIN) * cadence), 0, 1))) : 0;
+  const stride = Math.max(hipAmp, 0.25) * s.amp;
 
   // ---- 다리 ----
-  const hipL = HIP_AMP * s.amp * sin * (1 - c) + CROUCH_HIP * c;
-  const hipR = -HIP_AMP * s.amp * sin * (1 - c) + CROUCH_HIP * c;
+  const hipL = stride * sin * (1 - c) + CROUCH_HIP * c;
+  const hipR = -stride * sin * (1 - c) + CROUCH_HIP * c;
   const kneeL = -KNEE_AMP * s.amp * Math.max(0, cos) * (1 - c) + CROUCH_KNEE * c;
   const kneeR = -KNEE_AMP * s.amp * Math.max(0, -cos) * (1 - c) + CROUCH_KNEE * c;
   const pelvisY = Math.max(legHeight(hipL, kneeL), legHeight(hipR, kneeR)) + HIP_DROP;
@@ -109,5 +117,7 @@ export function stepMotion(s: MotionState, m: MotionIn, dt: number): Joints {
   return {
     pelvisY, torsoX, headX, headY: s.headYaw, hipL, hipR, kneeL, kneeR, shoulderL, shoulderR, elbowL, elbowR,
     breath: 0.015 * Math.sin(2 * Math.PI * 0.25 * m.t) * (1 - s.amp) * (1 - c),
+    sway: 0.025 * s.amp * Math.sin(s.phase) * (1 - c),
+    roll: 0.05 * s.amp * Math.sin(s.phase) * (1 - c),
   };
 }

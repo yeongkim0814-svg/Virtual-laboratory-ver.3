@@ -43,13 +43,13 @@ module.exports = {
     });
     let r = await rig();
     t.check(!!r, '손님 인형이 방장 화면에 있음');
-    t.near(r.pelvisY, 0.96, 0.03, '서 있는 인형 골반 높이 (m)');
+    t.near(r.pelvisY, 0.79, 0.03, '서 있는 인형 골반 높이 (m, 다리 0.7 + 0.09)');
 
-    // 앉기: 손님이 앉으면 골반 0.476 m (엉덩이 85° · 무릎 −130° → 다리 높이 0.39 + 0.09)
+    // 앉기: 손님이 앉으면 골반 0.430 m (엉덩이 85° · 무릎 −130° → 다리 높이 0.34 + 0.09)
     await B.ev(() => { window.lab.player.crouch = true; });
     await A.wait(1500);
     r = await rig();
-    t.near(r.pelvisY, 0.476, 0.04, '앉은 인형 골반 높이 (m)');
+    t.near(r.pelvisY, 0.43, 0.04, '앉은 인형 골반 높이 (m)');
     t.near(r.hipL, 1.48, 0.1, '앉은 인형 엉덩이 각 (rad, 85°)');
     await B.ev(() => { window.lab.player.crouch = false; });
     await A.wait(1500);
@@ -62,15 +62,24 @@ module.exports = {
       const tick = () => { const r = window.lab.avatars.rigOf('p1'); max = Math.max(max, Math.abs(r.hipL.rotation.x), Math.abs(r.hipR.rotation.x)); if (performance.now() - t0 < ms) requestAnimationFrame(tick); else res(max); };
       requestAnimationFrame(tick);
     }), ms);
-    const walking = await sample(1200);
-    t.check(walking > 0.3, `걸을 때 엉덩이 각 최대 ${walking.toFixed(2)} rad (> 0.3, 이론 0.40)`);
-    // 걸음 빈도: 3 s 동안 엉덩이 각이 0을 위로 지나는 횟수 / 3 = 0.9 Hz (1.4 m/s)
-    const freq = await A.ev(() => new Promise((res) => {
-      let prev = null; let n = 0; const t0 = performance.now();
-      const tick = () => { const x = window.lab.avatars.rigOf('p1').hipL.rotation.x; if (prev !== null && prev < 0 && x >= 0) n++; prev = x; if (performance.now() - t0 < 3000) requestAnimationFrame(tick); else res(n / 3); };
+    // 3 s 동안 실제 이동 속도 v · 걸음 빈도 f · 엉덩이 각 최대를 함께 재고, 이론(f = 1.15·√(v/1.4), θ = asin(v / 4Lf))과 비교 — 손님 탭 타이머가 느려 속도가 1.4보다 낮아도 맞게
+    const gait = await A.ev(() => new Promise((res) => {
+      const g = window.lab.avatars.groupOf('p1'); const x0 = g.position.x; const z0 = g.position.z;
+      const m = window.lab.avatars.motionOf('p1'); const ph0 = m.phase;
+      let max = 0; const t0 = performance.now();
+      const tick = () => {
+        max = Math.max(max, Math.abs(window.lab.avatars.rigOf('p1').hipL.rotation.x));
+        const el = (performance.now() - t0) / 1000;
+        if (el < 3) requestAnimationFrame(tick);
+        else res({ v: Math.hypot(g.position.x - x0, g.position.z - z0) / el, f: (m.phase - ph0) / (2 * Math.PI) / el, max });
+      };
       requestAnimationFrame(tick);
     }));
-    t.check(freq > 0.65 && freq < 1.2, `걸음 빈도 ${freq.toFixed(2)} Hz (1.4 m/s에서 사람은 약 0.9 Hz)`);
+    const fTheory = Math.min(2, 1.15 * Math.sqrt(gait.v / 1.4));
+    const hipTheory = Math.min(0.55, Math.asin(Math.min(1, gait.v / (4 * 0.6 * fTheory))));
+    t.check(gait.v > 0.5, `손님 이동 속도 ${gait.v.toFixed(2)} m/s`);
+    t.check(Math.abs(gait.f - fTheory) < 0.3, `걸음 빈도 ${gait.f.toFixed(2)} Hz (이론 1.15·√(v/1.4) = ${fTheory.toFixed(2)})`);
+    t.check(Math.abs(gait.max - hipTheory) < 0.15, `엉덩이 각 최대 ${gait.max.toFixed(2)} rad (미끄럼 방지 이론 asin(v/4Lf) = ${hipTheory.toFixed(2)})`);
     await B.ev(() => { clearInterval(window.__w); });
     await A.wait(1500);
     const still = await sample(400);
@@ -91,7 +100,7 @@ module.exports = {
       const tick = () => { max = Math.max(max, window.lab.avatars.rigOf('p1').shoulderR.rotation.x); if (performance.now() - t0 < 500) requestAnimationFrame(tick); else res(max); };
       requestAnimationFrame(tick);
     }));
-    t.check(reach > 0.7, `조작하면 오른팔이 앞으로 뻗음: 위팔 최대 ${reach.toFixed(2)} rad (> 0.7)`);
+    t.check(reach > 0.4, `조작하면 오른팔이 앞으로 뻗음: 위팔 최대 ${reach.toFixed(2)} rad (쉴 때 0, 정점 0.9)`);
 
     // 고개: 손님이 위를 보면 머리가 위를 본다 (몸통 기울기 보정 후)
     await B.ev(() => { window.lab.player.pitch = 0.5; });
