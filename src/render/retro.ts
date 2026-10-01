@@ -6,7 +6,7 @@
  * 2. 후처리(포스트 프로세싱) 셰이더: 한 번 그린 화면(텍스처)을 다시 가공한다.
  *    - 외곽선: 깊이(카메라까지 거리)가 급격히 바뀌는 곳 = 물체의 테두리 → 어둡게
  *    - 색 보정: 채도를 낮추고 대비를 올리고 누런 초록빛으로 물들임 + 가장자리 어둡게(비네팅)
- *    - 색 단계 줄이기 + 디더링: 채널당 색을 18단계로 줄이고, 4×4 바이어(Bayer) 행렬로
+ *    - 색 단계 줄이기 + 디더링: 채널당 색을 20단계로 줄이고, 4×4 바이어(Bayer) 행렬로
  *      점무늬를 섞어 계단 현상을 흩뜨린다 (옛 콘솔의 적은 색 수를 흉내)
  * 3. 정점 흔들림(PS1 jitter): 꼭짓점의 화면 위치를 거친 격자에 맞춰 반올림한다.
  *    PS1은 소수점 없는 정수 좌표로 그려서 물체가 미세하게 "떨리는" 느낌이 있었다.
@@ -66,6 +66,7 @@ uniform vec2 res;
 uniform float near;
 uniform float far;
 uniform float levels;
+uniform float time;
 varying vec2 vUv;
 
 // 깊이 버퍼 값(0~1, 비선형) → 카메라까지 실제 거리(m)
@@ -75,6 +76,10 @@ float linDepth(vec2 uv) {
 }
 
 // 4×4 바이어 행렬: 이웃 픽셀끼리 문턱값이 고르게 흩어져 있다
+float hash12(vec2 p) {
+  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
 float bayer4(vec2 p) {
   vec2 q = mod(floor(p), 4.0);
   int i = int(q.x + q.y * 4.0);
@@ -94,16 +99,21 @@ void main() {
   dd = max(dd, abs(linDepth(vUv + vec2(0.0, px.y)) - dc));
   dd = max(dd, abs(linDepth(vUv - vec2(0.0, px.y)) - dc));
   float edge = smoothstep(0.04, 0.12, dd / dc);
-  col *= 1.0 - 0.55 * edge;
+  col *= 1.0 - 0.62 * edge;
 
   // 2) 선형 색 → 화면(sRGB) 색으로 바꾼 뒤 보정
   vec3 c = linearToOutputTexel(vec4(col, 1.0)).rgb;
   float l = dot(c, vec3(0.299, 0.587, 0.114));
-  c = mix(vec3(l), c, 0.72);             // 채도 낮춤
-  c = (c - 0.5) * 1.12 + 0.5;            // 대비 올림
-  c *= vec3(1.0, 0.99, 0.86);            // 누런 초록빛
+  c = mix(vec3(l), c, 0.62);             // 채도 낮춤 (탁한 색)
+  c = (c - 0.5) * 1.14 + 0.5;            // 대비 올림
+  c *= vec3(1.0, 0.985, 0.8);            // 올리브 노랑 색조
+  c = max(c, vec3(0.032, 0.036, 0.022)); // 가장 어두운 곳도 칙칙한 올리브 (완전한 검정 없음)
   vec2 d = vUv - 0.5;
-  c *= 1.0 - dot(d, d) * 1.1;            // 비네팅
+  c *= 1.0 - dot(d, d) * 1.6;            // 비네팅 (확실히, 하지만 읽힐 만큼)
+
+  // 2-b) 아날로그 CRT 느낌: 옅은 그레인(프레임마다 바뀜) + 한 줄씩 거른 옅은 주사선
+  c += (hash12(floor(gl_FragCoord.xy) + floor(time * 12.0)) - 0.5) * 0.045;
+  c *= 1.0 - 0.05 * step(0.5, fract(gl_FragCoord.y * 0.5));
 
   // 3) 디더링 + 색 단계 줄이기
   float b = bayer4(gl_FragCoord.xy) - 0.5;
@@ -139,7 +149,8 @@ export class RetroPipeline {
         res: { value: new THREE.Vector2() },
         near: { value: camera.near },
         far: { value: camera.far },
-        levels: { value: 18 },
+        levels: { value: 20 },
+        time: { value: 0 },
       },
       depthTest: false,
       depthWrite: false,
@@ -166,6 +177,7 @@ export class RetroPipeline {
 
   render(): void {
     const r = this.renderer;
+    this.post.uniforms.time.value = performance.now() / 1000;
     r.setRenderTarget(this.target);
     // 1) 레이어 0: 실험실 전체
     this.camera.layers.set(0);

@@ -7,9 +7,10 @@ import {
   DOOR, DOOR_HEIGHT, MAIN_ROOM, PARTITION, PREP_ROOM, ROOMS,
   WALLS, WALL_HEIGHT, WALL_THICKNESS, type Rect,
 } from './layout';
-import { ceilingTexture, floorTexture, wallTexture, woodTexture, worldUV } from '../render/textures';
+import { ceilingTexture, floorTexture, grimeTexture, wallTexture, worldUV } from '../render/textures';
+import { COL } from '../render/palette';
 
-const FOG_COLOR = 0x10120c;
+const FOG_COLOR = 0x0e100a;
 
 /** 실험실을 만들고, 매 프레임 호출할 조명 갱신 함수를 돌려준다 (형광등 깜빡임) */
 export function buildLab(scene: THREE.Scene): (time: number) => void {
@@ -22,15 +23,15 @@ export function buildLab(scene: THREE.Scene): (time: number) => void {
 
   // ---- 바닥·천장: 얇은 상자로 만들어 worldUV를 그대로 쓴다 ----
   addBox(scene, whole, -0.1, 0, new THREE.MeshLambertMaterial({ map: floorTexture() }), 1);
-  addBox(scene, whole, WALL_HEIGHT, WALL_HEIGHT + 0.1, new THREE.MeshLambertMaterial({ map: ceilingTexture(), color: 0xb8b4a4 }), 1.2);
+  addBox(scene, whole, WALL_HEIGHT, WALL_HEIGHT + 0.1, new THREE.MeshLambertMaterial({ map: ceilingTexture(), color: 0xc8c4ac }), 1.2);
 
   // ---- 벽 (텍스처 한 장 = 가로 1 m × 세로 3 m) ----
   const wallMat = new THREE.MeshLambertMaterial({ map: wallTexture() });
-  for (const w of WALLS) addBox(scene, w, 0, WALL_HEIGHT, wallMat, 1, WALL_HEIGHT);
+  for (const w of WALLS) addBox(scene, w, 0, WALL_HEIGHT, wallMat, 2, WALL_HEIGHT);
 
   // 문 위쪽 벽(상인방)과 문틀
-  addBox(scene, { x1: PARTITION.x1, z1: DOOR.z1, x2: PARTITION.x2, z2: DOOR.z2 }, DOOR_HEIGHT, WALL_HEIGHT, wallMat, 1, WALL_HEIGHT);
-  const frameMat = new THREE.MeshLambertMaterial({ map: woodTexture(), color: 0x5a3d26 });
+  addBox(scene, { x1: PARTITION.x1, z1: DOOR.z1, x2: PARTITION.x2, z2: DOOR.z2 }, DOOR_HEIGHT, WALL_HEIGHT, wallMat, 2, WALL_HEIGHT);
+  const frameMat = new THREE.MeshLambertMaterial({ map: grimeTexture(), color: COL.steelMid }); // 어두운 강철 문틀
   const f = 0.06;
   addBox(scene, { x1: PARTITION.x1, z1: DOOR.z1, x2: PARTITION.x2, z2: DOOR.z1 + f }, 0, DOOR_HEIGHT, frameMat, 1);
   addBox(scene, { x1: PARTITION.x1, z1: DOOR.z2 - f, x2: PARTITION.x2, z2: DOOR.z2 }, 0, DOOR_HEIGHT, frameMat, 1);
@@ -39,7 +40,7 @@ export function buildLab(scene: THREE.Scene): (time: number) => void {
   // ---- 조명 ----
   // 약한 전체광: 불빛이 닿지 않는 곳도 완전히 새까맣지는 않게
   // 조명은 모든 레이어를 비춘다 (손에 든 물체는 레이어 1에서 따로 그려지므로)
-  const ambient = new THREE.AmbientLight(0x7d8a6c, 0.32);
+  const ambient = new THREE.AmbientLight(0x7a8663, 0.5);
   ambient.layers.enableAll();
   scene.add(ambient);
 
@@ -53,9 +54,9 @@ export function buildLab(scene: THREE.Scene): (time: number) => void {
       for (let j = 0; j < rows; j++) {
         const x = rect.x1 + ((i + 0.5) * (rect.x2 - rect.x1)) / cols;
         const z = rect.z1 + ((j + 0.5) * (rect.z2 - rect.z1)) / rows;
-        const panel = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.04, 0.6), new THREE.MeshBasicMaterial({ color: 0xfff2cf }));
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.04, 0.6), new THREE.MeshBasicMaterial({ color: 0xeedc9a }));
         panel.position.set(x, WALL_HEIGHT - 0.02, z);
-        const light = new THREE.PointLight(0xffe4b0, 10, 11, 1.6);
+        const light = new THREE.PointLight(0xf0d994, 8.5 + 3 * Math.abs(Math.sin(i * 12.9 + j * 78.2)), 11, 1.6); // 밝기가 형광등마다 조금씩 다름
         light.layers.enableAll(); // 손에 든 물체(레이어 1)도 비춘다
         light.position.set(x, WALL_HEIGHT - 0.25, z);
         scene.add(panel, light);

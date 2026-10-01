@@ -45,23 +45,24 @@ function speckle(g: CanvasRenderingContext2D, r: () => number, w: number, h: num
   }
 }
 
-/** 바닥 타일: 32 px = 1 m (0.5 m 타일 2×2), 타일마다 색이 조금씩 다르고 때가 탐 */
+/** 바닥 타일: 32 px = 1 m (0.5 m 타일 2×2), 회녹색 산업 타일 — 타일마다 색이 다르고, 어두운 줄눈, 때·긁힘 */
 export function floorTexture(): THREE.CanvasTexture {
   return canvasTexture(32, 32, (g, r) => {
     for (let ty = 0; ty < 2; ty++) {
       for (let tx = 0; tx < 2; tx++) {
-        const tint = (r() - 0.5) * 14;
+        const tint = (r() - 0.5) * 16;
         for (let y = 0; y < 16; y++) {
           for (let x = 0; x < 16; x++) {
-            let v = 176 + tint + (r() - 0.5) * 16;
-            if (r() < 0.04) v -= 40; // 때 얼룩
+            let v = 130 + tint + (r() - 0.5) * 14;
+            if (r() < 0.05) v -= 34; // 때 얼룩
+            if (r() < 0.012) v += 22; // 긁힘
             const px = tx * 16 + x;
             const py = ty * 16 + y;
-            g.fillStyle = `rgb(${v | 0},${(v + 4) | 0},${(v - 10) | 0})`;
+            g.fillStyle = `rgb(${(v - 4) | 0},${(v + 2) | 0},${(v - 18) | 0})`;
             g.fillRect(px, py, 1, 1);
           }
         }
-        g.fillStyle = '#5d5c52'; // 줄눈
+        g.fillStyle = '#2e3228'; // 어두운 줄눈
         g.fillRect(tx * 16, ty * 16, 16, 1);
         g.fillRect(tx * 16, ty * 16, 1, 16);
       }
@@ -70,29 +71,59 @@ export function floorTexture(): THREE.CanvasTexture {
 }
 
 /**
- * 벽: 가로 32 px = 1 m, 세로 96 px = 3 m (천장 높이 전체).
- * 아래 1 m는 짙은 녹회색 페인트(걸레받이 띠), 위는 바랜 크림색 + 아래로 갈수록 때.
+ * 벽: 가로 64 px = 2 m (패널 2장), 세로 96 px = 3 m (천장 높이 전체). 가로 이음매가 있는 설비 패널 + 때 묻은 페인트.
+ *   아래 0.9 m = 어두운 올리브 걸레받이 띠, 위 = 니코틴 베이지(위로 갈수록 누렇게, 아래로 갈수록 때), 패널 이음매 · 리벳,
+ *   물 얼룩 줄무늬, 두 번째 패널 아래에 바랜 주황·검정 경고 줄무늬.
  */
 export function wallTexture(): THREE.CanvasTexture {
-  return canvasTexture(32, 96, (g, r) => {
+  return canvasTexture(64, 96, (g, r) => {
+    const streak = [9, 23, 41, 55].map((x) => ({ x, len: 14 + ((r() * 26) | 0), top: 20 + ((r() * 30) | 0) }));
     for (let y = 0; y < 96; y++) {
       const fromFloor = (95 - y) / 32; // m
-      for (let x = 0; x < 32; x++) {
+      for (let x = 0; x < 64; x++) {
+        const panel = x < 32 ? 0 : 1;
+        const pv = panel ? -6 : 3; // 패널마다 페인트 바램이 다름
         let R: number, G: number, B: number;
-        if (fromFloor < 1.0) {
-          const v = (r() - 0.5) * 12;
-          R = 92 + v; G = 104 + v; B = 90 + v;
+        if (fromFloor < 0.9) {
+          const v = (r() - 0.5) * 10 + pv;
+          R = 66 + v; G = 74 + v; B = 54 + v; // 어두운 올리브 띠
         } else {
-          const grime = Math.max(0, 1.6 - fromFloor) * 30; // 띠 바로 위가 더 더러움
-          const v = (r() - 0.5) * 10 - grime * r();
-          R = 206 + v; G = 200 + v; B = 176 + v;
+          const grime = Math.max(0, 1.7 - fromFloor) * 26; // 띠 바로 위가 더 더러움
+          const nic = Math.max(0, fromFloor - 2.3) * 22; // 천장 쪽 니코틴 누런 기
+          const v = (r() - 0.5) * 9 + pv - grime * r();
+          R = 168 + v - nic * 0.3; G = 160 + v - nic * 0.6; B = 128 + v - nic; // 니코틴 베이지
         }
         g.fillStyle = `rgb(${R | 0},${G | 0},${B | 0})`;
         g.fillRect(x, y, 1, 1);
       }
     }
-    g.fillStyle = '#3c3f36'; // 띠 경계선
-    g.fillRect(0, 95 - 32, 32, 1);
+    // 물 얼룩: 위에서 아래로 흐른 어두운 줄
+    for (const s of streak) {
+      for (let k = 0; k < s.len; k++) {
+        g.fillStyle = `rgba(60,52,34,${0.22 - (k / s.len) * 0.18})`;
+        g.fillRect(s.x + (r() < 0.2 ? 1 : 0), s.top + k, 1, 1);
+      }
+    }
+    // 가로 이음매 (띠 경계 · 1.95 m · 2.7 m) + 세로 이음매 (패널 경계)
+    g.fillStyle = '#2f3328';
+    g.fillRect(0, 95 - 29, 64, 1);
+    g.fillStyle = '#6f6a52';
+    g.fillRect(0, 95 - 62, 64, 1);
+    g.fillRect(0, 95 - 86, 64, 1);
+    g.fillStyle = '#4a4b3c';
+    g.fillRect(0, 0, 1, 96);
+    g.fillRect(32, 0, 1, 96);
+    // 리벳 (패널 모서리)
+    g.fillStyle = '#4e4d3b';
+    for (const px of [2, 29, 34, 61]) for (const py of [95 - 61, 95 - 85, 95 - 28]) g.fillRect(px, py, 1, 1);
+    // 경고 줄무늬: 두 번째 패널 아래쪽 (바랜 산화 주황 + 검정, 대각선)
+    for (let y = 95 - 24; y < 95 - 17; y++) {
+      for (let x = 36; x < 60; x++) {
+        const stripe = ((x + y) >> 1) % 2 === 0;
+        g.fillStyle = stripe ? `rgb(${150 + ((r() * 14) | 0)},${92 + ((r() * 10) | 0)},38)` : '#26261f';
+        g.fillRect(x, y, 1, 1);
+      }
+    }
   }, 22);
 }
 
@@ -119,11 +150,17 @@ export function woodTexture(): THREE.CanvasTexture {
   }, 44);
 }
 
-/** 천장 텍스타일: 60 cm 격자. 32 px = 1.2 m */
+/** 천장 패널: 60 cm 격자, 올리브 회색 + 얼룩. 32 px = 1.2 m */
 export function ceilingTexture(): THREE.CanvasTexture {
   return canvasTexture(32, 32, (g, r) => {
-    speckle(g, r, 32, 32, 196, 10);
-    g.fillStyle = '#8a8676';
+    for (let y = 0; y < 32; y++) {
+      for (let x = 0; x < 32; x++) {
+        const v = 150 + (r() - 0.5) * 12 - (r() < 0.04 ? 26 : 0);
+        g.fillStyle = `rgb(${(v - 2) | 0},${(v - 1) | 0},${(v - 18) | 0})`;
+        g.fillRect(x, y, 1, 1);
+      }
+    }
+    g.fillStyle = '#4e4e3c';
     g.fillRect(0, 0, 32, 1);
     g.fillRect(0, 16, 32, 1);
     g.fillRect(0, 0, 1, 32);

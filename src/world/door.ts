@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { DOOR, DOOR_HEIGHT, PARTITION } from './layout';
 import type { Action, Interactable } from './interactable';
 import type { Vec2 } from '../player/collision';
-import { woodTexture } from '../render/textures';
+import { grimeTexture } from '../render/textures';
 
 const LEAF_THICKNESS = 0.05;
 const OPEN_ANGLE = -Math.PI / 2;
@@ -31,12 +31,12 @@ export class Door implements Interactable {
 
     const leaf = new THREE.Mesh(
       new THREE.BoxGeometry(LEAF_THICKNESS, DOOR_HEIGHT, this.width),
-      new THREE.MeshLambertMaterial({ map: woodTexture(), color: 0x7a5434 }),
+      new THREE.MeshLambertMaterial({ map: grimeTexture(), color: 0x4e5a3c }),
     );
     leaf.position.set(0, DOOR_HEIGHT / 2, -this.width / 2);
 
     // 손잡이 (양쪽 면)
-    const handleMat = new THREE.MeshLambertMaterial({ color: 0xa8aaa4 });
+    const handleMat = new THREE.MeshLambertMaterial({ color: 0x2c2e29 });
     for (const side of [-1, 1]) {
       const handle = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.14), handleMat);
       handle.position.set(side * 0.06, 1.0, -this.width + 0.12);

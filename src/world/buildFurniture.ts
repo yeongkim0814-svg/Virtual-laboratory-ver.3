@@ -8,23 +8,24 @@ import { FURNITURE, ROOMS, type Furniture, type Rect } from './layout';
 import { grimeTexture, woodTexture, worldUV } from '../render/textures';
 import { StorageCabinet, type CabinetDoor } from './cabinet';
 import { Outlet } from './power';
+import { COL } from '../render/palette';
 
 // ---- 재질 (여러 가구가 함께 쓴다) — 픽셀 텍스처 × 색 ----
 const grime = grimeTexture();
 const wood = woodTexture();
 const lambert = (color: number, map: THREE.Texture | null = grime) => new THREE.MeshLambertMaterial({ color, map });
 const M = {
-  wood: lambert(0x9a6c40, wood),
-  woodDark: lambert(0x5a3d26, wood),
-  epoxy: lambert(0x2c2f2c), // 실험대 상판 (검은 에폭시)
-  cabinet: lambert(0xb9bcae),
-  door: lambert(0xa3a898),
-  metal: lambert(0x8d9290),
-  handle: lambert(0x3d403c),
-  glass: new THREE.MeshLambertMaterial({ color: 0x9fc4c8, transparent: true, opacity: 0.35, depthWrite: false }),
-  plastic: lambert(0x5d665f),
-  hazard: lambert(0xd6a21e),
-  white: lambert(0xd8d6c8),
+  wood: lambert(COL.laminate, grime),
+  woodDark: lambert(COL.woodDark, wood),
+  epoxy: lambert(COL.benchTop), // 실험대 상판 (검은 에폭시)
+  cabinet: lambert(COL.oliveMid),
+  door: lambert(0x66704a),
+  metal: lambert(COL.steelMid),
+  handle: lambert(COL.rubber),
+  glass: new THREE.MeshLambertMaterial({ color: COL.glass, transparent: true, opacity: 0.38, depthWrite: false }),
+  plastic: lambert(COL.oliveDark),
+  hazard: lambert(COL.hazardOrange),
+  white: lambert(COL.khaki),
 };
 
 const CAB_MATS = { body: M.cabinet, door: M.door, glass: M.glass, handle: M.handle };
