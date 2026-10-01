@@ -19,7 +19,7 @@ interface Glide {
   wait: number;
   dur: number;
   /** 그리는 동안만 덮어쓴 값 (되돌릴 최종 자리) */
-  saved?: { p: THREE.Vector3; q: THREE.Quaternion };
+  saved?: { p: THREE.Vector3; q: THREE.Quaternion; r: THREE.Euler };
 }
 
 const glides = new Map<Item, Glide>();
@@ -63,7 +63,8 @@ export function stepGlides(): void {
 export function applyGlides(): void {
   for (const [item, g] of glides) {
     const o = item.object;
-    g.saved = { p: o.position.clone(), q: o.quaternion.clone() };
+    // 회전은 오일러 값 그대로 되돌린다: 쿼터니언을 거치면 |yaw| > 90°가 (π, π−yaw, π)로 바뀌어 digest(rotation.y)가 기기마다 달라진다
+    g.saved = { p: o.position.clone(), q: o.quaternion.clone(), r: o.rotation.clone() };
     // 그리는 순간의 실제 시계로 (stepGlides 이후 시간이 지났어도 손 뻗기와 맞음)
     const age = (performance.now() - g.t0) / 1000;
     const e = ease(Math.min(1, Math.max(0, (age - g.wait) / g.dur)));
@@ -82,7 +83,7 @@ export function restoreGlides(): void {
   for (const [item, g] of glides) {
     if (!g.saved) continue;
     item.object.position.copy(g.saved.p);
-    item.object.quaternion.copy(g.saved.q);
+    item.object.rotation.copy(g.saved.r);
     item.object.updateMatrixWorld(true);
     g.saved = undefined;
   }

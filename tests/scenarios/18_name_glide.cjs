@@ -74,7 +74,7 @@ module.exports = {
 
     // 남이 놓기: 손에서 출발해 REACH_OUT(0.25 s) 뒤 자리에
     const w2 = await run(A, placeCmd, B);
-    const m2 = near(w2.out, 0.06);
+    const m2 = w2.out[0]; // 부모가 바뀐 첫 프레임 (헤드리스 프레임이 느려 시각을 정해 고르면 0.25 s를 넘길 수 있다)
     const f2 = w2.out[w2.out.length - 1];
     t.check(dist(m2.p, spot) > 0.1, `놓은 ${m2.t.toFixed(2)} s 뒤: 아직 자리에 안 닿음 (자리까지 ${(dist(m2.p, spot) * 100).toFixed(0)} cm)`);
     t.check(dist(f2.p, spot) < 0.005, `${f2.t.toFixed(2)} s 뒤 놓을 자리에 (오차 ${(dist(f2.p, spot) * 1000).toFixed(1)} mm)`);

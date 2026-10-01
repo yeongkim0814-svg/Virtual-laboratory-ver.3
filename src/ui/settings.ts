@@ -84,6 +84,16 @@ export function bindSettingsPanel(settings: Settings, actions: { resetPosition()
   debug.addEventListener('change', () => { settings.showDebug = debug.checked; refresh(); save(settings); });
   hands.addEventListener('change', () => { settings.showHands = hands.checked; refresh(); save(settings); });
   haptics.addEventListener('change', () => { settings.haptics = haptics.checked; refresh(); save(settings); });
+  // 진동 시험: 설정과 상관없이 0.3 s 진동을 직접 호출하고 브라우저가 돌려준 값을 보여 준다 (안 느껴질 때 원인 구분용)
+  $('set-vib-test').addEventListener('click', () => {
+    const out = $('set-vib-status');
+    if (!('vibrate' in navigator)) { out.textContent = '이 브라우저는 진동 API를 지원하지 않음 (크롬으로 열어 보세요)'; return; }
+    let r = false;
+    try { r = navigator.vibrate(300); } catch { /* 아래 문구 */ }
+    out.textContent = r
+      ? '진동을 요청함 (브라우저가 받아들임). 안 느껴지면 기기 설정의 진동 세기·방해 금지·절전 모드를 확인 — 갤럭시 탭 일부 모델은 진동 모터가 없음'
+      : '브라우저가 진동 요청을 거부함 (화면을 한 번 더 탭한 뒤 다시 시도)';
+  });
   marks.addEventListener('change', () => { settings.touchMarks = marks.checked; refresh(); save(settings); });
   jitter.addEventListener('change', () => { settings.jitter = jitter.checked; refresh(); save(settings); actions.applyGraphics(); });
   for (const b of resButtons) {

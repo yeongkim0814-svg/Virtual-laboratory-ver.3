@@ -5,6 +5,9 @@
  */
 import type { Settings } from './settings';
 
+/** 진동 길이 (ms): 8~15 ms는 갤럭시 탭 진동 모터가 거의 못 낸다 → 확실히 느껴지는 25 ms 이상 */
+export const HAPTIC = { press: 25, ok: 30, grab: 40, reject: [50, 60, 50] } as const;
+
 const RING_MS = 300; // 물결이 퍼져 사라지는 시간 (style.css tap-ripple과 같게)
 
 export class TouchFeedback {
@@ -38,7 +41,7 @@ export class TouchFeedback {
 
   /** 버튼 눌림: 진동 + 눌린 모양 (손가락이 떨어지면 해제) */
   press(el: HTMLElement): void {
-    this.haptic(8);
+    this.haptic(HAPTIC.press);
     el.classList.add('pressed');
     const off = () => {
       el.classList.remove('pressed');
@@ -77,7 +80,7 @@ export class TouchFeedback {
 
   /** 내 명령이 거부됨: 마지막 탭 자리(3 s 안)에 붉은 고리 + 진동 */
   rejected(): void {
-    this.haptic([20, 40, 20]);
+    this.haptic([...HAPTIC.reject]);
     if (performance.now() - this.lastAt < 3000) this.ring(this.lastX, this.lastY, 'bad');
   }
 
@@ -96,7 +99,7 @@ export class TouchFeedback {
   holdFire(): void {
     if (!this.hold.classList.contains('on')) return;
     this.hold.classList.add('fire');
-    this.haptic(15);
+    this.haptic(HAPTIC.grab);
     setTimeout(() => this.holdCancel(), 220);
   }
 

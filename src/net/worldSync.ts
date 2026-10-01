@@ -264,7 +264,12 @@ export class WorldSync {
       const holder = holdings.holderOf(it);
       const o = it.object;
       const row: unknown[] = [holder ?? (it.attachedTo ? `${this.ref(it.attachedTo)}#${it.plugs.indexOf(it.attachedPlug!)}` : 's')];
-      if (!holder && !it.attachedTo) row.push(r5(o.position.x), r5(o.position.y), r5(o.position.z), r5(o.rotation.y));
+      if (!holder && !it.attachedTo) {
+        // 방향은 오일러 표현에 무관하게: 스냅숏 복원은 쿼터니언으로 넣어서 |yaw| > 90°면 rotation.y가 (π, π−yaw, π)로 바뀐다 → sin·cos로 비교
+        const q = o.quaternion;
+        const yaw = Math.atan2(2 * (q.w * q.y + q.x * q.z), 1 - 2 * (q.y * q.y + q.x * q.x));
+        row.push(r5(o.position.x), r5(o.position.y), r5(o.position.z), r5(Math.sin(yaw)), r5(Math.cos(yaw)));
+      }
       const port = this.portOf(it);
       if (port !== undefined) row.push(port);
       for (const k of DIGEST_FIELDS) {

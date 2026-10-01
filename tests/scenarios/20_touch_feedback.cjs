@@ -85,7 +85,7 @@ module.exports = {
     await A.page.tap('#btn-crouch');
     await A.wait(100);
     let vib = await A.ev(() => window.__vib.slice());
-    t.check(vib.includes(8), `앉기 버튼 누름 → 진동 8 (${JSON.stringify(vib)})`);
+    t.check(vib.includes(25), `앉기 버튼 누름 → 진동 25 (${JSON.stringify(vib)})`);
     await A.ev(() => { window.lab.player.crouch = false; });
     await A.page.tap('#btn-crouch'); await A.wait(100); await A.ev(() => { window.lab.player.crouch = false; });
     await A.camera(9.0, 6.2, Math.PI / 2, 0);
@@ -131,14 +131,14 @@ module.exports = {
     await A.page.touchscreen.tap(pt.x, pt.y);
     await A.ev(() => { const { items, bus } = window.lab; const it = items[0]; bus.dispatch({ t: 'act', by: bus.me, target: bus.registry.ref(it), label: '없는 동작' }); });
     vib = await A.ev(() => window.__vib.slice());
-    t.check(vib.some((p) => Array.isArray(p) && p.join() === '20,40,20'), `거부된 명령 → 진동 [20,40,20] (${JSON.stringify(vib)})`);
+    t.check(vib.some((p) => Array.isArray(p) && p.join() === '50,60,50'), `거부된 명령 → 진동 [50,60,50] (${JSON.stringify(vib)})`);
     t.check((await A.ev(() => document.querySelectorAll('#hud .tap-ripple.bad').length)) === 1, '붉은 고리 표시');
     await A.wait(500);
     // 성공한 명령 → 10, 집기 → 15
     await A.ev(() => { window.__vib.length = 0; });
     await pick(A);
     vib = await A.ev(() => window.__vib.slice());
-    t.check(vib.includes(15), `집기 성공 → 진동 15 (${JSON.stringify(vib)})`);
+    t.check(vib.includes(40), `집기 성공 → 진동 40 (${JSON.stringify(vib)})`);
 
     // 설정: 진동 끄기 → 앉기 눌러도 진동 없음
     await A.ev(() => { const c = document.getElementById('set-haptics'); c.checked = false; c.dispatchEvent(new Event('change')); window.__vib.length = 0; });

@@ -53,7 +53,7 @@ import { updateScopes } from './equipment/scope';
 import { ScopePanel } from './ui/scopePanel';
 import { Transient, waveform } from './sim/transient';
 import { PlaceBar } from './ui/placeBar';
-import { TouchFeedback } from './ui/touchFeedback';
+import { HAPTIC, TouchFeedback } from './ui/touchFeedback';
 import { UndoKeeper } from './net/undo';
 import { Session, COLORS, type Hooks, type PlayerInfo } from './net/session';
 import { Avatars } from './net/avatars';
@@ -113,10 +113,10 @@ scene.add(door.object);
 
 // 기구: 테이블 위의 비커 등 + 보관장 속 역학·광학 기구
 const stock = stockEquipment(furniture.cabinets);
-// 탁상시계·온습도계: 유리 기구 보관장(d) 윗면, 문자판이 방 쪽(-x)을 본다. 맨 끝에 붙여 기존 기구의 명령 이름표가 바뀌지 않게
-const deskClock = at(new DeskClock(), new THREE.Vector3(16.7, 2.1, 2.6));
-const hygrometer = at(new Hygrometer(), new THREE.Vector3(16.7, 2.1, 3.0));
-for (const it of [deskClock, hygrometer]) it.yaw = it.object.rotation.y = -Math.PI / 2; // 문자판 +z → -x
+// 탁상시계·온습도계: 실험 기구 수납장(b, 뒤쪽 벽) 윗면, 문자판이 방 쪽(-z)을 본다. 맨 끝에 붙여 기존 기구의 명령 이름표가 바뀌지 않게
+const deskClock = at(new DeskClock(), new THREE.Vector3(9.0, 0.9, 7.32));
+const hygrometer = at(new Hygrometer(), new THREE.Vector3(9.4, 0.9, 7.32));
+for (const it of [deskClock, hygrometer]) it.yaw = it.object.rotation.y = Math.PI; // 문자판 +z → -z
 const items: Item[] = [...createBenchItems(), ...stock.items, deskClock, hygrometer];
 for (const it of items) scene.add(it.object);
 
@@ -172,8 +172,8 @@ bus.listeners.push((c, ok) => {
   if (c.by !== bus.me) return;
   if (!ok) fx.rejected();
   else if (c.t === 'call' || c.t === 'set') return;
-  else if (c.t === 'place' || c.t === 'attach' || (c.t === 'act' && holdings.heldOf(c.by) === bus.registry.get(c.target))) fx.haptic(15);
-  else fx.haptic(10);
+  else if (c.t === 'place' || c.t === 'attach' || (c.t === 'act' && holdings.heldOf(c.by) === bus.registry.get(c.target))) fx.haptic(HAPTIC.grab);
+  else fx.haptic(HAPTIC.ok);
 });
 const infoOf = (id: string): PlayerInfo => session.players.get(id) ?? { id, name: id, color: 0x888888 };
 const holdings: Holdings & { heldOf(who: string): Item | null } = {

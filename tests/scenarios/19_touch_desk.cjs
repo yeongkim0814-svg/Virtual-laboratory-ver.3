@@ -48,8 +48,8 @@ module.exports = {
     });
     t.check(!!info, '탁상시계·온습도계가 기구 목록에 있음');
     t.check(info && info.last, '기구 목록 맨 끝 (기존 기구의 명령 이름표 그대로)');
-    t.check(info && [info.cp, info.hp].every((p) => Math.abs(p[1] - 2.1) < 0.001 && p[0] > 16.25 && p[0] < 17.2), `처음 자리 유리 기구 보관장(d) 윗면 (높이 ${info && info.cp[1].toFixed(3)} m, x ${info && info.cp[0].toFixed(2)})`);
-    t.check(info && [info.cf, info.hf].every((f) => f[0] < -0.99), `문자판이 방 쪽(-x)을 봄 (앞 방향 x ${info && info.cf[0].toFixed(2)})`);
+    t.check(info && [info.cp, info.hp].every((p) => Math.abs(p[1] - 0.9) < 0.001 && p[2] > 7.05 && p[2] < 7.6 && p[0] > 2.15 && p[0] < 12), `처음 자리 실험 기구 수납장(b) 윗면 (높이 ${info && info.cp[1].toFixed(3)} m, x ${info && info.cp[0].toFixed(2)}, z ${info && info.cp[2].toFixed(2)})`);
+    t.check(info && [info.cf, info.hf].every((f) => f[2] < -0.99), `문자판이 방 쪽(-z)을 봄 (앞 방향 z ${info && info.cf[2].toFixed(2)})`);
     t.check(info && /^2[0-9]\.\d °C \d+ %RH$/.test(info.reading), `온습도 표시 "${info && info.reading}"`);
     const cmd = (fn, arg) => t.ev(fn, arg);
     await cmd(() => { const { items, bus } = window.lab; const it = items.find((i) => i.name === '탁상시계'); bus.dispatch({ t: 'act', by: bus.me, target: bus.registry.ref(it), label: '집기 · ' + it.name }); });
