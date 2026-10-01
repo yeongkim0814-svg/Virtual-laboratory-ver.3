@@ -31,6 +31,8 @@
         <button id="btn-help" class="icon-btn" aria-label="조작 방법">?</button>
         <!-- 되돌리기: 내 마지막 조작 하나 (화학 조작 제외) -->
         <button id="btn-undo" class="icon-btn" aria-label="되돌리기" disabled>↶</button>
+        <!-- 멀티플레이어: 방 만들기·들어가기 -->
+        <button id="btn-net" class="icon-btn" aria-label="멀티플레이어">👥</button>
         <div id="prompt" hidden></div>
         <!-- 탭한 물체에 동작이 여러 개일 때 그 자리에 뜨는 선택 메뉴 -->
         <div id="action-menu" hidden></div>
@@ -676,6 +678,25 @@
       </div>
 
       <!-- 설정 패널 -->
+      <div id="net-panel" class="panel" hidden>
+        <h2>멀티플레이어</h2>
+        <label class="row">이름 <input id="net-name" type="text" maxlength="12" /></label>
+        <div id="net-solo">
+          <div class="buttons"><button id="net-host" class="primary">방 만들기 (내가 방장)</button></div>
+          <label>방 코드로 들어가기
+            <input id="net-code" type="text" maxlength="4" placeholder="ABCD" autocapitalize="characters" autocomplete="off" />
+          </label>
+          <div class="buttons"><button id="net-join">들어가기</button></div>
+        </div>
+        <div id="net-room" hidden>
+          <p class="net-code">방 코드 <b id="net-room-code"></b></p>
+          <p id="net-role" class="net-dim"></p>
+          <ul id="net-roster"></ul>
+          <div class="buttons"><button id="net-leave">나가기</button></div>
+        </div>
+        <p id="net-status" class="net-dim"></p>
+        <div class="buttons"><button id="net-close" class="primary">닫기</button></div>
+      </div>
       <div id="settings" class="panel" hidden>
         <h2>설정</h2>
         <label>시점 감도 <span id="set-sens-val"></span>

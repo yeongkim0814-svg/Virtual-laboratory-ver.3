@@ -32,6 +32,27 @@ class T {
     this.fails = [];
   }
 
+  /** 같은 브라우저에 두 번째(세 번째 …) 탭을 열어 멀티플레이어 시험에 쓴다 (BroadcastChannel로 서로 보임) */
+  async newPeer() {
+    const page = await this.page.context().newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(URL);
+    await page.waitForTimeout(600);
+    await page.tap('#btn-enter');
+    await page.waitForTimeout(400);
+    const p = new T(this.browser, page, errors);
+    p.owner = this;
+    return p;
+  }
+
+  /** newPeer로 연 탭을 닫으면서 그 탭의 페이지 오류를 원래 시험의 결과에 합친다 */
+  async end() {
+    const errs = this.errors.filter((e) => !/ResizeObserver/.test(e));
+    this.owner.check(errs.length === 0, `보조 탭 페이지 오류 없음${errs.length ? ': ' + errs[0].slice(0, 120) : ''}`);
+    await this.page.close();
+  }
+
   /** 실패를 모아 둔다 (끝에서 한꺼번에 보고) */
   check(cond, msg) {
     if (!cond) this.fails.push(msg);

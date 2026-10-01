@@ -93,6 +93,17 @@ export class Chalkboard implements Interactable {
     this.version++;
   }
 
+  /** 멀티플레이어 입장·재동기화: 방장의 칠판 그림(PNG)으로 바꾼다 */
+  importImage(dataUrl: string, version: number): void {
+    const img = new Image();
+    img.onload = () => {
+      this.g.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
+      this.tex.needsUpdate = true;
+      this.version = version;
+    };
+    img.src = dataUrl;
+  }
+
   /** 칠판 전체 지우기 (지우개로 싹 닦은 것처럼 옅은 자국만) */
   clearAll(): void {
     this.blank();

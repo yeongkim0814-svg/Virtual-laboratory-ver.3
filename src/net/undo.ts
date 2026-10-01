@@ -13,7 +13,7 @@
 import * as THREE from 'three';
 import { applySet, type Command, type CommandBus } from './commands';
 import type { Item, Plug, Socket } from '../world/items';
-import type { Hand } from '../player/hand';
+import type { Holdings } from './worldSync';
 import type { Wire, WireSystem } from '../world/wires';
 import type { OutletPort, PowerSystem } from '../world/power';
 
@@ -22,6 +22,8 @@ type Prim = number | string | boolean | null;
 interface ItemState {
   /** 손에 들림 / 소켓에 끼워짐 / 그 밖의 부모(보통 장면) */
   where: 'hand' | 'socket' | 'parent';
+  /** 손에 든 사람 */
+  holder: string | null;
   socket: Socket | null;
   plug: Plug | null;
   parent: THREE.Object3D | null;
@@ -57,7 +59,8 @@ interface Record_ {
 export interface UndoDeps {
   bus: CommandBus;
   items: Item[];
-  hand: Hand;
+  /** 누가 무엇을 들고 있나 (나는 손, 남은 아바타) */
+  holdings: Holdings & { heldOf(who: string): Item | null };
   wires: WireSystem;
   power: PowerSystem;
   /** 용액이 든 그릇 (화학 조작 감지용) */
@@ -126,14 +129,15 @@ export class UndoKeeper {
   }
 
   /** undo 명령 처리 (방장 쪽). 되돌렸으면 true */
-  undo(who: string): boolean {
+  undo(who0: string): boolean {
+    const who = who0;
     const s = this.slots.get(who);
     if (!s) return this.fail('되돌릴 조작이 없음');
     if ('blocked' in s) return this.fail(s.blocked);
     const touched = [...s.items.keys(), ...s.fields.keys(), ...(s.set ? [s.set.target] : []),
       ...[...s.wiresAdded, ...s.wiresRemoved].flatMap((w) => [w.a.owner, w.b.owner])];
     if (touched.some((o) => (this.lastTouch.get(o) ?? 0) > s.seq)) return this.fail('다른 사람이 그 뒤에 같은 기구를 바꿈');
-    const { hand, wires, power } = this.d;
+    const { holdings, wires, power } = this.d;
     // 1) 도선: 새로 생긴 것은 빼고, 빠진 것은 다시 잇는다
     for (const w of s.wiresAdded) if (wires.wires.includes(w)) wires.remove(w);
     for (const w of s.wiresRemoved) wires.connect(w.a, w.b);
@@ -141,12 +145,14 @@ export class UndoKeeper {
     const order = (st: ItemState) => (st.where === 'parent' ? 0 : st.where === 'socket' ? 1 : 2);
     for (const [it, st] of [...s.items].sort((x, y) => order(x[1]) - order(y[1]))) {
       if (st.where === 'hand') {
-        if (hand.held && hand.held !== it) return this.fail(`손에 든 것(${hand.held.name})을 먼저 내려놓아야 함`);
-        if (hand.held !== it) hand.pickUp(it);
+        const who = st.holder ?? who0;
+        const cur = holdings.heldOf(who);
+        if (cur && cur !== it) return this.fail(`손에 든 것(${cur.name})을 먼저 내려놓아야 함`);
+        if (cur !== it) holdings.hold(who, it);
         continue;
       }
-      if (hand.held === it) hand.handOver();
-      else it.detachFromParent();
+      holdings.release(it);
+      it.detachFromParent();
       if (st.where === 'socket' && st.socket && st.plug) {
         st.socket.attach(it, st.plug);
         const anchor = it.object.parent!;
@@ -184,7 +190,7 @@ export class UndoKeeper {
   }
 
   private snapshot(c: Command | null): Snapshot {
-    const { items, hand, wires, containers, bus } = this.d;
+    const { items, holdings, wires, containers, bus } = this.d;
     const map = new Map<Item, ItemState>();
     for (const it of items) {
       const o = it.object;
@@ -194,7 +200,8 @@ export class UndoKeeper {
       }
       const anchor = it.attachedTo ? o.parent : null;
       map.set(it, {
-        where: hand.held === it ? 'hand' : it.attachedTo ? 'socket' : 'parent',
+        where: holdings.holderOf(it) ? 'hand' : it.attachedTo ? 'socket' : 'parent',
+        holder: holdings.holderOf(it),
         socket: it.attachedTo,
         plug: it.attachedPlug,
         parent: o.parent,
@@ -244,7 +251,7 @@ export class UndoKeeper {
 }
 
 function samePlace(a: ItemState, b: ItemState): boolean {
-  return a.where === b.where && a.socket === b.socket && a.plug === b.plug && a.parent === b.parent && a.port === b.port &&
+  return a.where === b.where && a.holder === b.holder && a.socket === b.socket && a.plug === b.plug && a.parent === b.parent && a.port === b.port &&
     a.pos.equals(b.pos) && a.quat.equals(b.quat) && a.anchorRotY === b.anchorRotY &&
     (a.anchorPos === b.anchorPos || (!!a.anchorPos && !!b.anchorPos && a.anchorPos.equals(b.anchorPos)));
 }

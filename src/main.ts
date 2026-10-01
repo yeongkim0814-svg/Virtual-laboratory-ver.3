@@ -48,6 +48,11 @@ import { BoardEditor } from './ui/boardEditor';
 import { Led, solveDCCircuits, type DCCircuitState } from './equipment/circuitParts';
 import { PlaceBar } from './ui/placeBar';
 import { UndoKeeper } from './net/undo';
+import { Session, type Hooks, type PlayerInfo } from './net/session';
+import { Avatars } from './net/avatars';
+import { WorldSync, type Holdings } from './net/worldSync';
+import { NetPanel } from './ui/netPanel';
+import { LocalTransport } from './net/transport';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -110,8 +115,23 @@ const player = new Player(camera, door, SPAWN);
 const hand = new Hand(scene, camera, items);
 const rotateBar = new PlaceBar(camera);
 Item.canStand = (item, p) => hand.canStand(item, p);
+// 다른 참가자의 아바타(육면체)와 그 손. 나는 카메라에 붙은 hand, 남은 아바타 앞 가슴 높이에 든다
+const avatars = new Avatars(scene, applyRetroMaterials);
+const infoOf = (id: string): PlayerInfo => session.players.get(id) ?? { id, name: id, color: 0x888888 };
+const holdings: Holdings & { heldOf(who: string): Item | null } = {
+  heldOf: (who) => (who === bus.me ? hand.held : avatars.heldBy(who)),
+  holderOf: (it) => (hand.held === it ? bus.me : avatars.holderOf(it)),
+  hold: (who, it) => { if (who === bus.me) hand.pickUp(it); else avatars.hold(infoOf(who), it); },
+  release: (it) => {
+    const who = holdings.holderOf(it);
+    if (who === bus.me) hand.handOver();
+    else if (who) avatars.handOver(who);
+  },
+};
+/** 명령을 낸 사람(bus.actor)이 든 것 — 지금 실행 중인 명령 안에서 "누가"를 묻는 곳에 쓴다 */
+const heldByActor = () => holdings.heldOf(bus.actor);
 for (const it of items) {
-  it.onPick = (item) => hand.pickUp(item);
+  it.onPick = (item) => holdings.hold(bus.actor, item);
   it.onRotate = (item) => rotateBar.open(item);
 }
 
@@ -233,7 +253,7 @@ wasteHooks.alert = (title, body) => {
   $('alert-body').innerHTML = body;
   alertEl.hidden = false;
 };
-for (const w of wasteCans) w.getHeld = () => hand.held;
+for (const w of wasteCans) w.getHeld = heldByActor;
 for (const s of [...stock.motionSensors, ...stock.forceSensors, ...stock.photogates]) {
   // 레일 끝에 끼워져 있으면 레일의 재생 속도(느리게 보기)만큼 시간도 느리게 흐른다 → 측정값은 실제 물리량
   s.timeScale = () => (s.attachedTo?.owner instanceof Rail ? s.attachedTo.owner.speed : 1);
@@ -246,7 +266,28 @@ for (const l of stock.lasers) l.onOpenPanel = (laser) => slitPanel.open(laser);
 // 전원: 실험 테이블 옆면의 콘센트 ↔ 전원이 필요한 기기(레이저)
 const power = new PowerSystem(scene, furniture.outlets, [...stock.lasers, ...stock.supplies, ...stock.lightBoxes]);
 // 되돌리기: 사람마다 마지막 조작 하나 (명령 실행 전후 상태 비교, 화학 조작은 되돌리지 않음)
-const undo = new UndoKeeper({ bus, items, hand, wires, power, containers: stock.containers });
+const undo = new UndoKeeper({ bus, items, holdings, wires, power, containers: stock.containers });
+
+// ---------- 멀티플레이어 (net/session.ts): 방장이 진짜 세계, 손님은 명령을 보내고 돌려받아 같은 세계를 만든다 ----------
+const sync = new WorldSync({
+  bus, scene, items, wires, outlets: furniture.outlets, doors: doors as unknown as { isOpen: boolean; toggle(): void }[], boards: furniture.boards, wasteCans, holdings,
+  power: power as unknown as { plug(d: never, port: never): boolean; unplug(d: never): void },
+});
+const netHooks: Hooks = {
+  pose: () => ({ x: player.pos.x, y: 0, z: player.pos.z, yaw: player.yaw }),
+  changed: () => netPanel.refresh(),
+  poses: (list) => { for (const { id, pose } of list) { const p = session.players.get(id); if (p) avatars.setPose(p, pose); } },
+  left: (id) => avatars.remove(id),
+  notice: (m) => toast(m),
+  snapshot: () => sync.snapshot(),
+  restore: (w) => sync.restore(w as ReturnType<WorldSync['snapshot']>),
+  digest: () => sync.digest(),
+  physicsOut: () => null,
+  physicsIn: () => {},
+  followHost: () => {},
+};
+const session = new Session(bus, netHooks);
+const netPanel = new NetPanel(session);
 bus.recorder = undo;
 bus.on('undo', (c) => undo.undo(c.by));
 const undoBtn = $('btn-undo') as HTMLButtonElement;
@@ -271,7 +312,7 @@ for (const b of stock.textbooks) b.onOpen = (t) => bookReader.open(t.book);
 // 칠판: 분필·지우개를 들고 탭 → 쓰기 화면
 const boardEditor = new BoardEditor((open) => { if (open) for (const p of panels) if (p.isOpen) p.close(); });
 for (const b of furniture.boards) {
-  b.getHeld = () => hand.held;
+  b.getHeld = heldByActor;
   b.onWrite = (board, tool) => boardEditor.open(board, tool);
 }
 for (const p of stock.circuitParts) {
@@ -310,28 +351,34 @@ bus.on('act', (c) => {
   const target = get<Interactable>(c.target);
   const a = target && findAct(target.actions(), c.label);
   if (!a) return false;
+  // 이미 다른 사람이 든 기구(를 포함한 조립체)는 집을 수 없다 — 먼저 방장에게 닿은 쪽이 이긴다
+  if (a.kind === 'pick' && target instanceof Item) {
+    const holder = holdings.holderOf(target.root());
+    if (holder && holder !== c.by) return false;
+  }
   a.run();
   return true;
 });
 bus.on('use', (c) => {
   const item = get<Item>(c.item);
   const target = get<Item>(c.target);
-  if (!item || !target || hand.held !== item) return false;
+  if (!item || !target || holdings.heldOf(c.by) !== item) return false;
   const a = findAct(item.useOn(target), c.label);
   if (!a) return false;
   a.run();
   return true;
 });
 bus.on('place', (c) => {
-  if (!hand.held || hand.held !== get<Item>(c.item)) return false;
-  return hand.place({ point: vec(c.p), valid: true });
+  const held = holdings.heldOf(c.by);
+  if (!held || held !== get<Item>(c.item)) return false;
+  return c.by === bus.me ? hand.place({ point: vec(c.p), valid: true }) : avatars.place(c.by, vec(c.p));
 });
 bus.on('attach', (c) => {
   const item = get<Item>(c.item);
   const socket = get<Socket>(c.socket);
   const plug = item?.plugs[c.plug];
-  if (!item || !socket || !plug || hand.held !== item) return false;
-  hand.handOver();
+  if (!item || !socket || !plug || holdings.heldOf(c.by) !== item) return false;
+  holdings.release(item);
   socket.attach(item, plug, vec(c.p), vec(c.cam));
   return true;
 });
@@ -738,7 +785,7 @@ function collectEquipmentBoxes(): void {
 
 // 테스트용: 주소 끝이 #debug일 때만 내부 객체를 노출 (자동 테스트가 조립을 빠르게 재현하는 데 씀)
 if (location.hash === '#debug') {
-  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans };
+  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans, session, avatars, sync, holdings, LocalTransport };
 }
 
 renderer.info.autoReset = false; // 한 프레임의 그리기 호출을 모두 더한다 (진단 표시용)
@@ -784,6 +831,7 @@ renderer.setAnimationLoop(() => {
   for (const a of stock.ammeters) a.update();
   beams.update();
   rotateBar.update();
+  avatars.update(dt, camera);
   const undoLabel = undo.pending(bus.me);
   const undoBlocked = undo.blocked(bus.me);
   undoBtn.disabled = !undoLabel && !undoBlocked;

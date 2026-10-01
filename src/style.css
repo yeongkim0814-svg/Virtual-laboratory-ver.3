@@ -320,6 +320,18 @@ canvas.plot {
 #btn-help { right: calc(16px + min(280px, 24%) + 10px + 108px); font-weight: 700; }
 #btn-undo { right: calc(16px + min(280px, 24%) + 10px + 162px); font-size: 22px; }
 #btn-undo:disabled, #btn-undo.blocked { opacity: 0.35; }
+#btn-net { right: calc(16px + min(280px, 24%) + 10px + 216px); }
+#btn-net.on { background: var(--amber); color: var(--bg); }
+#net-panel { z-index: 20; pointer-events: auto; }
+#net-panel input[type='text'] { flex: 1; min-width: 0; padding: 8px; font: inherit; background: #000; color: var(--text); border: 2px solid var(--amber-dim, var(--amber)); }
+#net-panel #net-code { width: 100%; margin-top: 8px; text-transform: uppercase; letter-spacing: 6px; font-size: 20px; text-align: center; }
+#net-panel .net-code { font-size: 18px; margin: 4px 0; }
+#net-panel .net-code b { color: var(--text); letter-spacing: 6px; font-size: 26px; }
+#net-panel .net-dim { color: var(--amber-dim, var(--amber)); font-size: 13px; margin: 6px 0; min-height: 1em; }
+#net-roster { list-style: none; padding: 0; margin: 8px 0; }
+#net-roster li { display: flex; align-items: center; gap: 8px; padding: 4px 0; color: var(--text); }
+#net-roster i { width: 14px; height: 14px; display: inline-block; border: 1px solid #000; }
+
 #stage.panel-open #btn-zoom { display: block; right: calc(var(--panel-w) + 24px); }
 #btn-zoom[aria-pressed='true'] { background: var(--amber); color: var(--bg); }
 

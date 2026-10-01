@@ -18,6 +18,8 @@
  *   set    대상의 속성 바꾸기 (패널 슬라이더: 전압, 기울기 …) — key는 "sim.airDrag"처럼 점 경로 가능
  *   call   대상의 메서드 부르기 (패널 버튼: 놓기, 기록 시작 …) — 인자에 물체가 있으면 { ref } 로
  *   undo   그 사람이 마지막으로 한 조작 하나 되돌리기 (net/undo.ts — 실행 전후 상태 비교로 기록)
+ * 멀티플레이어: 손님의 dispatch는 방장에게 보내기(router)만 한다. 방장이 apply(실행)하고 순서 번호를 붙여
+ *   모두에게 돌려주면 각 기기가 applyRemote로 같은 명령을 같은 순서로 실행한다 (net/session.ts).
  * 이름(label)으로 동작을 다시 찾는 것은 일부러다: 실행하는 순간 상태가 달라져 그 동작이 없어졌다면
  * (예: 다른 사람이 먼저 문을 닫음) 명령은 거절된다 — 여럿이 동시에 조작할 때의 충돌 처리.
  */
@@ -80,6 +82,8 @@ export class CommandBus {
   readonly log: Command[] = [];
   /** 나 (멀티플레이어에서는 접속 순서로 p0 ~ p3) */
   me = 'p0';
+  /** 손님일 때만: 명령을 방장에게 보내는 함수 (net/session.ts가 단다) */
+  router: ((c: Command) => void) | null = null;
   /** 명령이 나갈 때마다 부름 (나중에 네트워크 전송을 여기에 단다) */
   readonly listeners: ((c: Command, ok: boolean) => void)[] = [];
   /** 지금 실행 중인 명령을 낸 사람 — 폐액통처럼 "누가 들고 있는가"를 묻는 동작용 */
@@ -98,11 +102,32 @@ export class CommandBus {
     if (import.meta.env.DEV && JSON.stringify(JSON.parse(JSON.stringify(c))) !== JSON.stringify(c)) {
       console.warn('직렬화할 수 없는 명령', c);
     }
+    // 손님: 방장에게 보내고 여기서는 실행하지 않는다 (방장이 순서를 정해 모두에게 돌려주면 그때 실행)
+    if (this.router) {
+      this.router(c);
+      return true;
+    }
+    return this.apply(c);
+  }
+
+  /** 실행 + 기록 + 알림 (혼자·방장). 방장은 손님이 보낸 명령도 여기로 실행한다 → 리스너가 모두에게 퍼뜨린다 */
+  apply(c: Command): boolean {
     const ok = this.execute(c);
-    this.log.push(c);
-    if (this.log.length > 500) this.log.shift();
+    this.record(c);
     for (const l of this.listeners) l(c, ok);
     return ok;
+  }
+
+  /** 손님 쪽: 방장이 순서를 정해 보낸 명령을 실행 (다시 보내지 않는다) */
+  applyRemote(c: Command): boolean {
+    const ok = this.execute(c);
+    this.record(c);
+    return ok;
+  }
+
+  private record(c: Command): void {
+    this.log.push(c);
+    if (this.log.length > 500) this.log.shift();
   }
 
   /** 명령 실행 (방장 쪽) */
