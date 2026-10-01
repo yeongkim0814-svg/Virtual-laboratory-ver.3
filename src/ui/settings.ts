@@ -10,13 +10,15 @@ export interface Settings {
   /** 앉았을 때 눈높이 (m) */
   crouchEye: number;
   showDebug: boolean;
+  /** 내 두 손 보이기 (1인칭) */
+  showHands: boolean;
   /** 내부 렌더링 세로 픽셀 수 (240 / 270 / 360) — 작을수록 도트가 굵다 */
   pixelHeight: number;
   /** PS1식 정점 흔들림 */
   jitter: boolean;
 }
 
-const DEFAULTS: Settings = { lookSensitivity: 1.0, moveSpeed: 2.2, crouchEye: 1.0, showDebug: true, pixelHeight: 270, jitter: true };
+const DEFAULTS: Settings = { lookSensitivity: 1.0, moveSpeed: 2.2, crouchEye: 1.0, showDebug: true, showHands: true, pixelHeight: 270, jitter: true };
 const PIXEL_HEIGHTS = [240, 270, 360];
 
 export function loadSettings(): Settings {
@@ -46,6 +48,7 @@ export function bindSettingsPanel(settings: Settings, actions: { resetPosition()
   const speed = $<HTMLInputElement>('set-speed');
   const debug = $<HTMLInputElement>('set-debug');
   const jitter = $<HTMLInputElement>('set-jitter');
+  const hands = $<HTMLInputElement>('set-hands');
   const resButtons = [...document.querySelectorAll<HTMLButtonElement>('#set-res button')];
   const sensVal = $('set-sens-val');
   const speedVal = $('set-speed-val');
@@ -59,6 +62,7 @@ export function bindSettingsPanel(settings: Settings, actions: { resetPosition()
     crouchVal.textContent = settings.crouchEye.toFixed(2) + ' m';
     debug.checked = settings.showDebug;
     jitter.checked = settings.jitter;
+    hands.checked = settings.showHands;
     for (const b of resButtons) b.setAttribute('aria-pressed', String(Number(b.dataset.h) === settings.pixelHeight));
     sensVal.textContent = settings.lookSensitivity.toFixed(1) + '×';
     speedVal.textContent = settings.moveSpeed.toFixed(1) + ' m/s';
@@ -70,6 +74,7 @@ export function bindSettingsPanel(settings: Settings, actions: { resetPosition()
   speed.addEventListener('input', () => { settings.moveSpeed = Number(speed.value); refresh(); save(settings); });
   crouch.addEventListener('input', () => { settings.crouchEye = Number(crouch.value); refresh(); save(settings); });
   debug.addEventListener('change', () => { settings.showDebug = debug.checked; refresh(); save(settings); });
+  hands.addEventListener('change', () => { settings.showHands = hands.checked; refresh(); save(settings); });
   jitter.addEventListener('change', () => { settings.jitter = jitter.checked; refresh(); save(settings); actions.applyGraphics(); });
   for (const b of resButtons) {
     b.addEventListener('click', () => { settings.pixelHeight = Number(b.dataset.h); refresh(); save(settings); actions.applyGraphics(); });

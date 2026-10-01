@@ -131,9 +131,9 @@ export interface ArmRig {
 
 /**
  * 팔 하나 (굵은 카키 위팔 + 올리브 어깨 판, 올리브 아래팔 + 식별 색 소매 끝 띠, 큰 검은 장갑): 위팔 메시 1 + 아래팔·장갑 메시 1.
- * 어깨 관절은 parent 안 (side·0.19, 0.45). 1인칭 두 손이 같은 팔을 다시 쓴다 (위팔을 안 그리려면 shoulder의 첫 메시를 숨긴다)
+ * 어깨 관절은 parent 안 (side·0.31, 0.45). 1인칭 두 손이 같은 팔을 다시 쓴다 (위팔을 안 그리려면 shoulder의 첫 메시를 숨긴다)
  */
-export function buildArm(side: number, color: number, mat: THREE.Material, parent: THREE.Object3D, x = side * SHOULDER_X, y = SHOULDER_Y): ArmRig {
+export function buildArm(side: number, color: number, mat: THREE.Material, parent: THREE.Object3D, x = side * SHOULDER_X, y = SHOULDER_Y, glove = 1): ArmRig {
   const accent = accentOf(color);
   const shoulder = joint(parent, x, y);
   shoulder.add(new THREE.Mesh(merge(
@@ -144,7 +144,7 @@ export function buildArm(side: number, color: number, mat: THREE.Material, paren
   elbow.add(new THREE.Mesh(merge(
     prism(0.085, 0.1, 0.2, 6, -0.1, GREEN), // 올리브 아래팔
     prism(0.104, 0.104, 0.035, 6, -0.19, accent), // 소매 끝 식별 띠
-    box(0.19, 0.17, 0.2, 0, -FORE + 0.085, -0.01, BLACK), // 두꺼운 장갑
+    box(0.19 * glove, 0.17, 0.2 * glove, 0, -FORE + 0.085, -0.01, BLACK), // 두꺼운 장갑 (glove: 1인칭은 화면을 덜 덮게 폭만 줄임)
   ), mat));
   const anchor = joint(elbow, 0, -FORE);
   return { shoulder, elbow, anchor };
