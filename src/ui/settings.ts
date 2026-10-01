@@ -7,6 +7,8 @@ const STORAGE_KEY = 'vlab-settings-v1';
 export interface Settings {
   lookSensitivity: number;
   moveSpeed: number;
+  /** 앉았을 때 눈높이 (m) */
+  crouchEye: number;
   showDebug: boolean;
   /** 내부 렌더링 세로 픽셀 수 (240 / 270 / 360) — 작을수록 도트가 굵다 */
   pixelHeight: number;
@@ -14,7 +16,7 @@ export interface Settings {
   jitter: boolean;
 }
 
-const DEFAULTS: Settings = { lookSensitivity: 1.0, moveSpeed: 2.2, showDebug: true, pixelHeight: 270, jitter: true };
+const DEFAULTS: Settings = { lookSensitivity: 1.0, moveSpeed: 2.2, crouchEye: 1.0, showDebug: true, pixelHeight: 270, jitter: true };
 const PIXEL_HEIGHTS = [240, 270, 360];
 
 export function loadSettings(): Settings {
@@ -47,10 +49,14 @@ export function bindSettingsPanel(settings: Settings, actions: { resetPosition()
   const resButtons = [...document.querySelectorAll<HTMLButtonElement>('#set-res button')];
   const sensVal = $('set-sens-val');
   const speedVal = $('set-speed-val');
+  const crouch = $<HTMLInputElement>('set-crouch');
+  const crouchVal = $('set-crouch-val');
 
   const refresh = () => {
     sens.value = String(settings.lookSensitivity);
     speed.value = String(settings.moveSpeed);
+    crouch.value = String(settings.crouchEye);
+    crouchVal.textContent = settings.crouchEye.toFixed(2) + ' m';
     debug.checked = settings.showDebug;
     jitter.checked = settings.jitter;
     for (const b of resButtons) b.setAttribute('aria-pressed', String(Number(b.dataset.h) === settings.pixelHeight));
@@ -62,6 +68,7 @@ export function bindSettingsPanel(settings: Settings, actions: { resetPosition()
 
   sens.addEventListener('input', () => { settings.lookSensitivity = Number(sens.value); refresh(); save(settings); });
   speed.addEventListener('input', () => { settings.moveSpeed = Number(speed.value); refresh(); save(settings); });
+  crouch.addEventListener('input', () => { settings.crouchEye = Number(crouch.value); refresh(); save(settings); });
   debug.addEventListener('change', () => { settings.showDebug = debug.checked; refresh(); save(settings); });
   jitter.addEventListener('change', () => { settings.jitter = jitter.checked; refresh(); save(settings); actions.applyGraphics(); });
   for (const b of resButtons) {

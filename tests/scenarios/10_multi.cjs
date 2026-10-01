@@ -23,11 +23,11 @@ module.exports = {
     await A.wait(2500); // 보조 탭은 타이머가 느려질 수 있어 넉넉히
     const av = (T, id) => T.ev((id) => {
       const g = window.lab.avatars.groupOf(id);
-      return g && { x: g.position.x, z: g.position.z, yaw: g.rotation.y, vis: g.visible, boxes: g.children.filter((c) => c.isMesh && !c.userData.nameTag).length, noPick: !!g.userData.noPick };
+      return g && { x: g.position.x, z: g.position.z, yaw: g.rotation.y, vis: g.visible, boxes: (() => { let n = 0; g.traverse((o) => { if (o.isMesh && !o.userData.nameTag) n++; }); return n; })(), noPick: !!g.userData.noPick };
     }, id);
     const a1 = await av(A, 'p1');
     const b0 = await av(B, 'p0');
-    t.check(a1 && a1.vis && a1.boxes === 1 && a1.noPick, '방장 화면에 손님 아바타: 육면체 1개, 광선 판정 제외');
+    t.check(a1 && a1.vis && a1.boxes === 10 && a1.noPick, '방장 화면에 손님 아바타: 상자 인형(몸 상자 10개), 광선 판정 제외');
     t.near(a1.x, 9.0, 0.05, '손님 아바타 x'); t.near(a1.z, 6.0, 0.05, '손님 아바타 z'); t.near(a1.yaw, 0.5, 0.05, '손님 아바타 방향');
     t.check(b0 && b0.vis, '손님 화면에 방장 아바타');
     t.near(b0.x, 5.0, 0.05, '방장 아바타 x');

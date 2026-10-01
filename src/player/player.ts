@@ -16,7 +16,10 @@ import type { Door } from '../world/door';
 import { pushOutOfRect, pushOutOfSegment, clamp, type Vec2 } from './collision';
 import type { InputState } from '../input/controls';
 
-export const EYE_HEIGHT = 1.6; // m
+export const EYE_HEIGHT = 1.6; // m (서 있을 때)
+/** 앉았을 때 이동 속도 배율 · 일어서고 앉는 데 걸리는 시간 상수 (s) */
+export const CROUCH_SPEED = 0.5;
+const CROUCH_TAU = 0.08;
 const RADIUS = 0.3; // 몸통 반지름 (m)
 const MAX_PITCH = (85 * Math.PI) / 180;
 const LOOK_DEG_PER_PX = 0.25; // 감도 1.0일 때 1픽셀 드래그당 회전 각도
@@ -25,12 +28,18 @@ const ACCEL = 12; // 속도가 목표 속도에 다가가는 빠르기 (1/s)
 export interface PlayerSettings {
   lookSensitivity: number;
   moveSpeed: number; // m/s
+  /** 앉았을 때 눈높이 (m) */
+  crouchEye?: number;
 }
 
 export class Player {
   readonly pos: Vec2;
   yaw: number;
   pitch = 0;
+  /** 앉기 목표 (true = 앉음) · 현재 정도 0(섬) ~ 1(앉음) · 현재 눈높이 (m) */
+  crouch = false;
+  c = 0;
+  eye = EYE_HEIGHT;
   private vel: Vec2 = { x: 0, z: 0 };
 
   constructor(
@@ -48,6 +57,9 @@ export class Player {
     this.pos.z = this.spawn.z;
     this.yaw = this.spawn.yaw;
     this.pitch = 0;
+    this.crouch = false;
+    this.c = 0;
+    this.eye = EYE_HEIGHT;
     this.vel.x = this.vel.z = 0;
   }
 
@@ -61,8 +73,12 @@ export class Player {
     // ---- 2. 목표 속도 ----
     const s = Math.sin(this.yaw);
     const c = Math.cos(this.yaw);
-    const targetX = settings.moveSpeed * (input.moveX * c - input.moveY * s);
-    const targetZ = settings.moveSpeed * (-input.moveX * s - input.moveY * c);
+    // 앉기: 눈높이 · 이동 속도 (지수로 따라가 부드럽게)
+    this.c += ((this.crouch ? 1 : 0) - this.c) * (1 - Math.exp(-dt / CROUCH_TAU));
+    this.eye = EYE_HEIGHT + ((settings.crouchEye ?? 1.0) - EYE_HEIGHT) * this.c;
+    const speed = settings.moveSpeed * (1 - (1 - CROUCH_SPEED) * this.c);
+    const targetX = speed * (input.moveX * c - input.moveY * s);
+    const targetZ = speed * (-input.moveX * s - input.moveY * c);
 
     // 속도를 목표값으로 부드럽게 접근 (지수 감쇠: 갑자기 멈추거나 튀지 않게)
     const a = 1 - Math.exp(-ACCEL * dt);
@@ -80,7 +96,7 @@ export class Player {
     }
 
     // ---- 4. 카메라에 반영 ----
-    this.camera.position.set(this.pos.x, EYE_HEIGHT, this.pos.z);
+    this.camera.position.set(this.pos.x, this.eye, this.pos.z);
     this.camera.rotation.set(this.pitch, this.yaw, 0);
   }
 

@@ -20,7 +20,7 @@
 | 폴더 | 내용 |
 |---|---|
 | `main.ts` | 입력·탭 판정(한 번/두 번), 명령 버스 처리기, 패널 연결, 메인 루프. `#debug` 해시에서 `window.lab` 공개 |
-| `net/` (멀티플레이어) | `transport.ts`(PeerJS·BroadcastChannel) · `session.ts`(방장 권한, 명령 순서 번호, 재동기화) · `avatars.ts`(육면체) · `worldSync.ts`(스냅숏·digest) · `physicsSync.ts`(연속 상태 15 Hz 덮어쓰기). 설계·검증은 README "멀티플레이어" |
+| `net/` (멀티플레이어) | `transport.ts`(PeerJS·BroadcastChannel) · `session.ts`(방장 권한, 명령 순서 번호, 재동기화) · `avatars.ts`(상자 인형) · `avatarMotion.ts`(관절 각 계산) · `worldSync.ts`(스냅숏·digest) · `physicsSync.ts`(연속 상태 15 Hz 덮어쓰기). 설계·검증은 README "멀티플레이어" |
 | `net/commands.ts` | **명령 버스**. 세계를 바꾸는 조작은 모두 명령 (act/use/place/attach/wire/unwire/pour/set/call/undo). 멀티플레이어 대비. `undo.ts` = 실행 전후 상태 비교로 마지막 조작 하나 되돌리기 |
 | `world/` | 방·가구·보관장(`cabinet.ts`·`buildFurniture.ts`·`layout.ts` 도면 좌표), 문, 기구 기반 클래스(`items.ts`: Item/Socket/Plug), 전원(`power.ts`), 도선(`wires.ts`·`cable.ts`·`routing.ts`), 칠판 |
 | `equipment/` | 기구: 진자·스프링(`mechanics`·`pendulumString`·`spring`), 레일·수레·도르래(`track`), 센서·노트북(`sensors`), 힘 센서·포토게이트(`dynamicsSensors`), 전기(`electrical`·`circuitParts`), 함수 발생기·오실로스코프(`scope`), 화학(`glassware`), 광학(`optics`·`opticalElements`·`beams`), 보관장 배치(`stock.ts`) |
@@ -55,6 +55,5 @@
 ## 남은 일 (PLAN.md 참고)
 - 다음 세션 (설계부터, Opus): 
   1. 터치 피드백 강화.
-  2. 6.2 캐릭터·모션·앉기 (설계: PLAN.md "6.2 설계", Sonnet으로 구현).
-- 멀티플레이어 후속: 방장 넘기기, 아바타 디자인, 측정 기록을 방장 기준으로 통일(표본 전송), 플레이어 충돌, 미니맵에 아바타, TURN(다른 Wi-Fi).
+- 멀티플레이어 후속: 방장 넘기기, 측정 기록을 방장 기준으로 통일(표본 전송), 플레이어 충돌, 미니맵에 아바타, TURN(다른 Wi-Fi).
 - 광학 B(광센서·편광판·브루스터각), 화학 3.2 중화열, 대형 실험 기구(보류, 회전 관성 실험대 후보).

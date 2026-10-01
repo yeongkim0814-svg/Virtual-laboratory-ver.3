@@ -121,6 +121,8 @@ const rotateBar = new PlaceBar(camera);
 Item.canStand = (item, p) => hand.canStand(item, p);
 // 다른 참가자의 아바타(육면체)와 그 손. 나는 카메라에 붙은 hand, 남은 아바타 앞 가슴 높이에 든다
 const avatars = new Avatars(scene, applyRetroMaterials);
+// 다른 사람이 조작(집기·놓기·끼우기·도선·따르기 …)하면 그 아바타가 오른팔을 앞으로 뻗는다
+bus.listeners.push((c, ok) => { if (ok && c.by !== bus.me && ['act', 'use', 'place', 'attach', 'wire', 'unwire', 'pour'].includes(c.t)) avatars.reach(c.by); });
 const infoOf = (id: string): PlayerInfo => session.players.get(id) ?? { id, name: id, color: 0x888888 };
 const holdings: Holdings & { heldOf(who: string): Item | null } = {
   heldOf: (who) => (who === bus.me ? hand.held : avatars.heldBy(who)),
@@ -285,7 +287,7 @@ const sync = new WorldSync({
 });
 const physics = new PhysicsSync(bus, stock);
 const netHooks: Hooks = {
-  pose: () => ({ x: player.pos.x, y: 0, z: player.pos.z, yaw: player.yaw }),
+  pose: () => ({ x: player.pos.x, y: 0, z: player.pos.z, yaw: player.yaw, pitch: Math.round(player.pitch * 100) / 100, c: Math.round(player.c * 100) / 100 }),
   changed: () => netPanel.refresh(),
   poses: (list) => { for (const { id, pose } of list) { const p = session.players.get(id); if (p) avatars.setPose(p, pose); } },
   left: (id) => avatars.remove(id),
@@ -518,6 +520,16 @@ function updateDock(): void {
 const helpEl = $('help');
 $('btn-help').addEventListener('click', () => { helpEl.hidden = !helpEl.hidden; });
 $('help-close').addEventListener('click', () => { helpEl.hidden = true; });
+// 앉기 (버튼 · 키보드 C): 눈높이 1.6 → 1.0 m (설정에서 바꿈)
+const crouchBtn = $('btn-crouch');
+function setCrouch(on: boolean): void {
+  player.crouch = on;
+  crouchBtn.setAttribute('aria-pressed', String(on));
+}
+crouchBtn.addEventListener('click', () => setCrouch(!player.crouch));
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyC' && !e.repeat && !e.ctrlKey && !e.metaKey && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) setCrouch(!player.crouch);
+});
 const zoomBtn = $('btn-zoom');
 zoomBtn.addEventListener('click', () => {
   const on = zoomBtn.getAttribute('aria-pressed') !== 'true';
