@@ -63,10 +63,15 @@ export class LocalTransport implements Transport {
       const m = e.data;
       if (m.to !== 'host') return;
       if (m.t === 'join') {
+        let closed = false;
         const link: Link = {
           peer: m.from,
-          send: (ch, msg) => bc.postMessage({ to: m.from, from: 'host', t: 'data', ch, msg } satisfies Wire),
-          close: () => bc.postMessage({ to: m.from, from: 'host', t: 'bye' } satisfies Wire),
+          send: (ch, msg) => { if (!closed) bc.postMessage({ to: m.from, from: 'host', t: 'data', ch, msg } satisfies Wire); },
+          close: () => {
+            if (closed) return;
+            closed = true;
+            bc.postMessage({ to: m.from, from: 'host', t: 'bye' } satisfies Wire);
+          },
         };
         links.set(m.from, link);
         bc.postMessage({ to: m.from, from: 'host', t: 'joined' } satisfies Wire);
@@ -86,6 +91,7 @@ export class LocalTransport implements Transport {
       code,
       close: () => {
         for (const l of links.values()) l.close();
+        links.clear();
         bc.close();
       },
     });
@@ -96,6 +102,7 @@ export class LocalTransport implements Transport {
     const me = rid();
     return new Promise((resolve, reject) => {
       let link: Link | null = null;
+      let closed = false;
       const timer = setTimeout(() => {
         bc.close();
         reject(new Error('방을 찾지 못함 (같은 브라우저에서 만든 방만 보임)'));
@@ -107,15 +114,18 @@ export class LocalTransport implements Transport {
           clearTimeout(timer);
           link = {
             peer: 'host',
-            send: (ch, msg) => bc.postMessage({ to: 'host', from: me, t: 'data', ch, msg } satisfies Wire),
+            send: (ch, msg) => { if (!closed) bc.postMessage({ to: 'host', from: me, t: 'data', ch, msg } satisfies Wire); },
             close: () => {
+              if (closed) return;
+              closed = true;
               bc.postMessage({ to: 'host', from: me, t: 'bye' } satisfies Wire);
               bc.close();
             },
           };
           resolve(link);
         } else if (m.t === 'data' && link) h.onMessage(link, m.ch!, m.msg);
-        else if (m.t === 'bye' && link) {
+        else if (m.t === 'bye' && link && !closed) {
+          closed = true;
           bc.close();
           h.onClose(link);
         }
@@ -127,6 +137,26 @@ export class LocalTransport implements Transport {
 
 // ---------------------------------------------------------------- WebRTC (PeerJS)
 
+/**
+ * ICE 서버: STUN은 두 기기가 서로의 바깥 주소를 알아내 직접 연결하게 돕는다 (대부분의 가정·학교 Wi-Fi끼리는 이것으로 충분).
+ * 서로 다른 망이 엄격한 NAT(통신사 CGNAT·학교 방화벽)에 막히면 직접 연결이 안 되고, 이때는 TURN(중계) 서버가 필요하다.
+ * TURN은 무료로 안정적인 공개 서버가 없어 직접 계정(Metered · Cloudflare 등)을 만들어 넣는다:
+ *   빌드 시  VITE_TURN_URLS="turn:서버:3478,turns:서버:443"  VITE_TURN_USER=...  VITE_TURN_CRED=...
+ *   또는 브라우저 localStorage 'vlab-turn' = {"urls":["turn:..."],"username":"...","credential":"..."}
+ */
+function iceServers(): { urls: string | string[]; username?: string; credential?: string }[] {
+  const list: { urls: string | string[]; username?: string; credential?: string }[] = [
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  ];
+  const env = import.meta.env as Record<string, string | undefined>;
+  if (env.VITE_TURN_URLS) list.push({ urls: env.VITE_TURN_URLS.split(','), username: env.VITE_TURN_USER, credential: env.VITE_TURN_CRED });
+  try {
+    const raw = localStorage.getItem('vlab-turn');
+    if (raw) list.push(JSON.parse(raw));
+  } catch { /* 저장소를 못 쓰거나 형식이 틀리면 무시 */ }
+  return list;
+}
+
 /** 연결 시도 제한 시간 (ms) — 학교·통신사 망은 느리게 붙기도 한다 */
 const PEER_TIMEOUT = 15000;
 const ID_PREFIX = 'vlab3-';
@@ -137,7 +167,8 @@ export class PeerTransport implements Transport {
   private async open(id?: string) {
     const { Peer } = await import('peerjs');
     return new Promise<InstanceType<typeof Peer>>((resolve, reject) => {
-      const peer = id ? new Peer(id) : new Peer();
+      const config = { config: { iceServers: iceServers() } };
+      const peer = id ? new Peer(id, config) : new Peer(config);
       const timer = setTimeout(() => {
         peer.destroy();
         reject(new Error('신호 서버에 연결하지 못함 (인터넷 연결 확인)'));

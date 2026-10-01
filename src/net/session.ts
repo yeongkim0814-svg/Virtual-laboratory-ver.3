@@ -25,6 +25,8 @@ export interface PlayerInfo {
   id: string;
   name: string;
   color: number;
+  /** 지금 열어 둔 실험 패널 이름 ("진자 실험 조작 중" 표시용, 없으면 빈 문자열) */
+  focus?: string;
 }
 export interface Pose {
   x: number;
@@ -53,8 +55,6 @@ export interface Hooks {
   /** 방장: 연속 운동 상태를 내보낸다 (초당 15번) / 손님: 받아 적용 */
   physicsOut(): unknown;
   physicsIn(state: unknown): void;
-  /** 손님: 물리 계산을 끄고 받은 상태만 따른다 */
-  followHost(on: boolean): void;
 }
 
 interface Msg {
@@ -75,6 +75,12 @@ export class Session {
   seq = 0;
   /** 연결 종류 (화면 표시용) */
   kind: Transport['kind'] | '' = '';
+  /** 손님: 방장에게서 마지막으로 무엇이든 받은 시각 (ms) */
+  lastHost = 0;
+  /** 손님: 방장 소식이 끊긴 상태 (방장 화면이 꺼졌거나 연결이 불안정) */
+  hostSilent = false;
+  /** 방장 화면이 꺼져 있음 (방장이 알려 줌) */
+  hostHidden = false;
 
   private links = new Map<string, Link>(); // 방장: 손님 id → 연결
   private linkIds = new Map<Link, string>();
@@ -112,13 +118,31 @@ export class Session {
     this.players.clear();
     this.players.set('p0', { id: 'p0', name, color: COLORS[0] });
     this.seq = 0;
+    document.addEventListener('visibilitychange', this.onVisibility);
     this.timers.push(
       window.setInterval(() => this.hostPoses(), POSE_MS),
       window.setInterval(() => this.broadcast('fast', { k: 'phys', s: this.hooks.physicsOut() }), PHYS_MS),
       window.setInterval(() => this.broadcast('cmd', { k: 'sum', n: this.seq, d: this.hooks.digest() }), SUM_MS),
     );
     this.hooks.changed();
+    // 칠판 그림(PNG) 첫 인코딩이 느려서(수백 ms) 손님이 들어올 때 끊기지 않게 미리 한 번 만들어 둔다
+    window.setTimeout(() => this.hooks.snapshot(), 50);
     return this.code;
+  }
+
+  /** 방장 화면이 꺼지면(다른 앱·화면 잠금) 브라우저가 프레임 루프를 멈춰 모두의 세계가 멈춘다 → 알린다 */
+  private onVisibility = (): void => {
+    if (this.role === 'host') this.broadcast('cmd', { k: 'pause', on: document.hidden });
+  };
+
+  /** 내가 지금 열어 둔 패널 이름을 알린다 (닫으면 빈 문자열) */
+  setFocus(label: string): void {
+    const me = this.players.get(this.me);
+    if (!me || me.focus === label) return;
+    me.focus = label;
+    if (this.role === 'host') this.broadcast('cmd', { k: 'focus', id: this.me, label });
+    else if (this.role === 'client') this.up?.send('cmd', { k: 'focus', label });
+    this.hooks.changed();
   }
 
   private broadcast(ch: Channel, msg: Msg): void {
@@ -157,6 +181,12 @@ export class Session {
       if (!ok) link.send('cmd', { k: 'no', msg: '다른 조작이 먼저 처리되어 거절됨' });
     } else if (m.k === 'pose') {
       this.poses.set(id, m.p as Pose);
+    } else if (m.k === 'focus') {
+      const label = String(m.label ?? '').slice(0, 24);
+      const p = this.players.get(id);
+      if (p) p.focus = label;
+      this.broadcast('cmd', { k: 'focus', id, label });
+      this.hooks.changed();
     } else if (m.k === 'resync') {
       link.send('cmd', { k: 'snap', seq: this.seq, world: this.hooks.snapshot() });
     } else if (m.k === 'bye') {
@@ -221,16 +251,29 @@ export class Session {
     for (const p of w.players as PlayerInfo[]) this.players.set(p.id, p);
     this.seq = Number(w.seq);
     this.bus.router = (c) => link.send('cmd', { k: 'cmd', c });
-    this.hooks.followHost(true);
     this.hooks.restore(w.world);
-    this.timers.push(window.setInterval(() => link.send('fast', { k: 'pose', p: this.hooks.pose() }), POSE_MS));
+    this.lastHost = performance.now();
+    this.timers.push(
+      window.setInterval(() => link.send('fast', { k: 'pose', p: this.hooks.pose() }), POSE_MS),
+      window.setInterval(() => this.watchHost(), 1000),
+    );
     this.hooks.changed();
   }
 
   private onWelcome: (m: Msg) => void = () => {};
   private onRefused: (e: Error) => void = () => {};
 
+  /** 방장 소식이 4초 넘게 없으면 알린다 (방장은 0.07초마다 물리 상태를 보내므로 정상이면 끊길 수 없다) */
+  private watchHost(): void {
+    const silent = performance.now() - this.lastHost > 4000;
+    if (silent === this.hostSilent) return;
+    this.hostSilent = silent;
+    this.hooks.notice(silent ? '방장에게서 소식이 없습니다 (방장 화면이 꺼졌거나 연결이 불안정)' : '방장과 다시 연결됨');
+    this.hooks.changed();
+  }
+
   private clientGot(ch: Channel, m: Msg): void {
+    this.lastHost = performance.now();
     switch (m.k) {
       case 'welcome':
         this.onWelcome(m);
@@ -252,6 +295,17 @@ export class Session {
       case 'no':
         this.hooks.notice(String(m.msg));
         break;
+      case 'pause':
+        this.hostHidden = m.on === true;
+        this.hooks.notice(this.hostHidden ? '방장 화면이 꺼져 세계가 멈췄습니다 — 방장이 돌아오면 이어집니다' : '방장이 돌아와 다시 진행됩니다');
+        this.hooks.changed();
+        break;
+      case 'focus': {
+        const p = this.players.get(String(m.id));
+        if (p) p.focus = String(m.label ?? '');
+        this.hooks.changed();
+        break;
+      }
       case 'poses':
         this.hooks.poses((m.list as [string, Pose][]).filter(([id]) => id !== this.me).map(([id, pose]) => ({ id, pose })));
         break;
@@ -306,6 +360,8 @@ export class Session {
   leave(): void {
     for (const id of this.timers) clearInterval(id);
     this.timers = [];
+    document.removeEventListener('visibilitychange', this.onVisibility);
+    this.hostSilent = this.hostHidden = false;
     if (this.role === 'client') this.up?.send('cmd', { k: 'bye' });
     this.up?.close();
     this.up = null;
@@ -317,7 +373,6 @@ export class Session {
     this.poses.clear();
     this.players.clear();
     this.bus.router = null;
-    this.hooks.followHost(false);
     this.role = 'solo';
     this.code = '';
     this.kind = '';

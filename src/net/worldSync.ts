@@ -101,9 +101,19 @@ export class WorldSync {
       items: items.map((it) => this.snapItem(it, holdings.holderOf(it))),
       wires: wires.wires.map((w) => [this.ref(w.a), this.ref(w.b)] as [string, string]),
       doors: doors.map((x) => x.isOpen),
-      boards: boards.map((b) => ({ v: b.version, img: b.canvas.toDataURL('image/png') })),
+      boards: boards.map((b) => ({ v: b.version, img: this.boardImage(b) })),
       waste: wasteCans.map((w) => w.volume),
     };
+  }
+
+  /** 칠판 그림(PNG) — 인코딩이 느려서(약 100 ms) 획이 늘었을 때만 다시 만든다 */
+  private boardCache = new Map<Chalkboard, { v: number; img: string }>();
+  private boardImage(b: Chalkboard): string {
+    const c = this.boardCache.get(b);
+    if (c && c.v === b.version) return c.img;
+    const img = b.canvas.toDataURL('image/png');
+    this.boardCache.set(b, { v: b.version, img });
+    return img;
   }
 
   private snapItem(it: Item, holder: string | null): ItemSnap {

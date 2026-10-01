@@ -71,14 +71,15 @@ export class NetPanel {
     byId('btn-net').classList.toggle('on', s.connected);
     if (!s.connected) return;
     byId('net-room-code').textContent = s.code;
-    byId('net-role').textContent = s.role === 'host' ? '방장 (물리 계산을 맡음)' : '참가자 (방장의 세계를 따라감)';
+    byId('net-role').textContent =
+      s.role === 'host' ? '방장 (물리 계산을 맡음 — 화면을 켜 두세요)' : `참가자 (방장의 세계를 따라감)${s.hostHidden ? ' · 방장 화면 꺼짐' : s.hostSilent ? ' · 방장 소식 없음' : ''}`;
     const list = byId('net-roster');
     list.innerHTML = '';
     for (const p of s.players.values()) {
       const li = document.createElement('li');
       const dot = document.createElement('i');
       dot.style.background = `#${p.color.toString(16).padStart(6, '0')}`;
-      li.append(dot, `${p.name}${p.id === s.me ? ' (나)' : ''}${p.id === 'p0' ? ' · 방장' : ''}`);
+      li.append(dot, `${p.name}${p.id === s.me ? ' (나)' : ''}${p.id === 'p0' ? ' · 방장' : ''}${p.focus ? ` — ${p.focus} 조작 중` : ''}`);
       list.appendChild(li);
     }
   }

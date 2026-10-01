@@ -51,6 +51,7 @@ import { UndoKeeper } from './net/undo';
 import { Session, type Hooks, type PlayerInfo } from './net/session';
 import { Avatars } from './net/avatars';
 import { WorldSync, type Holdings } from './net/worldSync';
+import { PhysicsSync, type PhysState } from './net/physicsSync';
 import { NetPanel } from './ui/netPanel';
 import { LocalTransport } from './net/transport';
 
@@ -137,6 +138,11 @@ for (const it of items) {
 
 // ---------- 실험 패널 (한 번에 하나만 열림, 화면 오른쪽) ----------
 function panelToggled(panel: { el: HTMLElement }, open: boolean): void {
+  // 다른 참가자에게 "○○ 조작 중"으로 보이게 (세션 객체는 아래에서 만들어지므로 늦게 찾는다)
+  queueMicrotask(() => {
+    const shown = panels.find((p) => p.isOpen);
+    session.setFocus(shown ? (shown.el.querySelector('h2')?.textContent ?? '').trim().slice(0, 24) : '');
+  });
   if (open) for (const p of panels) if (p !== panel && p.isOpen) p.close();
   const shown = panels.find((p) => p.isOpen);
   stage.classList.toggle('panel-open', !!shown);
@@ -273,6 +279,7 @@ const sync = new WorldSync({
   bus, scene, items, wires, outlets: furniture.outlets, doors: doors as unknown as { isOpen: boolean; toggle(): void }[], boards: furniture.boards, wasteCans, holdings,
   power: power as unknown as { plug(d: never, port: never): boolean; unplug(d: never): void },
 });
+const physics = new PhysicsSync(bus, stock);
 const netHooks: Hooks = {
   pose: () => ({ x: player.pos.x, y: 0, z: player.pos.z, yaw: player.yaw }),
   changed: () => netPanel.refresh(),
@@ -282,9 +289,8 @@ const netHooks: Hooks = {
   snapshot: () => sync.snapshot(),
   restore: (w) => sync.restore(w as ReturnType<WorldSync['snapshot']>),
   digest: () => sync.digest(),
-  physicsOut: () => null,
-  physicsIn: () => {},
-  followHost: () => {},
+  physicsOut: () => physics.out(),
+  physicsIn: (s) => physics.apply(s as PhysState),
 };
 const session = new Session(bus, netHooks);
 const netPanel = new NetPanel(session);
@@ -785,7 +791,7 @@ function collectEquipmentBoxes(): void {
 
 // 테스트용: 주소 끝이 #debug일 때만 내부 객체를 노출 (자동 테스트가 조립을 빠르게 재현하는 데 씀)
 if (location.hash === '#debug') {
-  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans, session, avatars, sync, holdings, LocalTransport };
+  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans, session, avatars, sync, holdings, LocalTransport, physics };
 }
 
 renderer.info.autoReset = false; // 한 프레임의 그리기 호출을 모두 더한다 (진단 표시용)
@@ -881,7 +887,7 @@ renderer.setAnimationLoop(() => {
   trackPanel.update();
   loggerPanel.update();
   updateDock();
-  roomLabel.textContent = roomNameAt(player.pos.x, player.pos.z);
+  roomLabel.textContent = roomNameAt(player.pos.x, player.pos.z) + (session.connected ? ` · 방 ${session.code} (${session.players.size}명${session.hostSilent ? ' · 방장 소식 없음' : ''})` : '');
 
   // 이 프레임의 JS 시간 (GPU가 실제로 그리는 시간은 빠짐 → JS가 작은데 FPS가 낮으면 GPU·발열 쪽)
   jsMs += (performance.now() - now - jsMs) * 0.1;
