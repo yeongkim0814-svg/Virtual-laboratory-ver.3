@@ -42,6 +42,54 @@ export function randomCode(): string {
 export const normalizeCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
 const rid = () => Math.random().toString(36).slice(2, 10);
 
+
+// ---------------------------------------------------------------- 메시지 크기
+/**
+ * PeerJS(1.5)의 JSON 통로는 한 메시지가 16 300바이트 이상이면 "Message too big"으로 버린다 (오류만 내고 보내지 않음).
+ * 입장 때 세계 스냅숏(약 44 KB, 칠판 그림이 있으면 더 큼)이 여기에 걸려 손님이 영영 들어오지 못했다.
+ * 같은 브라우저 통로(테스트)에도 같은 한도를 걸어, 큰 메시지가 생기면 테스트가 바로 실패하게 한다.
+ */
+export const MAX_FRAME = 16000;
+const enc = new TextEncoder();
+function checkFrame(msg: unknown): void {
+  const n = enc.encode(JSON.stringify(msg)).length;
+  if (n >= MAX_FRAME) throw new Error(`통신 메시지가 너무 큼: ${n} 바이트 (WebRTC 한도 ${MAX_FRAME})`);
+}
+
+
+/**
+ * 큰 메시지 나누기: JSON 글자 수가 PART를 넘으면 조각 {k:'__part', id, i, n, c, s}로 나눠 'cmd'(순서·도착 보장)로 보내고
+ * 받는 쪽에서 다 모이면 이어 붙여 원래 통로(c) 메시지로 넘긴다. PART 2500자 = 한 글자가 최악(이스케이프 6바이트)이어도 16 KB 아래.
+ */
+const PART = 2500;
+interface Part { k: '__part'; id: number; i: number; n: number; c: Channel; s: string }
+
+function framedSender(raw: (ch: Channel, msg: unknown) => void): (ch: Channel, msg: unknown) => void {
+  let next = 0;
+  return (ch, msg) => {
+    const text = JSON.stringify(msg);
+    if (text.length <= PART) { raw(ch, msg); return; }
+    const id = ++next;
+    const n = Math.ceil(text.length / PART);
+    for (let i = 0; i < n; i++) raw('cmd', { k: '__part', id, i, n, c: ch, s: text.slice(i * PART, (i + 1) * PART) } satisfies Part);
+  };
+}
+
+function framedReceiver(deliver: (ch: Channel, msg: unknown) => void): (ch: Channel, msg: unknown) => void {
+  const bufs = new Map<number, { got: number; parts: string[] }>();
+  return (ch, msg) => {
+    const p = msg as Part | null;
+    if (!p || p.k !== '__part') { deliver(ch, msg); return; }
+    const b = bufs.get(p.id) ?? { got: 0, parts: new Array<string>(p.n) };
+    bufs.set(p.id, b);
+    if (b.parts[p.i] === undefined) { b.parts[p.i] = p.s; b.got++; }
+    if (b.got === p.n) {
+      bufs.delete(p.id);
+      deliver(p.c, JSON.parse(b.parts.join('')));
+    }
+  };
+}
+
 // ---------------------------------------------------------------- 같은 브라우저 (BroadcastChannel)
 
 interface Wire {
@@ -59,6 +107,7 @@ export class LocalTransport implements Transport {
     const code = randomCode();
     const bc = new BroadcastChannel(`vlab-room-${code}`);
     const links = new Map<string, Link>();
+    const recv = new Map<string, (ch: Channel, msg: unknown) => void>();
     bc.onmessage = (e: MessageEvent<Wire>) => {
       const m = e.data;
       if (m.to !== 'host') return;
@@ -66,7 +115,7 @@ export class LocalTransport implements Transport {
         let closed = false;
         const link: Link = {
           peer: m.from,
-          send: (ch, msg) => { if (!closed) bc.postMessage({ to: m.from, from: 'host', t: 'data', ch, msg } satisfies Wire); },
+          send: framedSender((ch, msg) => { if (!closed) { checkFrame(msg); bc.postMessage({ to: m.from, from: 'host', t: 'data', ch, msg } satisfies Wire); } }),
           close: () => {
             if (closed) return;
             closed = true;
@@ -74,11 +123,11 @@ export class LocalTransport implements Transport {
           },
         };
         links.set(m.from, link);
+        recv.set(m.from, framedReceiver((ch, msg) => h.onMessage(link, ch, msg)));
         bc.postMessage({ to: m.from, from: 'host', t: 'joined' } satisfies Wire);
         h.onLink(link);
       } else if (m.t === 'data') {
-        const link = links.get(m.from);
-        if (link) h.onMessage(link, m.ch!, m.msg);
+        recv.get(m.from)?.(m.ch!, m.msg);
       } else if (m.t === 'bye') {
         const link = links.get(m.from);
         if (link) {
@@ -103,6 +152,7 @@ export class LocalTransport implements Transport {
     return new Promise((resolve, reject) => {
       let link: Link | null = null;
       let closed = false;
+      const recv = framedReceiver((ch, msg) => link && h.onMessage(link, ch, msg));
       const timer = setTimeout(() => {
         bc.close();
         reject(new Error('방을 찾지 못함 (같은 브라우저에서 만든 방만 보임)'));
@@ -114,7 +164,7 @@ export class LocalTransport implements Transport {
           clearTimeout(timer);
           link = {
             peer: 'host',
-            send: (ch, msg) => { if (!closed) bc.postMessage({ to: 'host', from: me, t: 'data', ch, msg } satisfies Wire); },
+            send: framedSender((ch, msg) => { if (!closed) { checkFrame(msg); bc.postMessage({ to: 'host', from: me, t: 'data', ch, msg } satisfies Wire); } }),
             close: () => {
               if (closed) return;
               closed = true;
@@ -123,7 +173,7 @@ export class LocalTransport implements Transport {
             },
           };
           resolve(link);
-        } else if (m.t === 'data' && link) h.onMessage(link, m.ch!, m.msg);
+        } else if (m.t === 'data' && link) recv(m.ch!, m.msg);
         else if (m.t === 'bye' && link && !closed) {
           closed = true;
           bc.close();
@@ -157,6 +207,19 @@ function iceServers(): { urls: string | string[]; username?: string; credential?
   return list;
 }
 
+/**
+ * 신호 서버: 기본은 PeerJS 공개 서버. 직접 띄운 서버(npx peerjs --port 9000)를 쓰려면
+ * localStorage 'vlab-peer-server' = {"host":"192.168.0.10","port":9000,"path":"/","secure":false}
+ */
+function peerServer(): Record<string, unknown> {
+  try {
+    const raw = localStorage.getItem('vlab-peer-server');
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
 /** 연결 시도 제한 시간 (ms) — 학교·통신사 망은 느리게 붙기도 한다 */
 const PEER_TIMEOUT = 15000;
 const ID_PREFIX = 'vlab3-';
@@ -167,7 +230,7 @@ export class PeerTransport implements Transport {
   private async open(id?: string) {
     const { Peer } = await import('peerjs');
     return new Promise<InstanceType<typeof Peer>>((resolve, reject) => {
-      const config = { config: { iceServers: iceServers() } };
+      const config = { ...peerServer(), config: { iceServers: iceServers() } };
       const peer = id ? new Peer(id, config) : new Peer(config);
       const timer = setTimeout(() => {
         peer.destroy();
@@ -198,7 +261,7 @@ export class PeerTransport implements Transport {
     }
     if (!peer) throw new Error('방 코드를 만들지 못함');
     type Conn = ReturnType<typeof peer.connect>;
-    const slots = new Map<string, { cmd?: Conn; fast?: Conn; link?: Link }>();
+    const slots = new Map<string, { cmd?: Conn; fast?: Conn; link?: Link; recv?: (ch: Channel, msg: unknown) => void }>();
     peer.on('connection', (conn: Conn) => {
       const cid = (conn.metadata as { cid: string }).cid;
       const slot = slots.get(cid) ?? {};
@@ -209,21 +272,23 @@ export class PeerTransport implements Transport {
         if (ch === 'cmd' && !slot.link) {
           const link: Link = {
             peer: cid,
-            send: (c, msg) => {
+            send: framedSender((c, msg) => {
               const target = c === 'fast' && slot.fast?.open ? slot.fast : slot.cmd;
               if (target?.open) target.send(msg);
-            },
+            }),
             close: () => {
               slot.cmd?.close();
               slot.fast?.close();
             },
           };
           slot.link = link;
+          slot.recv = framedReceiver((c, msg) => h.onMessage(link, c, msg));
           h.onLink(link);
         }
       };
       conn.on('open', ready);
-      conn.on('data', (d: unknown) => slot.link && h.onMessage(slot.link, ch, d));
+      conn.on('data', (d: unknown) => slot.recv?.(ch, d));
+      conn.on('error', (e: unknown) => console.warn('[통신] 연결 오류', ch, e));
       conn.on('close', () => {
         if (ch === 'cmd' && slot.link) {
           const l = slot.link;
@@ -243,12 +308,13 @@ export class PeerTransport implements Transport {
     const fast = peer.connect(target, { label: 'fast', reliable: false, serialization: 'json', metadata: { cid } });
     const link: Link = {
       peer: 'host',
-      send: (c, msg) => {
+      send: framedSender((c, msg) => {
         const t = c === 'fast' && fast.open ? fast : cmd;
         if (t.open) t.send(msg);
-      },
+      }),
       close: () => peer.destroy(),
     };
+    const recv = framedReceiver((c, msg) => h.onMessage(link, c, msg));
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         peer.destroy();
@@ -264,8 +330,9 @@ export class PeerTransport implements Transport {
         reject(new Error(err.type === 'peer-unavailable' ? '그 코드의 방이 없음' : `연결 오류: ${err.type ?? err}`));
       });
     });
-    cmd.on('data', (d: unknown) => h.onMessage(link, 'cmd', d));
-    fast.on('data', (d: unknown) => h.onMessage(link, 'fast', d));
+    cmd.on('data', (d: unknown) => recv('cmd', d));
+    fast.on('data', (d: unknown) => recv('fast', d));
+    for (const c of [cmd, fast]) c.on('error', (e: unknown) => console.warn('[통신] 연결 오류', c.label, e));
     cmd.on('close', () => h.onClose(link));
     return link;
   }

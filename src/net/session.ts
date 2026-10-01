@@ -18,7 +18,7 @@ import type { Command, CommandBus } from './commands';
 import type { Channel, HostHandle, Link, Transport } from './transport';
 
 export const MAX_PLAYERS = 4;
-export const PROTOCOL = 1;
+export const PROTOCOL = 2; // 2: 큰 메시지 조각내기 (transport.ts framedSender)
 export const COLORS = [0xe8923a, 0x3a8fe8, 0x5cc15c, 0xd04c8c];
 
 export interface PlayerInfo {
