@@ -7,7 +7,7 @@
  *   - 광선에 맞지 않는다 (noPick): 뒤에 있는 기구를 탭할 수 있다
  */
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Item } from '../world/items';
 import type { PlayerInfo, Pose } from './session';
 import { isPickable, itemOf } from '../player/hand';
@@ -63,33 +63,98 @@ interface Avatar {
   reachAt: number;
 }
 
-type BoxSpec = [w: number, h: number, d: number, x: number, y: number, z: number, color: number];
+// ---- 도형 도우미: 둥글린 상자 · 캡슐 · 공 · 곡선 관 (모두 색 입힌 같은 속성의 지오메트리라 한 덩어리로 합친다) ----
 
-/** 정점 색을 입히고 면마다 법선을 따로 둔 (납작 음영) 지오메트리 */
-function paint(g: THREE.BufferGeometry, color: number): THREE.BufferGeometry {
-  const f = g.index ? g.toNonIndexed() : g;
-  f.deleteAttribute('uv');
-  f.computeVertexNormals();
-  const col = new THREE.Color(color);
-  const n = f.getAttribute('position').count;
-  const arr = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) col.toArray(arr, i * 3);
-  f.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-  return f;
+/** 값 잡음 (0 ~ 1): 바랜 천·얼룩 색 변화에 쓴다 */
+const hash = (x: number, y: number, z: number) => {
+  const n = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
+  return n - Math.floor(n);
+};
+function vnoise(x: number, y: number, z: number): number {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  const zi = Math.floor(z);
+  const fx = x - xi;
+  const fy = y - yi;
+  const fz = z - zi;
+  const sm = (t: number) => t * t * (3 - 2 * t);
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  const c = (dx: number, dy: number, dz: number) => hash(xi + dx, yi + dy, zi + dz);
+  const u = sm(fx);
+  const v2 = sm(fy);
+  const w = sm(fz);
+  return lerp(
+    lerp(lerp(c(0, 0, 0), c(1, 0, 0), u), lerp(c(0, 1, 0), c(1, 1, 0), u), v2),
+    lerp(lerp(c(0, 0, 1), c(1, 0, 1), u), lerp(c(0, 1, 1), c(1, 1, 1), u), v2),
+    w,
+  );
 }
 
-/** 상자 여러 개를 정점 색으로 합친 하나의 지오메트리 */
-function boxes(specs: BoxSpec[]): THREE.BufferGeometry {
-  return mergeGeometries(specs.map(([w, h, d, x, y, z, color]) => paint(new THREE.BoxGeometry(w, h, d).translate(x, y, z), color)))!;
+/** 정점 색: 기본 색 × 바랜 얼룩(±12 %). uv는 안 쓰므로 지운다 */
+function tint(g: THREE.BufferGeometry, color: number): THREE.BufferGeometry {
+  g.deleteAttribute('uv');
+  const pos = g.getAttribute('position');
+  const base = new THREE.Color(color);
+  const col = new THREE.Color();
+  const arr = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const k = 0.88 + 0.24 * (0.6 * vnoise(x * 9, y * 9, z * 9) + 0.4 * vnoise(x * 23 + 5, y * 23, z * 23));
+    col.copy(base).multiplyScalar(k).toArray(arr, i * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  return g;
 }
 
-/** 6각 기둥 (위 반지름 rt, 아래 rb): 팔다리. 앞면이 평평하게 보이도록 30° 돌림 */
-const hex = (rt: number, rb: number, h: number, y: number, color: number): THREE.BufferGeometry =>
-  paint(new THREE.CylinderGeometry(rt, rb, h, 6).rotateY(Math.PI / 6).translate(0, y, 0), color);
+/** 모서리를 반지름 r로 둥글린 상자 + 이음매 없는 부드러운 법선 */
+function rbox(w: number, h: number, d: number, r: number, x: number, y: number, z: number, color: number): THREE.BufferGeometry {
+  r = Math.min(r, Math.min(w, h, d) / 2 - 0.002);
+  const g = new THREE.BoxGeometry(w, h, d, 4, 4, 4);
+  const p = g.getAttribute('position');
+  const hx = w / 2 - r;
+  const hy = h / 2 - r;
+  const hz = d / 2 - r;
+  const cl = (v: number, m: number) => Math.max(-m, Math.min(m, v));
+  for (let i = 0; i < p.count; i++) {
+    let X = p.getX(i);
+    let Y = p.getY(i);
+    let Z = p.getZ(i);
+    const qx = cl(X, hx);
+    const qy = cl(Y, hy);
+    const qz = cl(Z, hz);
+    const dx = X - qx;
+    const dy = Y - qy;
+    const dz = Z - qz;
+    const len = Math.hypot(dx, dy, dz);
+    if (len > 1e-9) {
+      X = qx + (dx / len) * r;
+      Y = qy + (dy / len) * r;
+      Z = qz + (dz / len) * r;
+    }
+    p.setXYZ(i, X, Y, Z);
+  }
+  g.deleteAttribute('uv');
+  g.deleteAttribute('normal');
+  const m = mergeVertices(g, 1e-5);
+  m.computeVertexNormals();
+  m.translate(x, y, z);
+  return tint(m, color);
+}
 
-/** 공 관절 마디 (6 × 4 면) */
-const ball = (r: number, x: number, y: number, z: number, color: number): THREE.BufferGeometry =>
-  paint(new THREE.SphereGeometry(r, 6, 4).translate(x, y, z), color);
+/** 얇은 평판 (패치·라벨·환기구): 납작하게 */
+const plate = (w: number, h: number, d: number, x: number, y: number, z: number, color: number) => tint(new THREE.BoxGeometry(w, h, d).translate(x, y, z), color);
+
+/** 세로 캡슐 (팔다리): 전체 길이 len + 2r, 가운데 y */
+const cap = (r: number, len: number, y: number, color: number) => tint(new THREE.CapsuleGeometry(r, len, 3, 8).translate(0, y, 0), color);
+
+/** 공 (납작하게 sy) */
+const ball = (r: number, x: number, y: number, z: number, color: number, sx = 1, sy = 1, sz = 1) =>
+  tint(new THREE.SphereGeometry(r, 9, 6).scale(sx, sy, sz).translate(x, y, z), color);
+
+/** 속 빈 원통 띠 (헬멧 식별 띠) */
+const band = (r: number, h: number, y: number, color: number) => tint(new THREE.CylinderGeometry(r, r, h, 14, 1, true).translate(0, y, 0), color);
 
 const merge = (...g: THREE.BufferGeometry[]): THREE.BufferGeometry => mergeGeometries(g)!;
 
@@ -101,8 +166,8 @@ const joint = (parent: THREE.Object3D, x: number, y: number, z = 0): THREE.Group
 };
 
 /**
- * 인형 만들기 (3.5등신): 앞(−z), 뒤(+z)에 배낭. 서 있을 때 키 약 1.75 m, 발바닥 y = 0, 다리 0.7 m + 몸통 0.42 m + 큰 헬멧.
- * 팔다리는 6각 기둥 + 공 관절 마디라 꺾일 때 이음매가 덜 보인다. 식별 색(띠·가슴 패치·소매 끝·장화 줄)은 사람마다 다르게
+ * 인형 만들기 (3.5등신, 부드러운 곡면): 앞(−z), 뒤(+z)에 배낭. 서 있을 때 키 약 1.75 m, 발바닥 y = 0.
+ * 모서리를 둥글린 몸통·돔 헬멧·캡슐 팔다리·공 어깨와 무릎. 식별 색(띠·가슴 패치·소매 끝·장화 줄)은 사람마다 다르게
  */
 function buildRig(color: number, mat: THREE.Material, group: THREE.Group): Rig {
   const accent = new THREE.Color(color).lerp(new THREE.Color(0x6a6048), 0.1).getHex();
@@ -111,68 +176,67 @@ function buildRig(color: number, mat: THREE.Material, group: THREE.Group): Rig {
     parent.add(m);
     return m;
   };
+  const hose = new THREE.TubeGeometry(
+    new THREE.CatmullRomCurve3([new THREE.Vector3(0.13, 0.08, 0.33), new THREE.Vector3(0.19, -0.03, 0.35), new THREE.Vector3(0.14, -0.1, 0.31), new THREE.Vector3(0.07, -0.06, 0.28)]),
+    10, 0.02, 5,
+  );
   const pelvis = joint(group, 0, 0.79);
   const torso = joint(pelvis, 0, 0.09);
-  mesh(boxes([
-    [0.44, 0.18, 0.28, 0, 0, 0, KHAKI], // 허리·엉덩이
-    [0.48, 0.42, 0.3, 0, 0.2, 0, KHAKI], // 굵은 몸통
-    [0.38, 0.26, 0.02, 0, 0.24, -0.16, GREEN], // 초록 가슴 판
-    [0.12, 0.12, 0.012, 0.06, 0.27, -0.176, accent], // 가슴 식별 패치 (네모)
-    [0.07, 0.045, 0.012, -0.11, 0.14, -0.176, 0xb59b24], // 작은 경고 라벨
-    [0.06, 0.38, 0.02, -0.16, 0.2, -0.165, BLACK], // 멜빵
-    [0.06, 0.38, 0.02, 0.16, 0.2, -0.165, BLACK],
-    [0.5, 0.07, 0.32, 0, 0.04, 0, BLACK], // 벨트
-    [0.09, 0.1, 0.07, -0.2, 0.04, -0.18, BLACK], // 벨트 주머니
-    [0.09, 0.1, 0.07, 0.2, 0.04, -0.18, BLACK],
-    [0.5, 0.06, 0.32, 0, 0.42, 0, GREEN], // 어깨 판
-    [0.36, 0.4, 0.17, 0, 0.22, 0.235, PACK], // 사각 장비 배낭
-    [0.37, 0.05, 0.18, 0, 0.44, 0.235, BLACK], // 배낭 윗덮개
-    [0.05, 0.05, 0.012, 0.11, 0.34, 0.326, LIGHT], // 상태 표시등
-    [0.16, 0.014, 0.012, -0.03, 0.08, 0.326, BLACK], // 환기구 홈
-    [0.16, 0.014, 0.012, -0.03, 0.115, 0.326, BLACK],
-    [0.16, 0.014, 0.012, -0.03, 0.15, 0.326, BLACK],
-    [0.04, 0.22, 0.04, 0.13, 0.04, 0.34, BLACK], // 늘어진 호스
-    [0.04, 0.04, 0.08, 0.13, -0.07, 0.32, BLACK],
-  ]), torso);
+  mesh(merge(
+    rbox(0.44, 0.2, 0.29, 0.08, 0, -0.01, 0, KHAKI), // 허리·엉덩이
+    rbox(0.48, 0.44, 0.31, 0.11, 0, 0.2, 0, KHAKI), // 굵은 몸통
+    rbox(0.38, 0.27, 0.06, 0.05, 0, 0.24, -0.16, GREEN), // 올리브 가슴 판
+    plate(0.12, 0.12, 0.012, 0.06, 0.27, -0.195, accent), // 가슴 식별 패치 (네모)
+    plate(0.07, 0.045, 0.012, -0.11, 0.14, -0.195, 0xb59b24), // 작은 경고 라벨
+    rbox(0.07, 0.4, 0.05, 0.02, -0.16, 0.2, -0.175, BLACK), // 멜빵
+    rbox(0.07, 0.4, 0.05, 0.02, 0.16, 0.2, -0.175, BLACK),
+    rbox(0.52, 0.08, 0.34, 0.035, 0, 0.04, 0, BLACK), // 벨트
+    rbox(0.09, 0.11, 0.08, 0.03, -0.2, 0.04, -0.19, BLACK), // 벨트 주머니
+    rbox(0.09, 0.11, 0.08, 0.03, 0.2, 0.04, -0.19, BLACK),
+    rbox(0.5, 0.08, 0.33, 0.04, 0, 0.42, 0, GREEN), // 어깨 판
+    rbox(0.36, 0.4, 0.18, 0.05, 0, 0.22, 0.24, PACK), // 사각 장비 배낭
+    rbox(0.37, 0.06, 0.19, 0.03, 0, 0.44, 0.24, BLACK), // 배낭 윗덮개
+    plate(0.05, 0.05, 0.012, 0.11, 0.34, 0.335, LIGHT), // 상태 표시등
+    plate(0.16, 0.014, 0.012, -0.03, 0.08, 0.335, BLACK), // 환기구 홈
+    plate(0.16, 0.014, 0.012, -0.03, 0.115, 0.335, BLACK),
+    plate(0.16, 0.014, 0.012, -0.03, 0.15, 0.335, BLACK),
+    tint(hose, BLACK), // 늘어진 호스
+  ), torso);
   const head = joint(torso, 0, 0.42);
-  mesh(boxes([
-    [0.16, 0.06, 0.16, 0, 0.03, 0, BLACK], // 목 보호대
-    [0.4, 0.34, 0.4, 0, 0.2, 0, HELM], // 크고 낮고 넓은 헬멧
-    [0.36, 0.08, 0.36, 0, 0.4, 0, HELM], // 각진 윗면
-    [0.42, 0.05, 0.42, 0, 0.3, 0, accent], // 식별 띠
-    [0.32, 0.17, 0.02, 0, 0.19, -0.205, VISOR], // 불투명 검은 바이저 (얼굴 없음)
-    [0.2, 0.022, 0.005, -0.03, 0.235, -0.217, TEAL], // 어두운 청록 반사
-    [0.36, 0.06, 0.07, 0, 0.05, -0.19, BLACK], // 턱 보호대
-    [0.022, 0.19, 0.012, 0.171, 0.19, -0.205, BLACK], // 바이저 테두리
-    [0.022, 0.19, 0.012, -0.171, 0.19, -0.205, BLACK],
-    [0.07, 0.08, 0.08, 0.205, 0.19, -0.08, SIDEPLATE], // 옆 바이저 판
-    [0.07, 0.08, 0.08, -0.205, 0.19, -0.08, SIDEPLATE],
-  ]), head);
+  mesh(merge(
+    cap(0.075, 0.0, 0.03, BLACK), // 목 보호대
+    ball(0.215, 0, 0.2, 0, HELM, 1.1, 0.95, 1.05), // 돔 헬멧
+    band(0.208, 0.05, 0.3, accent), // 식별 띠
+    rbox(0.38, 0.24, 0.08, 0.065, 0, 0.19, -0.18, HELM), // 바이저 틀
+    rbox(0.33, 0.19, 0.06, 0.055, 0, 0.19, -0.212, VISOR), // 불투명 검은 바이저 (얼굴 없음)
+    plate(0.22, 0.02, 0.006, -0.03, 0.255, -0.245, TEAL), // 어두운 청록 반사
+    rbox(0.3, 0.07, 0.09, 0.03, 0, 0.05, -0.17, BLACK), // 턱 보호대
+    rbox(0.06, 0.1, 0.11, 0.025, 0.225, 0.19, -0.04, SIDEPLATE), // 옆 바이저 판
+    rbox(0.06, 0.1, 0.11, 0.025, -0.225, 0.19, -0.04, SIDEPLATE),
+  ), head);
   const arm = (side: number) => {
     const shoulder = joint(torso, side * 0.33, 0.36);
-    mesh(merge(hex(0.085, 0.075, 0.24, -0.12, KHAKI), ball(0.105, 0, 0, 0, GREEN)), shoulder);
+    mesh(merge(cap(0.085, 0.07, -0.12, KHAKI), ball(0.115, 0, 0.0, 0, GREEN)), shoulder);
     const elbow = joint(shoulder, 0, -0.24);
     mesh(merge(
-      ball(0.08, 0, 0, 0, KHAKI),
-      hex(0.075, 0.07, 0.2, -0.1, GREEN), // 초록 아래팔
-      hex(0.083, 0.083, 0.03, -0.19, accent), // 소매 끝 식별 띠
-      paint(new THREE.BoxGeometry(0.17, 0.14, 0.17).translate(0, -0.27, 0), BLACK), // 두꺼운 장갑
+      cap(0.075, 0.05, -0.1, GREEN), // 올리브 아래팔
+      band(0.082, 0.03, -0.185, accent), // 소매 끝 식별 띠
+      rbox(0.17, 0.15, 0.17, 0.06, 0, -0.27, 0, BLACK), // 두꺼운 장갑
     ), elbow);
     return { shoulder, elbow };
   };
   const leg = (side: number) => {
     const hip = joint(pelvis, side * 0.12, -0.09);
     mesh(merge(
-      ball(0.115, 0, 0, 0, KHAKI),
-      hex(0.105, 0.09, 0.3, -0.15, KHAKI),
-      paint(new THREE.BoxGeometry(0.045, 0.14, 0.1).translate(side * 0.115, -0.12, 0), BLACK), // 허벅지 옆 주머니
+      cap(0.105, 0.09, -0.15, KHAKI),
+      rbox(0.05, 0.14, 0.1, 0.02, side * 0.115, -0.12, 0, BLACK), // 허벅지 옆 주머니
     ), hip);
     const knee = joint(hip, 0, -0.3);
     mesh(merge(
-      hex(0.09, 0.085, 0.3, -0.15, GREEN),
-      ball(0.11, 0, 0, -0.01, DGREEN), // 무릎 보호대
-      paint(new THREE.BoxGeometry(0.2, 0.14, 0.34).translate(0, -0.33, -0.07), BLACK), // 큰 장화 (바닥 −0.40)
-      paint(new THREE.BoxGeometry(0.205, 0.03, 0.14).translate(0, -0.3, -0.12), accent), // 장화 식별 줄
+      cap(0.09, 0.12, -0.15, GREEN),
+      ball(0.11, 0, 0, -0.025, DGREEN, 1, 0.9, 1), // 무릎 보호대
+      rbox(0.2, 0.15, 0.34, 0.06, 0, -0.325, -0.07, BLACK), // 큰 장화 (바닥 −0.40)
+      rbox(0.21, 0.03, 0.15, 0.012, 0, -0.29, -0.12, accent), // 장화 식별 줄
     ), knee);
     return { hip, knee };
   };
