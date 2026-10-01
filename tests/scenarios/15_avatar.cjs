@@ -64,6 +64,13 @@ module.exports = {
     }), ms);
     const walking = await sample(1200);
     t.check(walking > 0.3, `걸을 때 엉덩이 각 최대 ${walking.toFixed(2)} rad (> 0.3, 이론 0.40)`);
+    // 걸음 빈도: 3 s 동안 엉덩이 각이 0을 위로 지나는 횟수 / 3 = 0.9 Hz (1.4 m/s)
+    const freq = await A.ev(() => new Promise((res) => {
+      let prev = null; let n = 0; const t0 = performance.now();
+      const tick = () => { const x = window.lab.avatars.rigOf('p1').hipL.rotation.x; if (prev !== null && prev < 0 && x >= 0) n++; prev = x; if (performance.now() - t0 < 3000) requestAnimationFrame(tick); else res(n / 3); };
+      requestAnimationFrame(tick);
+    }));
+    t.check(freq > 0.65 && freq < 1.2, `걸음 빈도 ${freq.toFixed(2)} Hz (1.4 m/s에서 사람은 약 0.9 Hz)`);
     await B.ev(() => { clearInterval(window.__w); });
     await A.wait(1500);
     const still = await sample(400);

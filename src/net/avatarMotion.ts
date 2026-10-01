@@ -4,7 +4,7 @@
  * 각도 규칙 (관절 그룹의 rotation.x, 라디안): 아래로 늘어진 팔다리는 + 이면 앞(−z)으로 흔들린다.
  *   위로 뻗은 몸통·머리는 − 이면 앞으로 숙인다 (몸통 기울이기), 머리는 + 이면 위를 본다.
  *
- * 걷기: 걸음 위상 φ가 이동 거리에 비례해 돈다 (한 걸음 0.35 m = 반 주기) → 빨리 걸을수록 다리가 빨리 움직이고 제자리에서는 멈춘다.
+ * 걷기: 걸음 위상 φ가 걸음 빈도 0.9·√(v/1.4) Hz로 돈다 (1.4 m/s에서 한 주기 = 두 걸음 = 약 1.1 s) → 제자리에서는 멈춘다.
  *   엉덩이 ±0.4 rad, 무릎은 다리가 앞으로 나올 때 굽힘, 팔은 반대 다리와 같은 박자.
  *   골반 높이 = 땅을 딛은(더 낮은) 다리의 길이로 정해 발이 땅에 붙는다 → 걸을 때 몸이 저절로 조금 오르내린다.
  */
@@ -13,7 +13,6 @@ export const THIGH = 0.4;
 export const SHIN = 0.4;
 export const FOOT = 0.07;
 export const HIP_DROP = 0.09; // 골반 중심 ~ 엉덩이 관절
-const STRIDE = 0.35;
 const HIP_AMP = 0.4;
 const KNEE_AMP = 0.6;
 const ARM_AMP = 0.35;
@@ -78,7 +77,9 @@ export function stepMotion(s: MotionState, m: MotionIn, dt: number): Joints {
   const spin = clamp(Math.abs(m.turn) / 1.5, 0, 1) * 0.3;
   const target = Math.max(walk, spin) * (1 - m.c);
   s.amp += (target - s.amp) * follow(dt, 0.1);
-  s.phase += Math.max((m.speed / STRIDE) * Math.PI, Math.abs(m.turn) * 1.0) * dt;
+  // 걸음 빈도(주기/초): 사람은 1.4 m/s에서 약 0.9 Hz(1.8걸음/초), 빨리 걸을수록 보폭이 늘어 빈도는 √v로만 는다
+  const cadence = 0.9 * Math.sqrt(Math.max(m.speed, 0) / 1.4);
+  s.phase += Math.max(2 * Math.PI * cadence, Math.abs(m.turn) * 1.0) * dt;
   const sin = Math.sin(s.phase);
   const cos = Math.cos(s.phase);
   const c = m.c;
