@@ -10,7 +10,7 @@
  */
 import * as THREE from 'three';
 import './style.css';
-import { applySet, bus, type Vec3 } from './net/commands';
+import { applySet, bus, type Command, type Vec3 } from './net/commands';
 import { buildLab } from './world/buildLab';
 import { buildFurniture } from './world/buildFurniture';
 import { Door } from './world/door';
@@ -122,7 +122,25 @@ Item.canStand = (item, p) => hand.canStand(item, p);
 // 다른 참가자의 아바타(육면체)와 그 손. 나는 카메라에 붙은 hand, 남은 아바타 앞 가슴 높이에 든다
 const avatars = new Avatars(scene, applyRetroMaterials);
 // 다른 사람이 조작(집기·놓기·끼우기·도선·따르기 …)하면 그 아바타가 오른팔을 앞으로 뻗는다
-bus.listeners.push((c, ok) => { if (ok && c.by !== bus.me && ['act', 'use', 'place', 'attach', 'wire', 'unwire', 'pour'].includes(c.t)) avatars.reach(c.by); });
+// 손 뻗을 곳: 명령이 가리키는 실제 위치 (act/use → 대상 경계 상자 중심, place → 놓을 점, attach → 소켓, wire → 단자, pour → 받는 용기). 못 풀면 몸 앞 가슴 높이
+// 집기는 실행하면 물체가 손으로 옮겨 가므로 act 처리기가 실행 전에 위치를 reachPre에 적어 둔다
+let reachPre: THREE.Vector3 | null = null;
+const centreOf = (o: THREE.Object3D | undefined | null): THREE.Vector3 | null => (o ? new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3()) : null);
+function reachPointOf(c: Command): THREE.Vector3 | null {
+  switch (c.t) {
+    case 'act': return centreOf(bus.registry.get<Interactable>(c.target)?.object);
+    case 'use': return centreOf(bus.registry.get<Item>(c.target)?.object);
+    case 'place': return new THREE.Vector3(...c.p);
+    case 'attach': return bus.registry.get<Socket>(c.socket)?.anchor.getWorldPosition(new THREE.Vector3()) ?? null;
+    case 'wire': case 'unwire': return bus.registry.get<Terminal>(c.b)?.worldPosition() ?? null;
+    case 'pour': return centreOf(bus.registry.get<Container>(c.dst)?.object);
+    default: return null;
+  }
+}
+bus.listeners.push((c, ok) => {
+  if (ok && c.by !== bus.me && ['act', 'use', 'place', 'attach', 'wire', 'unwire', 'pour'].includes(c.t)) avatars.reach(c.by, reachPre ?? reachPointOf(c) ?? undefined);
+  reachPre = null;
+});
 const infoOf = (id: string): PlayerInfo => session.players.get(id) ?? { id, name: id, color: 0x888888 };
 const holdings: Holdings & { heldOf(who: string): Item | null } = {
   heldOf: (who) => (who === bus.me ? hand.held : avatars.heldBy(who)),
@@ -369,6 +387,7 @@ bus.on('act', (c) => {
   const target = get<Interactable>(c.target);
   const a = target && findAct(target.actions(), c.label);
   if (!a) return false;
+  if (c.by !== bus.me) reachPre = centreOf(target.object); // 집기: 실행하면 물체가 손으로 옮겨 가므로 실행 전 위치
   // 이미 다른 사람이 든 기구(를 포함한 조립체)는 집을 수 없다 — 먼저 방장에게 닿은 쪽이 이긴다
   if (a.kind === 'pick' && target instanceof Item) {
     const holder = holdings.holderOf(target.root());

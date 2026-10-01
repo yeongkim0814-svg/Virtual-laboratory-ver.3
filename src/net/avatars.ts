@@ -1,36 +1,40 @@
 /**
- * 다른 참가자의 아바타: 낡은 안전 작업복 현장 기술자(올리브·카키 옷, 검은 바이저 헬멧, 사각 배낭) 상자 인형(마디 관절) + 머리 위 이름표
- *   - 자세(x, z, 방향, 고개, 앉기)는 방장 경유로 초당 10번 온다 → 여기서 부드럽게 따라가고, 움직임(걷기·돌기·숨쉬기·앉기·들기·손 뻗기)은
+ * 다른 참가자의 아바타: 가운 입은 연구자(미색 가운 · 숯색 바지 · 보안경 · 사람 색 장갑과 셔츠) 저폴리 인형(마디 관절) + 머리 위 이름표
+ *   - 자세(x, z, 방향, 고개, 앉기)는 방장 경유로 초당 10번 온다 → 여기서 부드럽게 따라가고, 움직임(발 디딤 걸음·돌기·숨쉬기·앉기·들기·손 뻗기)은
  *     위치 변화에서 net/avatarMotion.ts가 계산한다 (모델 파일·뼈대 메시 없음)
- *   - 몸 전체가 정점 색 상자 10개(+ 이름표 1) = 그리기 호출 11, 재질 하나
+ *   - 몸 전체가 정점 색 기둥 13개(+ 이름표 1) = 그리기 호출 14, 재질 하나
  *   - 손에 든 기구는 오른손에 붙는다 (다른 사람이 못 집도록 광선 판정에서 제외)
  *   - 광선에 맞지 않는다 (noPick): 뒤에 있는 기구를 탭할 수 있다
+ *   - group.rotation.y = 받은 고개 방향. 몸 방향(걸음·따라 돌기)은 골반이 그 차이만큼 돌아 있다
  */
 import * as THREE from 'three';
-import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Item } from '../world/items';
 import type { PlayerInfo, Pose } from './session';
 import { isPickable, itemOf } from '../player/hand';
-import { newMotion, stepMotion, type MotionState } from './avatarMotion';
+import { newMotion, stepMotion, wrapAngle, HIP_DROP, HIP_X, NECK_Y, SHOULDER_X, SHOULDER_Y, THIGH, SHIN, UPPER, FORE, ANKLE_H, type MotionState } from './avatarMotion';
 
-const H = 1.75;
+const H = 1.72;
+const _qe = new THREE.Quaternion();
+const _qy = new THREE.Quaternion();
+const _up = new THREE.Vector3(0, 1, 0);
 /** 위치를 따라가는 속도 (1/s) */
 const FOLLOW = 14;
-const GREEN = 0x4f5d36; // 올리브 초록: 가슴 판·아래팔·정강이
-const DGREEN = 0x37432b; // 어두운 초록: 무릎 보호대
-const KHAKI = 0x938d62; // 카키: 몸통·위팔·허벅지
-const HELM = 0x6b7340; // 헬멧
-const BLACK = 0x1f201e; // 멜빵·벨트·장갑·장화·배낭
-const PACK = 0x2e312c;
-const VISOR = 0x05090a;
-const TEAL = 0x123a3a;
-const SIDEPLATE = 0x4a5a56;
-const LIGHT = 0xff9a22; // 상태 표시등 (배낭)
+const COAT = 0xb8b49a; // 바랜 미색 가운
+const COAT_D = 0x9c9880; // 주머니 (짙은 미색)
+const TROUSER = 0x3a3c40; // 숯색 바지
+const SHOE = 0x3b2c22; // 짙은 갈색 신발
+const SKIN = 0xb59a86; // 무채 살색
+const HAIR = 0x2a2420;
+const STRAP = 0x6a7f86; // 보안경 띠 (회청)
+const LENS = 0x4f8a85; // 보안경 렌즈 (탁한 청록)
 
-/** 관절 그룹 (모션이 rotation.x 등을 돌린다) */
+/** 관절 그룹 (모션이 quaternion을 정한다) */
 export interface Rig {
   pelvis: THREE.Group;
   torso: THREE.Group;
+  /** 몸통 메시 (숨쉬기 크기 변화는 이 메시에만 — 팔을 같이 늘리지 않는다) */
+  torsoMesh: THREE.Mesh;
   head: THREE.Group;
   hipL: THREE.Group;
   hipR: THREE.Group;
@@ -40,6 +44,10 @@ export interface Rig {
   shoulderR: THREE.Group;
   elbowL: THREE.Group;
   elbowR: THREE.Group;
+  flapL: THREE.Group;
+  flapR: THREE.Group;
+  /** 오른손 끝 (든 기구가 붙는 자리) */
+  anchor: THREE.Group;
 }
 
 interface Avatar {
@@ -51,110 +59,64 @@ interface Avatar {
   target: Pose;
   held: Item | null;
   seen: boolean;
-  speed: number;
   /** 받은 자세 사이 속도 (m/s)로 다음 자세가 오기 전까지 앞질러 간다 */
   vx: number;
   vz: number;
+  /** 모션에 쓰는 이동 속도 (실제로 움직인 만큼, 평활) */
+  mvx: number;
+  mvz: number;
   poseAt: number;
-  turn: number;
   c: number;
   pitch: number;
   t: number;
   reachAt: number;
+  reachPoint: THREE.Vector3 | null;
 }
 
-// ---- 도형 도우미: 둥글린 상자 · 캡슐 · 공 · 곡선 관 (모두 색 입힌 같은 속성의 지오메트리라 한 덩어리로 합친다) ----
+// ---- 도형 도우미: 저폴리 기둥·상자 (평평한 면 + 마디마다 위 밝고 아래 어두운 2단 정점 색) ----
 
-/** 값 잡음 (0 ~ 1): 바랜 천·얼룩 색 변화에 쓴다 */
-const hash = (x: number, y: number, z: number) => {
-  const n = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
-  return n - Math.floor(n);
-};
-function vnoise(x: number, y: number, z: number): number {
-  const xi = Math.floor(x);
-  const yi = Math.floor(y);
-  const zi = Math.floor(z);
-  const fx = x - xi;
-  const fy = y - yi;
-  const fz = z - zi;
-  const sm = (t: number) => t * t * (3 - 2 * t);
-  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-  const c = (dx: number, dy: number, dz: number) => hash(xi + dx, yi + dy, zi + dz);
-  const u = sm(fx);
-  const v2 = sm(fy);
-  const w = sm(fz);
-  return lerp(
-    lerp(lerp(c(0, 0, 0), c(1, 0, 0), u), lerp(c(0, 1, 0), c(1, 1, 0), u), v2),
-    lerp(lerp(c(0, 0, 1), c(1, 0, 1), u), lerp(c(0, 1, 1), c(1, 1, 1), u), v2),
-    w,
-  );
-}
-
-/** 정점 색: 기본 색 × 바랜 얼룩(±12 %). uv는 안 쓰므로 지운다 */
-function tint(g: THREE.BufferGeometry, color: number): THREE.BufferGeometry {
+/** 정점 색: 기본 색 × (위쪽 절반 1.0 · 아래쪽 절반 0.72). uv·인덱스는 지운다 */
+function shade(g0: THREE.BufferGeometry, color: number): THREE.BufferGeometry {
+  const g = g0.index ? g0.toNonIndexed() : g0;
   g.deleteAttribute('uv');
+  g.computeVertexNormals(); // 평평한 면 법선
+  g.computeBoundingBox();
+  const { min, max } = g.boundingBox!;
   const pos = g.getAttribute('position');
   const base = new THREE.Color(color);
-  const col = new THREE.Color();
   const arr = new Float32Array(pos.count * 3);
+  const mid = (min.y + max.y) / 2;
   for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const y = pos.getY(i);
-    const z = pos.getZ(i);
-    const k = 0.88 + 0.24 * (0.6 * vnoise(x * 9, y * 9, z * 9) + 0.4 * vnoise(x * 23 + 5, y * 23, z * 23));
-    col.copy(base).multiplyScalar(k).toArray(arr, i * 3);
+    const k = pos.getY(i) >= mid - 1e-6 ? 1 : 0.72;
+    arr[i * 3] = base.r * k;
+    arr[i * 3 + 1] = base.g * k;
+    arr[i * 3 + 2] = base.b * k;
   }
   g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
   return g;
 }
 
-/** 모서리를 반지름 r로 둥글린 상자 + 이음매 없는 부드러운 법선 */
-function rbox(w: number, h: number, d: number, r: number, x: number, y: number, z: number, color: number): THREE.BufferGeometry {
-  r = Math.min(r, Math.min(w, h, d) / 2 - 0.002);
-  const g = new THREE.BoxGeometry(w, h, d, 4, 4, 4);
-  const p = g.getAttribute('position');
-  const hx = w / 2 - r;
-  const hy = h / 2 - r;
-  const hz = d / 2 - r;
-  const cl = (v: number, m: number) => Math.max(-m, Math.min(m, v));
-  for (let i = 0; i < p.count; i++) {
-    let X = p.getX(i);
-    let Y = p.getY(i);
-    let Z = p.getZ(i);
-    const qx = cl(X, hx);
-    const qy = cl(Y, hy);
-    const qz = cl(Z, hz);
-    const dx = X - qx;
-    const dy = Y - qy;
-    const dz = Z - qz;
-    const len = Math.hypot(dx, dy, dz);
-    if (len > 1e-9) {
-      X = qx + (dx / len) * r;
-      Y = qy + (dy / len) * r;
-      Z = qz + (dz / len) * r;
-    }
-    p.setXYZ(i, X, Y, Z);
-  }
-  g.deleteAttribute('uv');
-  g.deleteAttribute('normal');
-  const m = mergeVertices(g, 1e-5);
-  m.computeVertexNormals();
-  m.translate(x, y, z);
-  return tint(m, color);
+/** n각 기둥(아래 반지름 rb, 위 rt, 높이 h). 앞(−z)이 평면이 되게 반 칸 돌리고 앞뒤 sz · 좌우 sx 배, 가운데 (x, y0, z) */
+const prism = (rb: number, rt: number, h: number, n: number, y0: number, color: number, sx = 1, sz = 1, x = 0, z = 0) =>
+  shade(new THREE.CylinderGeometry(rt, rb, h, n, 1, false).rotateY(Math.PI / n).scale(sx, 1, sz).translate(x, y0, z), color);
+
+const box = (w: number, h: number, d: number, x: number, y: number, z: number, color: number) => shade(new THREE.BoxGeometry(w, h, d).translate(x, y, z), color);
+
+/** 위쪽 반지름 rt · 아래 rb의 반쪽 기둥 (가운 자락: 왼쪽 반 = side −1). 안쪽 면은 안 그린다 → 앞이 열린 모습 */
+function halfPrism(side: number, rb: number, rt: number, h: number, y0: number, color: number, sz: number, x: number): THREE.BufferGeometry {
+  const g = new THREE.CylinderGeometry(rt, rb, h, 8, 1, true, side < 0 ? Math.PI : 0, Math.PI).scale(1, 1, sz).translate(x, y0, 0);
+  return shade(g, color);
 }
 
-/** 얇은 평판 (패치·라벨·환기구): 납작하게 */
-const plate = (w: number, h: number, d: number, x: number, y: number, z: number, color: number) => tint(new THREE.BoxGeometry(w, h, d).translate(x, y, z), color);
-
-/** 세로 캡슐 (팔다리): 전체 길이 len + 2r, 가운데 y */
-const cap = (r: number, len: number, y: number, color: number) => tint(new THREE.CapsuleGeometry(r, len, 3, 8).translate(0, y, 0), color);
-
-/** 공 (납작하게 sy) */
-const ball = (r: number, x: number, y: number, z: number, color: number, sx = 1, sy = 1, sz = 1) =>
-  tint(new THREE.SphereGeometry(r, 9, 6).scale(sx, sy, sz).translate(x, y, z), color);
-
-/** 속 빈 원통 띠 (헬멧 식별 띠) */
-const band = (r: number, h: number, y: number, color: number) => tint(new THREE.CylinderGeometry(r, r, h, 14, 1, true).translate(0, y, 0), color);
+/** 앞(−z)을 보는 삼각형 (셔츠 V) */
+function tri(a: number[], b: number[], c: number[], color: number): THREE.BufferGeometry {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([...a, ...c, ...b], 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 0, -1, 0, 0, -1, 0, 0, -1], 3));
+  const col = new THREE.Color(color);
+  g.setAttribute('color', new THREE.Float32BufferAttribute([col.r, col.g, col.b, col.r, col.g, col.b, col.r, col.g, col.b], 3));
+  return g;
+}
 
 const merge = (...g: THREE.BufferGeometry[]): THREE.BufferGeometry => mergeGeometries(g)!;
 
@@ -165,86 +127,83 @@ const joint = (parent: THREE.Object3D, x: number, y: number, z = 0): THREE.Group
   return g;
 };
 
+export interface ArmRig {
+  shoulder: THREE.Group;
+  elbow: THREE.Group;
+  /** 손끝 (위팔 UPPER + 아래팔·손 FORE) */
+  anchor: THREE.Group;
+}
+
 /**
- * 인형 만들기 (3.5등신, 부드러운 곡면): 앞(−z), 뒤(+z)에 배낭. 서 있을 때 키 약 1.75 m, 발바닥 y = 0.
- * 모서리를 둥글린 몸통·돔 헬멧·캡슐 팔다리·공 어깨와 무릎. 식별 색(띠·가슴 패치·소매 끝·장화 줄)은 사람마다 다르게
+ * 팔 하나 (가운 소매 + 사람 색 니트릴 장갑): 위팔 메시 1 + 아래팔·장갑 메시 1. 어깨 관절은 parent 안 (side·0.19, 0.45)
+ * 1인칭 두 손이 같은 팔을 다시 쓴다 (위팔을 안 그리려면 shoulder의 첫 메시를 숨긴다)
+ */
+export function buildArm(side: number, color: number, mat: THREE.Material, parent: THREE.Object3D, x = side * SHOULDER_X, y = SHOULDER_Y): ArmRig {
+  const shoulder = joint(parent, x, y);
+  shoulder.add(new THREE.Mesh(merge(prism(0.042, 0.052, UPPER, 6, -UPPER / 2, COAT)), mat));
+  const elbow = joint(shoulder, 0, -UPPER);
+  elbow.add(new THREE.Mesh(merge(
+    prism(0.038, 0.046, 0.2, 6, -0.1, COAT), // 소매
+    prism(0.03, 0.04, FORE - 0.2, 6, -0.2 - (FORE - 0.2) / 2, color), // 장갑 (손)
+  ), mat));
+  const anchor = joint(elbow, 0, -FORE);
+  return { shoulder, elbow, anchor };
+}
+
+/**
+ * 인형 만들기 (가운 연구자, 약 6.5등신): 앞(−z). 서 있을 때 키 약 1.72 m, 발바닥 y = 0. 마디 13개 = 그리기 13.
+ * 사람 색은 장갑과 가운 앞 V 셔츠 (앞·뒤 어디서나 식별)
  */
 function buildRig(color: number, mat: THREE.Material, group: THREE.Group): Rig {
-  const accent = new THREE.Color(color).lerp(new THREE.Color(0x6a6048), 0.1).getHex();
   const mesh = (geo: THREE.BufferGeometry, parent: THREE.Object3D) => {
     const m = new THREE.Mesh(geo, mat);
     parent.add(m);
     return m;
   };
-  const hose = new THREE.TubeGeometry(
-    new THREE.CatmullRomCurve3([new THREE.Vector3(0.13, 0.08, 0.33), new THREE.Vector3(0.19, -0.03, 0.35), new THREE.Vector3(0.14, -0.1, 0.31), new THREE.Vector3(0.07, -0.06, 0.28)]),
-    10, 0.02, 5,
-  );
-  const pelvis = joint(group, 0, 0.79);
-  const torso = joint(pelvis, 0, 0.09);
-  mesh(merge(
-    rbox(0.44, 0.2, 0.29, 0.08, 0, -0.01, 0, KHAKI), // 허리·엉덩이
-    rbox(0.48, 0.44, 0.31, 0.11, 0, 0.2, 0, KHAKI), // 굵은 몸통
-    rbox(0.38, 0.27, 0.06, 0.05, 0, 0.24, -0.16, GREEN), // 올리브 가슴 판
-    plate(0.12, 0.12, 0.012, 0.06, 0.27, -0.195, accent), // 가슴 식별 패치 (네모)
-    plate(0.07, 0.045, 0.012, -0.11, 0.14, -0.195, 0xb59b24), // 작은 경고 라벨
-    rbox(0.07, 0.4, 0.05, 0.02, -0.16, 0.2, -0.175, BLACK), // 멜빵
-    rbox(0.07, 0.4, 0.05, 0.02, 0.16, 0.2, -0.175, BLACK),
-    rbox(0.52, 0.08, 0.34, 0.035, 0, 0.04, 0, BLACK), // 벨트
-    rbox(0.09, 0.11, 0.08, 0.03, -0.2, 0.04, -0.19, BLACK), // 벨트 주머니
-    rbox(0.09, 0.11, 0.08, 0.03, 0.2, 0.04, -0.19, BLACK),
-    rbox(0.5, 0.08, 0.33, 0.04, 0, 0.42, 0, GREEN), // 어깨 판
-    rbox(0.36, 0.4, 0.18, 0.05, 0, 0.22, 0.24, PACK), // 사각 장비 배낭
-    rbox(0.37, 0.06, 0.19, 0.03, 0, 0.44, 0.24, BLACK), // 배낭 윗덮개
-    plate(0.05, 0.05, 0.012, 0.11, 0.34, 0.335, LIGHT), // 상태 표시등
-    plate(0.16, 0.014, 0.012, -0.03, 0.08, 0.335, BLACK), // 환기구 홈
-    plate(0.16, 0.014, 0.012, -0.03, 0.115, 0.335, BLACK),
-    plate(0.16, 0.014, 0.012, -0.03, 0.15, 0.335, BLACK),
-    tint(hose, BLACK), // 늘어진 호스
+  const pelvis = joint(group, 0, 0.93);
+  mesh(merge(prism(0.13, 0.14, 0.16, 6, -0.02, TROUSER, 1.15, 0.85)), pelvis); // 바지 허리
+  const torso = joint(pelvis, 0, 0);
+  const torsoMesh = mesh(merge(
+    prism(0.205, 0.185, 0.48, 8, 0.22, COAT, 1, 0.72), // 가운 몸통
+    tri([-0.075, 0.46, -0.126], [0, 0.2, -0.131], [0.075, 0.46, -0.126], color), // 앞 V: 사람 색 셔츠
+    box(0.075, 0.09, 0.02, -0.095, 0.07, -0.135, COAT_D), // 가운 주머니
+    box(0.075, 0.09, 0.02, 0.095, 0.07, -0.135, COAT_D),
   ), torso);
-  const head = joint(torso, 0, 0.42);
+  const head = joint(torso, 0, NECK_Y);
   mesh(merge(
-    cap(0.075, 0.0, 0.03, BLACK), // 목 보호대
-    ball(0.215, 0, 0.2, 0, HELM, 1.1, 0.95, 1.05), // 돔 헬멧
-    band(0.208, 0.05, 0.3, accent), // 식별 띠
-    rbox(0.38, 0.24, 0.08, 0.065, 0, 0.19, -0.18, HELM), // 바이저 틀
-    rbox(0.33, 0.19, 0.06, 0.055, 0, 0.19, -0.212, VISOR), // 불투명 검은 바이저 (얼굴 없음)
-    plate(0.22, 0.02, 0.006, -0.03, 0.255, -0.245, TEAL), // 어두운 청록 반사
-    rbox(0.3, 0.07, 0.09, 0.03, 0, 0.05, -0.17, BLACK), // 턱 보호대
-    rbox(0.06, 0.1, 0.11, 0.025, 0.225, 0.19, -0.04, SIDEPLATE), // 옆 바이저 판
-    rbox(0.06, 0.1, 0.11, 0.025, -0.225, 0.19, -0.04, SIDEPLATE),
+    prism(0.04, 0.04, 0.06, 6, 0.03, SKIN), // 목
+    prism(0.085, 0.09, 0.22, 8, 0.15, SKIN), // 머리 (눈 = 목 위 0.15)
+    prism(0.097, 0.097, 0.09, 8, 0.215, HAIR), // 머리칼
+    box(0.17, 0.15, 0.05, 0, 0.17, 0.075, HAIR),
+    prism(0.099, 0.099, 0.05, 8, 0.15, STRAP), // 보안경 띠
+    box(0.13, 0.035, 0.012, 0, 0.15, -0.098, LENS), // 렌즈
   ), head);
-  const arm = (side: number) => {
-    const shoulder = joint(torso, side * 0.33, 0.36);
-    mesh(merge(cap(0.085, 0.07, -0.12, KHAKI), ball(0.115, 0, 0.0, 0, GREEN)), shoulder);
-    const elbow = joint(shoulder, 0, -0.24);
-    mesh(merge(
-      cap(0.075, 0.05, -0.1, GREEN), // 올리브 아래팔
-      band(0.082, 0.03, -0.185, accent), // 소매 끝 식별 띠
-      rbox(0.17, 0.15, 0.17, 0.06, 0, -0.27, 0, BLACK), // 두꺼운 장갑
-    ), elbow);
-    return { shoulder, elbow };
+  // 가운 자락: 골반 자식, 허리 → 무릎 0.50 m (엉덩이 앞뒤 각의 0.6배로 흔들림)
+  const flap = (side: number) => {
+    const f = joint(pelvis, side * HIP_X, -HIP_DROP);
+    mesh(merge(halfPrism(side, 0.27, 0.19, 0.5, -0.15, COAT, 0.75, -side * HIP_X)), f);
+    return f;
   };
+  const flapL = flap(-1);
+  const flapR = flap(1);
+  const aL = buildArm(-1, color, mat, torso);
+  const aR = buildArm(1, color, mat, torso);
   const leg = (side: number) => {
-    const hip = joint(pelvis, side * 0.12, -0.09);
+    const hip = joint(pelvis, side * HIP_X, -HIP_DROP);
+    mesh(merge(prism(0.06, 0.075, THIGH, 6, -THIGH / 2, TROUSER)), hip);
+    const knee = joint(hip, 0, -THIGH);
     mesh(merge(
-      cap(0.105, 0.09, -0.15, KHAKI),
-      rbox(0.05, 0.14, 0.1, 0.02, side * 0.115, -0.12, 0, BLACK), // 허벅지 옆 주머니
-    ), hip);
-    const knee = joint(hip, 0, -0.3);
-    mesh(merge(
-      cap(0.09, 0.12, -0.15, GREEN),
-      ball(0.11, 0, 0, -0.025, DGREEN, 1, 0.9, 1), // 무릎 보호대
-      rbox(0.2, 0.15, 0.34, 0.06, 0, -0.325, -0.07, BLACK), // 큰 장화 (바닥 −0.40)
-      rbox(0.21, 0.03, 0.15, 0.012, 0, -0.29, -0.12, accent), // 장화 식별 줄
+      prism(0.045, 0.058, SHIN, 6, -SHIN / 2, TROUSER), // 정강이 (무릎 ~ 발목)
+      box(0.1, ANKLE_H, 0.26, 0, -SHIN - ANKLE_H / 2, -0.06, SHOE), // 신발
     ), knee);
     return { hip, knee };
   };
-  const aL = arm(-1);
-  const aR = arm(1);
   const lL = leg(-1);
   const lR = leg(1);
-  return { pelvis, torso, head, hipL: lL.hip, hipR: lR.hip, kneeL: lL.knee, kneeR: lR.knee, shoulderL: aL.shoulder, shoulderR: aR.shoulder, elbowL: aL.elbow, elbowR: aR.elbow };
+  return {
+    pelvis, torso, torsoMesh, head, hipL: lL.hip, hipR: lR.hip, kneeL: lL.knee, kneeR: lR.knee, shoulderL: aL.shoulder, shoulderR: aR.shoulder, elbowL: aL.elbow, elbowR: aR.elbow,
+    flapL, flapR, anchor: aR.anchor,
+  };
 }
 
 export class Avatars {
@@ -269,15 +228,15 @@ export class Avatars {
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
     const rig = buildRig(info.color, mat, group);
     group.add(nameTag(info.name));
-    // 든 기구: 오른손 끝. 팔이 돌아도 기구는 똑바로 서게 update에서 반대로 돌려 준다
-    const anchor = joint(rig.elbowR, 0, -0.36, -0.07);
+    // 든 기구: 오른손 끝 (rig.anchor). 팔이 돌아도 기구는 몸 방향으로 똑바로 서게 update에서 반대로 돌려 준다
+    const anchor = rig.anchor;
     group.userData.noPick = true;
     group.visible = false; // 첫 자세를 받기 전에는 숨김
     this.retro(group);
     this.scene.add(group);
     a = {
       info, group, anchor, rig, motion: newMotion(), target: { x: 0, y: 0, z: 0, yaw: 0 }, held: null, seen: false,
-      speed: 0, vx: 0, vz: 0, poseAt: 0, turn: 0, c: 0, pitch: 0, t: 0, reachAt: -Infinity,
+      vx: 0, vz: 0, mvx: 0, mvz: 0, poseAt: 0, c: 0, pitch: 0, t: 0, reachAt: -Infinity, reachPoint: null,
     };
     this.map.set(info.id, a);
     return a;
@@ -286,6 +245,12 @@ export class Avatars {
   setPose(info: PlayerInfo, pose: Pose): void {
     const a = this.ensure(info);
     const now = performance.now();
+    if (a.seen && Math.hypot(pose.x - a.group.position.x, pose.z - a.group.position.z) > 1.5) {
+      // 순간이동(재접속·텔레포트): 따라가지 않고 바로 옮긴다 (속도가 튀어 발이 끌려가지 않게)
+      a.group.position.set(pose.x, 0, pose.z);
+      a.vx = a.vz = a.mvx = a.mvz = 0;
+      a.poseAt = 0;
+    }
     if (a.seen && a.poseAt && now > a.poseAt) {
       const dt = (now - a.poseAt) / 1000;
       const vx = Math.max(-4, Math.min(4, (pose.x - a.target.x) / dt));
@@ -303,10 +268,12 @@ export class Avatars {
     }
   }
 
-  /** 이 사람이 방금 무언가를 조작했다 → 오른팔을 앞으로 뻗는다 */
-  reach(id: string): void {
+  /** 이 사람이 방금 무언가를 조작했다 → 오른손을 세계 좌표 point(없으면 몸 앞 0.5 m 가슴 높이)로 뻗는다 (0.25 s 뻗기 · 0.15 s 멈춤 · 0.3 s 돌아옴) */
+  reach(id: string, point?: THREE.Vector3): void {
     const a = this.map.get(id);
-    if (a) a.reachAt = performance.now();
+    if (!a) return;
+    a.reachAt = performance.now();
+    a.reachPoint = point ? (a.reachPoint ?? new THREE.Vector3()).copy(point) : null;
   }
 
   /** 테스트·디버그: 모션 상태 (걸음 위상 등) */
@@ -319,6 +286,22 @@ export class Avatars {
     return this.map.get(id)?.rig ?? null;
   }
 
+  /** 테스트·디버그: 그려진 발목 세계 위치 (무릎 관절 아래 정강이 끝, 관절 행렬로 구한 값) [왼, 오른] */
+  anklesOf(id: string): THREE.Vector3[] | null {
+    const r = this.map.get(id)?.rig;
+    if (!r) return null;
+    return [r.kneeL, r.kneeR].map((k) => k.localToWorld(new THREE.Vector3(0, -SHIN, 0)));
+  }
+
+  /** 테스트·디버그: 그려진 손끝 세계 위치 · 관절(어깨·엉덩이·머리) 세계 위치 */
+  handOf(id: string): THREE.Vector3 | null {
+    return this.map.get(id)?.anchor.getWorldPosition(new THREE.Vector3()) ?? null;
+  }
+
+  jointOf(id: string, name: 'shoulderR' | 'hipL' | 'hipR' | 'head'): THREE.Vector3 | null {
+    return this.map.get(id)?.rig[name].getWorldPosition(new THREE.Vector3()) ?? null;
+  }
+
   update(dt: number, camera: THREE.Camera): void {
     const k = 1 - Math.exp(-FOLLOW * dt);
     const now = performance.now();
@@ -327,42 +310,46 @@ export class Avatars {
       const g = a.group;
       const px = g.position.x;
       const pz = g.position.z;
-      const py = g.rotation.y;
       const ahead = Math.min(0.15, (now - a.poseAt) / 1000); // 자세 사이를 속도로 이어 뚝뚝 끊김을 줄임 (최대 0.15 s 앞)
       g.position.x += (a.target.x + a.vx * ahead - g.position.x) * k;
       g.position.z += (a.target.z + a.vz * ahead - g.position.z) * k;
       let d = a.target.yaw - g.rotation.y;
       d = Math.atan2(Math.sin(d), Math.cos(d)); // −π ~ π (돌아가는 짧은 쪽으로)
       g.rotation.y += d * k;
-      // ---- 모션: 실제로 움직인 만큼으로 속도·회전 속도를 구한다 (지수 평활 0.15 s) ----
+      // ---- 모션: 실제로 움직인 만큼으로 이동 속도를 구한다 (지수 평활 0.15 s) ----
       if (dt > 0) {
         const sm = 1 - Math.exp(-dt / 0.15);
-        a.speed += (Math.hypot(g.position.x - px, g.position.z - pz) / dt - a.speed) * sm;
-        let dy = g.rotation.y - py;
-        dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-        a.turn += (dy / dt - a.turn) * sm;
+        a.mvx += ((g.position.x - px) / dt - a.mvx) * sm;
+        a.mvz += ((g.position.z - pz) / dt - a.mvz) * sm;
         a.c += ((a.target.c ?? 0) - a.c) * (1 - Math.exp(-dt / 0.08));
         a.pitch += ((a.target.pitch ?? 0) - a.pitch) * (1 - Math.exp(-dt / 0.08));
         a.t += dt;
       }
-      const j = stepMotion(a.motion, { speed: a.speed, turn: a.turn, pitch: a.pitch, c: a.c, holding: !!a.held, reachAge: (now - a.reachAt) / 1000, t: a.t }, dt);
+      const o = stepMotion(a.motion, {
+        x: g.position.x, z: g.position.z, vx: a.mvx, vz: a.mvz, headYaw: g.rotation.y, pitch: a.pitch, c: a.c, holding: !!a.held,
+        reachAge: (now - a.reachAt) / 1000, reachPoint: a.reachPoint, t: a.t,
+      }, dt);
       const r = a.rig;
-      r.pelvis.position.y = j.pelvisY;
-      r.pelvis.position.x = j.sway;
-      r.torso.rotation.z = j.roll;
-      r.torso.rotation.x = j.torsoX;
-      r.torso.scale.y = 1 + j.breath;
-      r.head.rotation.set(j.headX, j.headY, 0);
-      r.hipL.rotation.x = j.hipL;
-      r.hipR.rotation.x = j.hipR;
-      r.kneeL.rotation.x = j.kneeL;
-      r.kneeR.rotation.x = j.kneeR;
-      r.shoulderL.rotation.x = j.shoulderL;
-      r.shoulderR.rotation.x = j.shoulderR;
-      r.elbowL.rotation.x = j.elbowL;
-      r.elbowR.rotation.x = j.elbowR;
-      a.anchor.rotation.x = -(j.shoulderR + j.elbowR) - j.torsoX; // 든 기구는 팔이 돌아도 똑바로
+      r.pelvis.position.set(0, o.pelvisY, 0);
+      r.pelvis.rotation.y = wrapAngle(o.bodyYaw - g.rotation.y); // 몸 방향 (group은 고개 방향)
+      r.torso.quaternion.copy(o.torso);
+      r.torsoMesh.scale.y = 1 + o.breath;
+      r.head.quaternion.copy(o.head);
+      r.hipL.quaternion.copy(o.hip[0]);
+      r.hipR.quaternion.copy(o.hip[1]);
+      r.kneeL.quaternion.copy(o.knee[0]);
+      r.kneeR.quaternion.copy(o.knee[1]);
+      r.shoulderL.quaternion.copy(o.shoulder[0]);
+      r.shoulderR.quaternion.copy(o.shoulder[1]);
+      r.elbowL.quaternion.copy(o.elbow[0]);
+      r.elbowR.quaternion.copy(o.elbow[1]);
+      r.flapL.rotation.x = o.flap[0];
+      r.flapR.rotation.x = o.flap[1];
       g.updateMatrixWorld(true);
+      // 든 기구는 팔이 돌아도 몸 방향으로 똑바로: 앵커의 세계 회전 = 몸 방향 yaw
+      r.elbowR.getWorldQuaternion(_qe);
+      a.anchor.quaternion.copy(_qe.invert()).multiply(_qy.setFromAxisAngle(_up, o.bodyYaw));
+      a.anchor.updateMatrixWorld(true);
       const tag = g.children.find((c) => c.userData.nameTag);
       if (tag) {
         tag.position.y = r.head.matrixWorld.elements[13] - g.position.y + 0.45; // 머리 위 (앉으면 같이 내려옴)
