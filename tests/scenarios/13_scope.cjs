@@ -114,10 +114,18 @@ module.exports = {
 
     // ---- 4) 반파 정류 + 평활 ----
     r = await run(
-      [['정류 다이오드', 9.4, 2.3], ['저항 1 kΩ', 9.4, 2.6]],
-      [['함수 발생기', 'out', '정류 다이오드', 'a'], ['정류 다이오드', 'b', '저항 1 kΩ', 'a'], ['저항 1 kΩ', 'b', '함수 발생기', 'com'], ['오실로스코프', 'ch1', '함수 발생기', 'out'], ['오실로스코프', 'ch2', '저항 1 kΩ', 'a']],
+      [['정류 다이오드', 9.4, 2.3], ['저항 1 kΩ', 9.4, 2.6], ['전압계 1', 9.7, 2.6]],
+      [['함수 발생기', 'out', '정류 다이오드', 'a'], ['정류 다이오드', 'b', '저항 1 kΩ', 'a'], ['저항 1 kΩ', 'b', '함수 발생기', 'com'], ['오실로스코프', 'ch1', '함수 발생기', 'out'], ['오실로스코프', 'ch2', '저항 1 kΩ', 'a'], ['전압계 1', 'a', '저항 1 kΩ', 'a'], ['전압계 1', 'b', '저항 1 kΩ', 'b']],
       { wave: 'sine', freq: 100, amp: 5, offset: 0 }, { tdiv: 5e-3 });
     t.check(r.m2.vmin > -0.05 && r.m2.vmax > 3.9 && r.m2.vmax < 4.5, `반파 정류: 음의 반주기 차단, 최댓값 = 5 V − 다이오드 강하 (${r.m2.vmin.toFixed(3)} ~ ${r.m2.vmax.toFixed(2)} V)`);
+    // 직류 전압계(10 MΩ)는 파형의 평균을 읽는다 — 정상 상태로 멈춘 뒤에도 매 프레임 같은 값이어야 한다 (직류 해석이 0으로 덮어쓰지 않게)
+    const vm = await t.ev(() => new Promise((res) => {
+      const V = window.lab.items.find((i) => i.name.startsWith('전압계 1'));
+      const out = []; let n = 0;
+      const tick = () => { out.push(V.reading); if (++n < 14) requestAnimationFrame(tick); else res(out); };
+      requestAnimationFrame(tick);
+    }));
+    t.check(vm.every((x) => Math.abs(x - r.m2.mean) < 0.01) && r.m2.mean > 1, `전압계 표시값 = 파형 평균, 14프레임 내내 (${vm[0].toFixed(3)} V, 평균 ${r.m2.mean.toFixed(3)} V)`);
     r = await run(
       [['정류 다이오드', 9.4, 2.3], ['저항 1 kΩ', 9.4, 2.6], ['축전기 100', 9.7, 2.6]],
       [['함수 발생기', 'out', '정류 다이오드', 'a'], ['정류 다이오드', 'b', '저항 1 kΩ', 'a'], ['저항 1 kΩ', 'b', '함수 발생기', 'com'], ['축전기 100', 'a', '저항 1 kΩ', 'a'], ['축전기 100', 'b', '저항 1 kΩ', 'b'], ['오실로스코프', 'ch1', '함수 발생기', 'out'], ['오실로스코프', 'ch2', '저항 1 kΩ', 'a']],
@@ -139,6 +147,23 @@ module.exports = {
     await t.wait(500);
     r = await t.ev(() => window.H.read());
     t.check(!r.has, '오실로스코프를 끄면 파형이 사라짐');
+    // ---- 7) 패널 조작(명령 버스) → 되돌리기 ----
+    await run(
+      [['저항 1 kΩ', 9.4, 2.3]],
+      [['함수 발생기', 'out', '저항 1 kΩ', 'a'], ['저항 1 kΩ', 'b', '함수 발생기', 'com'], ['오실로스코프', 'ch1', '함수 발생기', 'out']],
+      { wave: 'sine', freq: 1000, amp: 2, offset: 0 }, { tdiv: 1e-3 }, 3000);
+    await t.ev(() => { window.lab.scopePanel.open(window.lab.stock.scopes[0]); });
+    const t0 = await t.ev(() => window.lab.stock.scopes[0].tdiv);
+    await t.page.tap('#sc-t-plus');
+    await t.wait(300);
+    t.check(await t.ev((t0) => window.lab.stock.scopes[0].tdiv > t0, t0), '패널 + 버튼: 시간축이 한 단계 느려짐 (bus.set)');
+    await t.page.tap('#fg-wave button[data-v="square"]');
+    await t.wait(1000);
+    t.check(await t.ev(() => window.lab.stock.funcGens[0].wave === 'square'), '패널: 발생기 파형 → 사각파');
+    await t.ev(() => { const { bus } = window.lab; bus.dispatch({ t: 'undo', by: bus.me }); });
+    await t.wait(400);
+    t.check(await t.ev(() => window.lab.stock.funcGens[0].wave === 'sine'), '되돌리기: 마지막 조작(사각파)만 취소');
+    t.check(await t.ev((t0) => window.lab.stock.scopes[0].tdiv > t0, t0), '되돌리기는 하나만: 시간축 변경은 그대로');
     t.check(t.errors.length === 0, `페이지 오류 없음${t.errors.length ? ': ' + t.errors[0].slice(0, 120) : ''}`);
   },
 };

@@ -133,6 +133,10 @@ export interface ScopeSim {
   settled: number;
   /** 지난번 최댓값·최솟값 (CH1 최대, CH1 최소, CH2 최대, CH2 최소) — 정상 상태 판정용 */
   stats: number[];
+  /** 풀이 구간의 부품별 평균 [전압, 전류] — 직류 해석이 매 프레임 0으로 덮어쓰므로 매 프레임 다시 적용한다 */
+  means: Map<CircuitPart, [number, number]>;
+  /** 기구 위 화면을 마지막으로 그린 상태 (기구의 단순 필드로 두면 되돌리기·스냅숏이 기록하므로 여기에) */
+  drawn: string;
   key: string;
   simT: number;
 }
@@ -168,10 +172,9 @@ export class Oscilloscope extends Item implements Powered {
   onOpenPanel: (s: Oscilloscope) => void = () => {};
   readonly sim: ScopeSim = {
     has: false, note: '', seq: 0, dt: 1e-6, ch1: new Float32Array(SCOPE_N), ch2: new Float32Array(SCOPE_N), triggered: false,
-    m1: NO_M, m2: NO_M, phase: null, gens: [], lastRun: 0, settled: 0, stats: [0, 0, 0, 0], key: '', simT: 0,
+    m1: NO_M, m2: NO_M, phase: null, gens: [], lastRun: 0, settled: 0, stats: [0, 0, 0, 0], means: new Map(), drawn: '', key: '', simT: 0,
   };
   private screen: { ctx: CanvasRenderingContext2D; tex: THREE.CanvasTexture };
-  private drawn = '';
 
   constructor(name = '오실로스코프') {
     const g = new THREE.Group();
@@ -210,8 +213,8 @@ export class Oscilloscope extends Item implements Powered {
   update(): void {
     if (!this.port) this.on = false;
     const key = `${this.on}|${this.sim.seq}|${this.mode}|${this.show1}|${this.show2}|${this.vdiv1}|${this.vdiv2}|${this.pos1}|${this.pos2}|${this.trigLevel}|${this.trigCh}|${this.tdiv}`;
-    if (key === this.drawn) return;
-    this.drawn = key;
+    if (key === this.sim.drawn) return;
+    this.sim.drawn = key;
     drawScope(this.screen.ctx, 160, 128, this, true);
     this.screen.tex.needsUpdate = true;
   }
@@ -361,8 +364,11 @@ export function updateScopes(env: ScopeEnv, nowMs: number): void {
       s.note = !sc.port ? '콘센트에 꽂혀 있지 않음' : '전원이 꺼져 있음';
       s.gens = [];
       s.key = '';
+      s.means = new Map();
       continue;
     }
+    // 직류 해석(solveDCCircuits)이 이 부품들의 전압·전류를 0으로 덮어쓴 뒤이므로, 지난 풀이의 평균을 매 프레임 다시 넣는다
+    for (const [p, [vv, ii]] of s.means) { p.voltage = vv; p.current = ii; }
     if (nowMs - s.lastRun < 120 && s.lastRun) {
       continue;
     }
@@ -398,6 +404,7 @@ function run(sc: Oscilloscope, env: ScopeEnv, nowMs: number, claimed: Set<Circui
     s.note = '프로브(CH1 · CH2)를 회로에 도선으로 연결하세요';
     s.gens = [];
     s.key = '';
+    s.means = new Map();
     return;
   }
   const comp = new Set<number>(probes);
@@ -413,6 +420,7 @@ function run(sc: Oscilloscope, env: ScopeEnv, nowMs: number, claimed: Set<Circui
   if (mine.some((p) => claimed.has(p))) {
     s.has = false;
     s.note = '다른 오실로스코프가 같은 회로를 재고 있습니다';
+    s.means = new Map();
     return;
   }
   for (const p of mine) claimed.add(p);
@@ -510,6 +518,7 @@ function run(sc: Oscilloscope, env: ScopeEnv, nowMs: number, claimed: Set<Circui
   }
   s.simT = sim.t;
   // 부품 상태·표시값 되돌려 쓰기
+  s.means = new Map(tracks.map((tr) => [tr.part, [tr.accV / total, tr.accI / total] as [number, number]]));
   for (const tr of tracks) {
     const p = tr.part;
     p.voltage = tr.accV / total;
