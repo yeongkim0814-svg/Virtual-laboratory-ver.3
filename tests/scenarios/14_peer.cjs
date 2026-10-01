@@ -36,6 +36,15 @@ module.exports = {
       t.check(a.n === 2 && b.n === 2 && b.role === 'client', `두 화면 모두 2명 (방장 ${a.n}, 손님 ${b.n}, ${b.role})`);
       t.near(b.v, 3.3, 1e-9, '방장의 명령(전압 3.3 V)이 손님에게 복제');
       t.check(a.d === b.d, '세계 요약(digest) 일치');
+      // 손님이 말없이 사라짐 (모바일에서 탭을 닫으면 끊김 신호가 안 오는 경우): 소식을 끊는다
+      await B.ev(() => { const s = window.lab.session; for (const id of s.timers) clearInterval(id); s.up.send = () => {}; });
+      await t.wait(11500);
+      const gone = await t.ev(() => window.lab.session.players.size);
+      t.check(gone === 1, `소식 없는 손님은 10초 뒤 내보냄 (인원 ${gone})`);
+      const C = await t.newPeer();
+      const again = await C.ev((code) => window.lab.session.join(new window.lab.PeerTransport(), code, '다시').then(() => 'ok', (e) => e.message), code);
+      t.check(again === 'ok' && (await t.ev(() => window.lab.session.players.size)) === 2, `같은 방에 다시 들어가기 (${again})`);
+      await C.end();
       await B.end();
     } finally {
       server.close();

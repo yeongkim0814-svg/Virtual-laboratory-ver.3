@@ -63,6 +63,8 @@ interface Msg {
 }
 
 const POSE_MS = 100;
+/** 손님 소식이 이만큼 없으면 나간 것으로 본다 (모바일은 탭을 닫아도 연결 끊김 신호가 안 오거나 늦다) */
+export const GHOST_MS = 10000;
 const PHYS_MS = 66;
 const SUM_MS = 2000;
 
@@ -123,6 +125,7 @@ export class Session {
       window.setInterval(() => this.hostPoses(), POSE_MS),
       window.setInterval(() => this.broadcast('fast', { k: 'phys', s: this.hooks.physicsOut() }), PHYS_MS),
       window.setInterval(() => this.broadcast('cmd', { k: 'sum', n: this.seq, d: this.hooks.digest() }), SUM_MS),
+      window.setInterval(() => this.reapGhosts(), 1000),
     );
     this.hooks.changed();
     // 칠판 그림(PNG) 첫 인코딩이 느려서(수백 ms) 손님이 들어올 때 끊기지 않게 미리 한 번 만들어 둔다
@@ -154,7 +157,16 @@ export class Session {
     return null;
   }
 
+  private seen = new Map<Link, number>();
+
+  /** 소식이 GHOST_MS 넘게 없는 손님을 내보낸다 */
+  private reapGhosts(): void {
+    const now = performance.now();
+    for (const [link, t] of this.seen) if (now - t > GHOST_MS) { link.close(); this.hostLost(link); }
+  }
+
   private hostGot(link: Link, ch: Channel, m: Msg): void {
+    this.seen.set(link, performance.now());
     const id = this.linkIds.get(link);
     if (m.k === 'hello') {
       const pid = this.freeId();
@@ -199,6 +211,7 @@ export class Session {
   }
 
   private hostLost(link: Link): void {
+    this.seen.delete(link);
     const id = this.linkIds.get(link);
     if (!id) return;
     this.linkIds.delete(link);
@@ -252,6 +265,7 @@ export class Session {
     this.seq = Number(w.seq);
     this.bus.router = (c) => link.send('cmd', { k: 'cmd', c });
     this.hooks.restore(w.world);
+    window.addEventListener('pagehide', this.onPageHide);
     this.lastHost = performance.now();
     this.timers.push(
       window.setInterval(() => link.send('fast', { k: 'pose', p: this.hooks.pose() }), POSE_MS),
@@ -356,11 +370,16 @@ export class Session {
 
   // ---------------------------------------------------------------- 공통
 
+  /** 탭을 닫거나 다른 페이지로 갈 때: 손님이면 나감 신호를 보낸다 (방장은 방이 끝남) */
+  private onPageHide = (): void => { if (this.role !== 'solo') this.leave(); };
+
   /** 방을 나간다 (방장이 나가면 방이 끝난다) */
   leave(): void {
     for (const id of this.timers) clearInterval(id);
     this.timers = [];
     document.removeEventListener('visibilitychange', this.onVisibility);
+    window.removeEventListener('pagehide', this.onPageHide);
+    this.seen.clear();
     this.hostSilent = this.hostHidden = false;
     if (this.role === 'client') this.up?.send('cmd', { k: 'bye' });
     this.up?.close();

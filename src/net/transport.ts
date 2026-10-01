@@ -260,6 +260,9 @@ export class PeerTransport implements Transport {
       }
     }
     if (!peer) throw new Error('방 코드를 만들지 못함');
+    // 신호 서버 연결이 끊기면(모바일 절전·망 흔들림) 이미 들어온 손님은 그대로지만 새 손님이 방을 못 찾는다 → 다시 붙는다
+    const p = peer;
+    p.on('disconnected', () => { if (!p.destroyed) window.setTimeout(() => { if (!p.destroyed && p.disconnected) p.reconnect(); }, 1000); });
     type Conn = ReturnType<typeof peer.connect>;
     const slots = new Map<string, { cmd?: Conn; fast?: Conn; link?: Link; recv?: (ch: Channel, msg: unknown) => void }>();
     peer.on('connection', (conn: Conn) => {
