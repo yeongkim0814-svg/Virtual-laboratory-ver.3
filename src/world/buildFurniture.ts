@@ -70,10 +70,15 @@ export function buildFurniture(scene: THREE.Scene): FurnitureResult {
   const clockTex = new THREE.CanvasTexture(clockCanvas);
   clockTex.colorSpace = THREE.SRGBColorSpace;
   clockTex.magFilter = THREE.NearestFilter;
-  const clockMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.32), new THREE.MeshBasicMaterial({ map: clockTex }));
-  clockMesh.position.set(0.09, 2.5, 3.9);
+  const clockMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.4), new THREE.MeshBasicMaterial({ map: clockTex }));
+  clockMesh.position.set(0.02, 2.5, 3.9);
+  clockMesh.rotation.y = Math.PI / 2;
   scene.add(clockMesh);
-  tickers.push((t) => {
+  let lastSec = -1;
+  tickers.push(() => {
+    const now = new Date();
+    if (now.getSeconds() === lastSec) return;
+    lastSec = now.getSeconds();
     const ctx = clockCanvas.getContext('2d')!;
     ctx.fillStyle = '#222';
     ctx.fillRect(0, 0, 128, 128);
@@ -82,7 +87,6 @@ export function buildFurniture(scene: THREE.Scene): FurnitureResult {
     ctx.beginPath();
     ctx.arc(64, 64, 60, 0, Math.PI * 2);
     ctx.stroke();
-    const now = new Date();
     const h = now.getHours() % 12;
     const m = now.getMinutes();
     const s = now.getSeconds();
@@ -129,17 +133,18 @@ export function buildFurniture(scene: THREE.Scene): FurnitureResult {
   // 온습도계 (칸막이 벽 문 옆)
   const thCanvas = document.createElement('canvas');
   thCanvas.width = 128;
-  thCanvas.height = 48;
+  thCanvas.height = 64;
   const thTex = new THREE.CanvasTexture(thCanvas);
   thTex.colorSpace = THREE.SRGBColorSpace;
   thTex.magFilter = THREE.NearestFilter;
-  const thMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.075), new THREE.MeshBasicMaterial({ map: thTex }));
-  thMesh.position.set(11.99, 1.6, 4.6);
+  const thMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.18), new THREE.MeshBasicMaterial({ map: thTex }));
+  thMesh.position.set(11.99, 1.5, 6.8);
+  thMesh.rotation.y = -Math.PI / 2;
   scene.add(thMesh);
   tickers.push((t) => {
     const ctx = thCanvas.getContext('2d')!;
     ctx.fillStyle = '#1a1a1a';
-    ctx.fillRect(0, 0, 128, 48);
+    ctx.fillRect(0, 0, 128, 64);
     const baseTemp = 22.5;
     const baseHumidity = 45;
     const periodT = 300; // 5분 주기
@@ -148,9 +153,9 @@ export function buildFurniture(scene: THREE.Scene): FurnitureResult {
     const temp = baseTemp + tempVar;
     const humidity = baseHumidity + humidVar;
     ctx.fillStyle = '#00ff00';
-    ctx.font = '12px monospace';
-    ctx.fillText(`T: ${temp.toFixed(1)}°C`, 4, 16);
-    ctx.fillText(`H: ${humidity.toFixed(0)}%`, 4, 32);
+    ctx.font = 'bold 24px Galmuri11, monospace';
+    ctx.fillText(`${temp.toFixed(1)} °C`, 8, 28);
+    ctx.fillText(`${humidity.toFixed(0)} %RH`, 8, 56);
     thTex.needsUpdate = true;
   });
 
