@@ -53,7 +53,8 @@ import { updateScopes } from './equipment/scope';
 import { ScopePanel } from './ui/scopePanel';
 import { Transient, waveform } from './sim/transient';
 import { PlaceBar } from './ui/placeBar';
-import { HAPTIC, TouchFeedback } from './ui/touchFeedback';
+import { TouchFeedback } from './ui/touchFeedback';
+import { audioManager, SFXS } from './audio/manager';
 import { UndoKeeper } from './net/undo';
 import { Session, COLORS, type Hooks, type PlayerInfo } from './net/session';
 import { Avatars } from './net/avatars';
@@ -167,13 +168,14 @@ bus.listeners.push((c, ok) => {
   reachPre = null;
 });
 // 내 명령의 결과를 손끝으로: 성공 짧게, 집기·놓기·끼우기는 조금 길게, 거부(실패)는 두 번 + 붉은 고리
-// (call·set은 슬라이더처럼 연달아 오므로 성공 진동은 생략)
+// (call·set은 슬라이더처럼 연달아 오므로 성공 음향은 생략)
 bus.listeners.push((c, ok) => {
   if (c.by !== bus.me) return;
   if (!ok) fx.rejected();
   else if (c.t === 'call' || c.t === 'set') return;
-  else if (c.t === 'place' || c.t === 'attach' || (c.t === 'act' && holdings.heldOf(c.by) === bus.registry.get(c.target))) fx.haptic(HAPTIC.grab);
-  else fx.haptic(HAPTIC.ok);
+  else if (c.t === 'place' || c.t === 'attach') audioManager.play(SFXS.attach);
+  else if (c.t === 'act' && holdings.heldOf(c.by) === bus.registry.get(c.target)) audioManager.play(SFXS.pick);
+  else audioManager.play(SFXS.pick);
 });
 const infoOf = (id: string): PlayerInfo => session.players.get(id) ?? { id, name: id, color: 0x888888 };
 const holdings: Holdings & { heldOf(who: string): Item | null } = {
@@ -884,7 +886,7 @@ function collectEquipmentBoxes(): void {
 
 // 테스트용: 주소 끝이 #debug일 때만 내부 객체를 노출 (자동 테스트가 조립을 빠르게 재현하는 데 씀)
 if (location.hash === '#debug') {
-  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans, session, avatars, sync, holdings, LocalTransport, PeerTransport, physics, scopePanel, fpHands, glide: { applyGlides, restoreGlides }, sim: { Transient, waveform }, motion: avatarMotion };
+  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans, session, avatars, sync, holdings, LocalTransport, PeerTransport, physics, scopePanel, fpHands, glide: { applyGlides, restoreGlides }, sim: { Transient, waveform }, motion: avatarMotion, audioManager };
 }
 
 renderer.info.autoReset = false; // 한 프레임의 그리기 호출을 모두 더한다 (진단 표시용)

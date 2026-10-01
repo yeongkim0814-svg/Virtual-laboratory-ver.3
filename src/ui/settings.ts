@@ -12,8 +12,6 @@ export interface Settings {
   showDebug: boolean;
   /** 내 두 손 보이기 (1인칭) */
   showHands: boolean;
-  /** 진동 피드백 (조작 결과·버튼 누름) */
-  haptics: boolean;
   /** 터치 표시 (탭 물결·길게 누르기 고리) */
   touchMarks: boolean;
   /** 내부 렌더링 세로 픽셀 수 (240 / 270 / 360) — 작을수록 도트가 굵다 */
@@ -22,7 +20,7 @@ export interface Settings {
   jitter: boolean;
 }
 
-const DEFAULTS: Settings = { lookSensitivity: 1.0, moveSpeed: 2.2, crouchEye: 1.0, showDebug: true, showHands: true, haptics: true, touchMarks: true, pixelHeight: 270, jitter: true };
+const DEFAULTS: Settings = { lookSensitivity: 1.0, moveSpeed: 2.2, crouchEye: 1.0, showDebug: true, showHands: true, touchMarks: true, pixelHeight: 270, jitter: true };
 const PIXEL_HEIGHTS = [240, 270, 360];
 
 export function loadSettings(): Settings {
@@ -53,7 +51,6 @@ export function bindSettingsPanel(settings: Settings, actions: { resetPosition()
   const debug = $<HTMLInputElement>('set-debug');
   const jitter = $<HTMLInputElement>('set-jitter');
   const hands = $<HTMLInputElement>('set-hands');
-  const haptics = $<HTMLInputElement>('set-haptics');
   const marks = $<HTMLInputElement>('set-marks');
   const resButtons = [...document.querySelectorAll<HTMLButtonElement>('#set-res button')];
   const sensVal = $('set-sens-val');
@@ -69,7 +66,6 @@ export function bindSettingsPanel(settings: Settings, actions: { resetPosition()
     debug.checked = settings.showDebug;
     jitter.checked = settings.jitter;
     hands.checked = settings.showHands;
-    haptics.checked = settings.haptics;
     marks.checked = settings.touchMarks;
     for (const b of resButtons) b.setAttribute('aria-pressed', String(Number(b.dataset.h) === settings.pixelHeight));
     sensVal.textContent = settings.lookSensitivity.toFixed(1) + '×';
@@ -83,17 +79,6 @@ export function bindSettingsPanel(settings: Settings, actions: { resetPosition()
   crouch.addEventListener('input', () => { settings.crouchEye = Number(crouch.value); refresh(); save(settings); });
   debug.addEventListener('change', () => { settings.showDebug = debug.checked; refresh(); save(settings); });
   hands.addEventListener('change', () => { settings.showHands = hands.checked; refresh(); save(settings); });
-  haptics.addEventListener('change', () => { settings.haptics = haptics.checked; refresh(); save(settings); });
-  // 진동 시험: 설정과 상관없이 0.3 s 진동을 직접 호출하고 브라우저가 돌려준 값을 보여 준다 (안 느껴질 때 원인 구분용)
-  $('set-vib-test').addEventListener('click', () => {
-    const out = $('set-vib-status');
-    if (!('vibrate' in navigator)) { out.textContent = '이 브라우저는 진동 API를 지원하지 않음 (크롬으로 열어 보세요)'; return; }
-    let r = false;
-    try { r = navigator.vibrate(300); } catch { /* 아래 문구 */ }
-    out.textContent = r
-      ? '진동을 요청함 (브라우저가 받아들임). 안 느껴지면 기기 설정의 진동 세기·방해 금지·절전 모드를 확인 — 갤럭시 탭 일부 모델은 진동 모터가 없음'
-      : '브라우저가 진동 요청을 거부함 (화면을 한 번 더 탭한 뒤 다시 시도)';
-  });
   marks.addEventListener('change', () => { settings.touchMarks = marks.checked; refresh(); save(settings); });
   jitter.addEventListener('change', () => { settings.jitter = jitter.checked; refresh(); save(settings); actions.applyGraphics(); });
   for (const b of resButtons) {

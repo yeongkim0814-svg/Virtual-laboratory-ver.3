@@ -1,12 +1,11 @@
 /**
- * 터치 피드백: 탭 물결 · 두 번 탭 겹고리 · 길게 누르기 진행 고리 · 결과(거부) 붉은 고리 · 진동.
+ * 터치 피드백: 탭 물결 · 두 번 탭 겹고리 · 길게 누르기 진행 고리 · 결과(거부) 붉은 고리.
  * 한 번 탭은 0.3 s 뒤에, 길게 누르기는 HOLD_TIME 뒤에 실행되므로 "닿았다"는 반응을 바로 보여 준다.
+ * 음향 피드백(효과음)은 audioManager에서 처리.
  * DOM만 쓴다 (Three 객체·점광원 없음). 놀고 있을 때는 아무것도 하지 않는다.
  */
 import type { Settings } from './settings';
-
-/** 진동 길이 (ms): 8~15 ms는 갤럭시 탭 진동 모터가 거의 못 낸다 → 확실히 느껴지는 25 ms 이상 */
-export const HAPTIC = { press: 25, ok: 30, grab: 40, reject: [50, 60, 50] } as const;
+import { audioManager, SFXS } from '../audio/manager';
 
 const RING_MS = 300; // 물결이 퍼져 사라지는 시간 (style.css tap-ripple과 같게)
 
@@ -29,19 +28,9 @@ export class TouchFeedback {
     });
   }
 
-  /** 진동 (설정이 꺼져 있으면 아무것도 안 함) */
-  haptic(pattern: number | number[]): void {
-    if (!this.settings.haptics) return;
-    try {
-      navigator.vibrate?.(pattern);
-    } catch {
-      /* 지원하지 않는 환경 */
-    }
-  }
-
-  /** 버튼 눌림: 진동 + 눌린 모양 (손가락이 떨어지면 해제) */
+  /** 버튼 눌림: 음향 피드백 + 눌린 모양 (손가락이 떨어지면 해제) */
   press(el: HTMLElement): void {
-    this.haptic(HAPTIC.press);
+    // 음향 피드백은 main.ts에서 처리 (버튼 종류에 따라 다른 음)
     el.classList.add('pressed');
     const off = () => {
       el.classList.remove('pressed');
@@ -78,9 +67,9 @@ export class TouchFeedback {
     this.ring(x, y, '', 80);
   }
 
-  /** 내 명령이 거부됨: 마지막 탭 자리(3 s 안)에 붉은 고리 + 진동 */
+  /** 내 명령이 거부됨: 마지막 탭 자리(3 s 안)에 붉은 고리 + 음향 피드백 */
   rejected(): void {
-    this.haptic([...HAPTIC.reject]);
+    audioManager.play(SFXS.reject);
     if (performance.now() - this.lastAt < 3000) this.ring(this.lastX, this.lastY, 'bad');
   }
 
@@ -95,11 +84,10 @@ export class TouchFeedback {
     h.classList.add('on');
   }
 
-  /** 길게 누르기가 실행됨 → 한 번 맥박 */
+  /** 길게 누르기가 실행됨 → 음향 피드백 (실행되는 명령에서 추가) */
   holdFire(): void {
     if (!this.hold.classList.contains('on')) return;
     this.hold.classList.add('fire');
-    this.haptic(HAPTIC.grab);
     setTimeout(() => this.holdCancel(), 220);
   }
 
