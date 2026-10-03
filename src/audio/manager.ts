@@ -51,14 +51,13 @@ export class AudioManager {
   }
 
   /**
-   * Google Drive에서 MP3 재생
-   * 파일 ID를 사용해 재생 URL 생성 후 HTMLAudioElement로 재생
+   * 로컬 MP3 파일 재생 (public/audio/sfx/ 에서)
    */
   play(sfx: SFX): void {
     if (!this.enabled) return;
     try {
-      const url = `https://drive.google.com/uc?export=download&id=${sfx.driveId}`;
-      const audio = this.getOrCreateAudio(sfx.driveId);
+      const url = `audio/sfx/${sfx.name}.mp3`;
+      const audio = this.getOrCreateAudio(sfx.name);
       audio.src = url;
       audio.volume = (sfx.volume ?? 0.5) * this.masterVolume;
       audio.currentTime = 0;
@@ -69,27 +68,24 @@ export class AudioManager {
   }
 
   /** 오디오 엘리먼트 캐시 (재사용) */
-  private getOrCreateAudio(driveId: string): HTMLAudioElement {
-    if (!this.audioCache.has(driveId)) {
+  private getOrCreateAudio(name: string): HTMLAudioElement {
+    if (!this.audioCache.has(name)) {
       const audio = new Audio();
       audio.preload = 'auto';
-      // CORS 문제 방지
-      audio.crossOrigin = 'anonymous';
-      this.audioCache.set(driveId, audio);
+      this.audioCache.set(name, audio);
     }
-    return this.audioCache.get(driveId)!;
+    return this.audioCache.get(name)!;
   }
 
   /**
    * 전등 떨림음: 반복되는 버징음
-   * itemId: 고유 식별자 (예: items[0].name)
    */
   bulbFlicker(itemId: string, enabled: boolean): void {
     if (!this.enabled) return;
     try {
       if (enabled) {
         const audio = this.getOrCreateAudio('bulbFlicker');
-        audio.src = `https://drive.google.com/uc?export=download&id=${DRIVE_FILES.bulbFlicker}`;
+        audio.src = 'audio/sfx/bulbFlicker.mp3';
         audio.volume = 0.5 * this.masterVolume;
         audio.loop = true;
         audio.play().catch((err) => console.log('떨림음 재생 실패:', err.message));
