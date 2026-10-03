@@ -27,18 +27,36 @@ export const DRIVE_FILES = {
   measureDone: '126houS5AWS92c832nGPQEPucIWSWaan2', // Measure done.mp3
 } as const;
 
-/** 효과음 정의 (Google Drive 파일) */
+/** 효과음 정의 (로컬 MP3 파일) */
 export const SFXS = {
-  pick: { name: 'pick', driveId: DRIVE_FILES.pick, volume: 0.7 } as SFX,
-  place: { name: 'place', driveId: DRIVE_FILES.place, volume: 0.7 } as SFX,
-  attach: { name: 'attach', driveId: DRIVE_FILES.attach, volume: 0.8 } as SFX,
-  reject: { name: 'reject', driveId: DRIVE_FILES.reject, volume: 0.9 } as SFX,
-  bulbOn: { name: 'bulbOn', driveId: DRIVE_FILES.bulbOn, volume: 0.8 } as SFX,
-  bulbOff: { name: 'bulbOff', driveId: DRIVE_FILES.bulbOff, volume: 0.8 } as SFX,
-  wireConnect: { name: 'wireConnect', driveId: DRIVE_FILES.wireConnect, volume: 0.75 } as SFX,
-  wireDisconnect: { name: 'wireDisconnect', driveId: DRIVE_FILES.wireDisconnect, volume: 0.75 } as SFX,
-  doorOpen: { name: 'doorOpen', driveId: DRIVE_FILES.doorOpen, volume: 0.65 } as SFX,
-  doorClose: { name: 'doorClose', driveId: DRIVE_FILES.doorClose, volume: 0.65 } as SFX,
+  // 기본 인터랙션
+  pick: { name: 'pick', driveId: '', volume: 0.7 } as SFX,                  // 물체 집기 (시약 제외)
+  place: { name: 'place', driveId: '', volume: 0.7 } as SFX,                // 물체 놓기 (시약 제외)
+  glass: { name: 'glass', driveId: '', volume: 0.7 } as SFX,                // 시약/유리 제품 집기/놓기
+  liquidPour: { name: 'liquidPour', driveId: '', volume: 0.8 } as SFX,      // 액체 붓기
+
+  // 문/캐비넷
+  cabinetOpen: { name: 'Cabinet open', driveId: '', volume: 0.75 } as SFX,  // 캐비넷 열기
+  cabinetClose: { name: 'Cabinet open', driveId: '', volume: 0.75 } as SFX, // 캐비넷 닫기 (같은 음)
+  doorOpen: { name: 'Wood door open', driveId: '', volume: 0.65 } as SFX,    // 문 열기
+  doorClose: { name: 'Wood door close', driveId: '', volume: 0.65 } as SFX,  // 문 닫기
+
+  // 전원
+  switchOn: { name: 'Switch on', driveId: '', volume: 0.8 } as SFX,         // 아날로그 기기 전원 ON
+  generatorOn: { name: 'Generator on', driveId: '', volume: 0.8 } as SFX,   // 디지털 기기(오실로스코프 등) 전원 ON
+  switchOff: { name: 'Switch off', driveId: '', volume: 0.8 } as SFX,       // 디지털 기기 전원 OFF
+
+  // UI
+  uiClick: { name: 'Interface click', driveId: '', volume: 0.7 } as SFX,    // UI 클릭 (점프 제외, 돋보기, 설정 등)
+  reject: { name: 'Negative Notification', driveId: '', volume: 0.9 } as SFX, // 거부
+  measureDone: { name: 'measureDone', driveId: '', volume: 0.8 } as SFX,    // 완료
+
+  // 호환성 (기존 코드)
+  attach: { name: 'Interface click', driveId: '', volume: 0.8 } as SFX,
+  wireConnect: { name: 'Interface click', driveId: '', volume: 0.75 } as SFX,
+  wireDisconnect: { name: 'reject', driveId: '', volume: 0.75 } as SFX,
+  bulbOn: { name: 'Switch on', driveId: '', volume: 0.8 } as SFX,
+  bulbOff: { name: 'Switch off', driveId: '', volume: 0.8 } as SFX,
 } as const;
 
 export class AudioManager {
@@ -56,7 +74,9 @@ export class AudioManager {
   play(sfx: SFX): void {
     if (!this.enabled) return;
     try {
-      const url = `audio/sfx/${sfx.name}.mp3`;
+      // 파일명 정규화: 공백을 언더스코어로, 소문자 변환 (필요시)
+      const filename = sfx.name.replace(/\s+/g, '_');
+      const url = `audio/sfx/${filename}.mp3`;
       const audio = this.getOrCreateAudio(sfx.name);
       audio.src = url;
       audio.volume = (sfx.volume ?? 0.5) * this.masterVolume;
