@@ -19,6 +19,7 @@
   "devDependencies": {
     "@types/three": "^0.186.0",
     "peer": "^1.0.2",
+    "playwright": "~1.45.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
     "vite-plugin-singlefile": "^2.3.3"
