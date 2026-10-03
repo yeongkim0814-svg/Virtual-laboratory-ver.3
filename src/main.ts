@@ -14,6 +14,7 @@ import { applySet, bus, type Command, type Vec3 } from './net/commands';
 import { buildLab } from './world/buildLab';
 import { buildFurniture } from './world/buildFurniture';
 import { Door } from './world/door';
+import { CabinetDoor } from './world/cabinet';
 import { at, createBenchItems, HITBOX_MAT, Item, type Plug, type Socket } from './world/items';
 import { DeskClock, Hygrometer } from './equipment/deskInstruments';
 import { equipmentBoxes } from './world/cable';
@@ -34,7 +35,7 @@ import { TrackPanel } from './ui/trackPanel';
 import { LoggerPanel } from './ui/loggerPanel';
 import { SensorNetwork } from './equipment/sensors';
 import { Rail } from './equipment/track';
-import { Container, WasteCan, chemHooks, wasteHooks } from './equipment/glassware';
+import { Container, DropperBottle, PHPaper, WasteCan, chemHooks, wasteHooks } from './equipment/glassware';
 import { PourBar } from './ui/pourBar';
 import { SlitPanel } from './ui/slitPanel';
 import { stockEquipment } from './equipment/stock';
@@ -54,7 +55,7 @@ import { ScopePanel } from './ui/scopePanel';
 import { Transient, waveform } from './sim/transient';
 import { PlaceBar } from './ui/placeBar';
 import { TouchFeedback } from './ui/touchFeedback';
-import { audioManager, SFXS } from './audio/manager';
+import { audioManager, SFXS, type SFX } from './audio/manager';
 import { UndoKeeper } from './net/undo';
 import { Session, COLORS, type Hooks, type PlayerInfo } from './net/session';
 import { Avatars } from './net/avatars';
@@ -169,20 +170,36 @@ bus.listeners.push((c, ok) => {
 });
 // 내 명령의 결과를 손끝으로: 성공 짧게, 집기·놓기·끼우기는 조금 길게, 거부(실패)는 두 번 + 붉은 고리
 // (call·set은 슬라이더처럼 연달아 오므로 성공 음향은 생략)
+const isGlass = (o: unknown): boolean => o instanceof Container || o instanceof DropperBottle || o instanceof PHPaper;
+const isClosing = (label: string): boolean => label.includes('닫기');
+/** 명령 → 효과음: 대상의 종류(문·보관장·유리 기구·일반 기구)와 동작으로 구분한다 */
+function sfxFor(c: Command): SFX | null {
+  switch (c.t) {
+    case 'call': case 'set': return null;
+    case 'place': return isGlass(bus.registry.get(c.item)) ? SFXS.glassPlace : SFXS.place;
+    case 'attach': return SFXS.attach;
+    case 'pour': return SFXS.liquidPour;
+    case 'wire': return SFXS.wireConnect;
+    case 'unwire': return SFXS.wireDisconnect;
+    case 'act': {
+      const o = bus.registry.get(c.target);
+      if (o instanceof CabinetDoor) return isClosing(c.label) ? SFXS.cabinetClose : SFXS.cabinetOpen;
+      if (o instanceof Door) return isClosing(c.label) ? SFXS.doorClose : SFXS.doorOpen;
+      if (c.label.startsWith('집기')) return isGlass(o) ? SFXS.glassPick : SFXS.pick;
+      return null; // 전원·설정 등 그 밖의 동작은 소리 없음 (전원음은 전용 연결)
+    }
+    default: return null;
+  }
+}
 bus.listeners.push((c, ok) => {
   if (c.by !== bus.me) return;
   if (!ok) {
     fx.rejected();
     audioManager.play(SFXS.reject);
-  } else if (c.t === 'call' || c.t === 'set') return;
-  else if (c.t === 'place') audioManager.play(SFXS.place);
-  else if (c.t === 'attach') audioManager.play(SFXS.attach);
-  else if (c.t === 'pour') audioManager.play(SFXS.liquidPour);
-  else if (c.t === 'wire') audioManager.play(SFXS.wireConnect);
-  else if (c.t === 'unwire') audioManager.play(SFXS.wireDisconnect);
-  else if (c.t === 'use') audioManager.play(SFXS.uiClick); // 문, 캐비넷 등 조작음
-  else if (c.t === 'act' && holdings.heldOf(c.by) === bus.registry.get(c.target)) audioManager.play(SFXS.pick);
-  else audioManager.play(SFXS.pick);
+    return;
+  }
+  const s = sfxFor(c);
+  if (s) audioManager.play(s);
 });
 const infoOf = (id: string): PlayerInfo => session.players.get(id) ?? { id, name: id, color: 0x888888 };
 const holdings: Holdings & { heldOf(who: string): Item | null } = {
@@ -893,7 +910,7 @@ function collectEquipmentBoxes(): void {
 
 // 테스트용: 주소 끝이 #debug일 때만 내부 객체를 노출 (자동 테스트가 조립을 빠르게 재현하는 데 씀)
 if (location.hash === '#debug') {
-  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans, session, avatars, sync, holdings, LocalTransport, PeerTransport, physics, scopePanel, fpHands, glide: { applyGlides, restoreGlides }, sim: { Transient, waveform }, motion: avatarMotion, audioManager };
+  (window as unknown as Record<string, unknown>).lab = { THREE, renderer, scene, camera, player, hand, items, stock, power, wires, doors: furniture.doors, bus, doubleActionsAt, singleActionsAt, beams, opticsPanel, wasteCans, session, avatars, sync, holdings, LocalTransport, PeerTransport, physics, scopePanel, fpHands, glide: { applyGlides, restoreGlides }, sim: { Transient, waveform }, motion: avatarMotion, audioManager, SFXS };
 }
 
 renderer.info.autoReset = false; // 한 프레임의 그리기 호출을 모두 더한다 (진단 표시용)

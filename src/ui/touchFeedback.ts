@@ -30,8 +30,8 @@ export class TouchFeedback {
 
   /** 버튼 눌림: 음향 피드백 + 눌린 모양 (손가락이 떨어지면 해제) */
   press(el: HTMLElement): void {
-    // UI 클릭 음향 (점프 제외)
-    if (!el.id.includes('crouch')) audioManager.play(SFXS.uiClick);
+    // 클릭음은 패널·HUD 버튼만 (동작 메뉴·붓기 막대는 자기 동작 소리가 따로 있고, 앉기는 제외)
+    if (!el.id.includes('crouch') && !el.closest('#action-menu, .pour-bar, #pour-bar')) audioManager.play(SFXS.uiClick);
     el.classList.add('pressed');
     const off = () => {
       el.classList.remove('pressed');
