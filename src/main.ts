@@ -171,9 +171,16 @@ bus.listeners.push((c, ok) => {
 // (call·set은 슬라이더처럼 연달아 오므로 성공 음향은 생략)
 bus.listeners.push((c, ok) => {
   if (c.by !== bus.me) return;
-  if (!ok) fx.rejected();
-  else if (c.t === 'call' || c.t === 'set') return;
-  else if (c.t === 'place' || c.t === 'attach') audioManager.play(SFXS.attach);
+  if (!ok) {
+    fx.rejected();
+    audioManager.play(SFXS.reject);
+  } else if (c.t === 'call' || c.t === 'set') return;
+  else if (c.t === 'place') audioManager.play(SFXS.place);
+  else if (c.t === 'attach') audioManager.play(SFXS.attach);
+  else if (c.t === 'pour') audioManager.play(SFXS.liquidPour);
+  else if (c.t === 'wire') audioManager.play(SFXS.wireConnect);
+  else if (c.t === 'unwire') audioManager.play(SFXS.wireDisconnect);
+  else if (c.t === 'use') audioManager.play(SFXS.uiClick); // 문, 캐비넷 등 조작음
   else if (c.t === 'act' && holdings.heldOf(c.by) === bus.registry.get(c.target)) audioManager.play(SFXS.pick);
   else audioManager.play(SFXS.pick);
 });
